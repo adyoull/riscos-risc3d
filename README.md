@@ -39,14 +39,23 @@ machine.
 
 | SWI | In | Out |
 |---|---|---|
-| `RISC3D_Info` (&C3D00) | | r0 = version * 100, r1 = drivers, r2 = contexts, r3 -> the name of the driver a new context gets (0: none) |
-| `RISC3D_Register` (&C3D01) | r0 = 0 add / 1 remove, r1 = entry, r2 = its r12, r3 -> name | |
-| `RISC3D_Open` (&C3D02) | r0 = flags (0) | r0 = context, r1 -> shared memory, r2 = size |
+| `RISC3D_Info` (&C3D00) | | r0 = version * 100, r1 = drivers, r2 = contexts, r3 -> the name of the driver a new context gets (0: none), r4 = its flags, r5 = its ioctl SWI and r6 -> its DRM driver name (DRM devices) |
+| `RISC3D_Register` (&C3D01) | r0 = 0 add / 1 remove, r1 = entry, r2 = its r12, r3 -> name, r4 = flags (bit 0: a DRM device), r5 = ioctl SWI, r6 -> DRM driver name | |
+| `RISC3D_Open` (&C3D02) | r0 = flags (0) | r0 = context, r1 -> shared memory, r2 = size (a DRM device: r1 = the driver's file, r2 = 0) |
 | `RISC3D_Close` (&C3D03) | r0 = context | |
 | `RISC3D_Sync` (&C3D04) | r0 = context, r1 = 0 wake / 1 wait | |
 
 A driver's entry is called with r0 = 0 open, 1 close, 2 sync (see
 `modules/RISC3D/risc3d.c`).
+
+Two kinds of driver (RISC3D 0.02): a command-stream driver (Linux3D, on
+RISC OS on Linux) reads the commands `lib/` writes into the shared
+memory; a DRM device (flag bit 0: V3DRender, the native driver for the
+Raspberry Pi 4's GPU, in its own repository) takes no command stream.
+For a DRM device the program's Mesa runs its own GPU driver (Mesa's v3d)
+and sends that driver's requests to the driver's ioctl SWI, with the
+file RISC3D_Open returned, as Mesa does through a DRM device on Linux.
+`r3d_available` is for the command stream, so it is 0 there.
 
 ## Building and testing
 
@@ -67,7 +76,8 @@ starts it), `RMLoad RISC3D`, `RMLoad Linux3D`, then `r3dtest` or
   program's memory reads the indices back (one wait) on OpenGL, and
   sends no arrays on GLES.
 - OpenGL 1.x/2.1 on real hardware (kit 2).
-- A native RISC OS driver. Allocated SWI and error numbers.
+- Allocated SWI and error numbers. (The native driver, V3DRender, is
+  in its own repository.)
 
 Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE). The Khronos
 headers in `include/` carry their own licences.

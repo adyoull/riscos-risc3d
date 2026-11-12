@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.02: drivers of a second kind, for the native GPU driver (12 Nov 2026)
+
+- RISC3D 0.02. `RISC3D_Register` takes flags in r4: bit 0 = a DRM
+  device, with its ioctl SWI in r5 and its DRM driver name in r6 ("v3d").
+  `RISC3D_Info` returns the chosen driver's r4-r6; `RISC3D_Open` returns
+  a DRM device's file in r1 (r2 = 0). Command-stream drivers (Linux3D)
+  pass r4 = 0 and work as before.
+- Why: on native RISC OS (the Pi 4) the driver is V3DRender, which
+  follows Linux's v3d kernel driver. The program's own Mesa runs Mesa's
+  v3d GPU driver and sends its requests straight to V3DRender, so there
+  is no command stream and no second process to switch to.
+- `r3d_available` is 0 when the driver is a DRM device (the command
+  stream is for command-stream drivers).
+- From the V3DRender conversation's patch (its handoff
+  `handoffs/2026-11-12-v3drender-drm-device-kind.md`), made on c3181c0
+  and applied on 134b17b (v0.1); only this changelog needed merging.
+
 ## Overlapped frames (12 Nov 2026)
 
 - `r3d_swap_overlapped (pixels, bytes)`: the renderer finishes and reads

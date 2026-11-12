@@ -364,11 +364,14 @@ int
 r3d_available (void)
 {
   const char *drv = 0;
+  unsigned flags = 0;
   if (getenv ("RISC3D$Disable"))
     return 0;
-  if (_swix (RISC3D_Info, _OUT (3), &drv))
+  if (_swix (RISC3D_Info, _OUT (3) | _OUT (4), &drv, &flags))
     return 0;
-  return drv != 0;
+  /* a DRM device (V3DRender) takes no command stream: Mesa's own driver
+     for it is used instead (RISC3D_Info r5, r6) */
+  return drv != 0 && !(flags & 1);
 }
 
 /* --- kept state: matrices ------------------------------------------------

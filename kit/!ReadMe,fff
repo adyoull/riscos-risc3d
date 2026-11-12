@@ -1,4 +1,4 @@
-RISC3D test kit 9 (prototype, 12 November 2026)
+RISC3D test kit 10 (prototype, 12 November 2026)
 ===============================================
 
 RISC3D is a 3D driver interface for RISC OS. On RISC OS on Linux its
@@ -14,7 +14,8 @@ one in pieces, so Linux draws while the program is still calling, and
 GL's bench measures the processor too (RISC OS against Linux); kit 8
 wrote the vertices straight into the shared memory (no copy); kit 9
 overlaps frames: Linux finishes one while the program draws the next
-(Cube uses it; GL's bench runs both ways). The SWI numbers are provisional.
+(Cube uses it; GL's bench runs both ways); kit 10 has RISC3D 0.02
+(a second kind of driver, for the native one: nothing changes here). The SWI numbers are provisional.
 
 Needs
 -----

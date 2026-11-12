@@ -16,6 +16,7 @@
 - From the V3DRender conversation's patch (its handoff
   `handoffs/2026-11-12-v3drender-drm-device-kind.md`), made on c3181c0
   and applied on 134b17b (v0.1); only this changelog needed merging.
+- Kit 10 (`out/RISC3DTest-10.zip`): kit 9 with the RISC3D module 0.02.
 
 ## Overlapped frames (12 Nov 2026)
 

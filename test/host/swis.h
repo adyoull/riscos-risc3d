@@ -3,6 +3,7 @@
    without RISC OS. Copyright (c) 2026 Andrew Youll. MIT licence. */
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -50,6 +51,15 @@ _swix (int swi, int flags, ...)
     }
   else if (swi == 0xC3D03)
     close (host_sock);
+  else if (swi == 0x23)
+    {
+      /* OS_ReadVarVal, R2 < 0: does the variable exist (R2 0 if not) */
+      const char *name = va_arg (ap, const char *);
+      (void) va_arg (ap, void *); (void) va_arg (ap, int); (void) va_arg (ap, int); (void) va_arg (ap, int);
+      int *len = va_arg (ap, int *);
+      const char *v = getenv (name);
+      *len = v ? ~(int) strlen (v) : 0;
+    }
   else if (swi == 0xC3D04)
     {
       (void) va_arg (ap, int);

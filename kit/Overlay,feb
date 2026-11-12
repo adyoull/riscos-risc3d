@@ -2,6 +2,6 @@
 | Needs rol-fb's overlays (RISC OS on Linux's PlaneTest build) and a
 | 16 million colour mode; otherwise it reads frames back, as Cube does,
 | and its title bar says why.
-RMEnsure RISC3D 0.01 RMLoad <Obey$Dir>.RISC3D
-RMEnsure Linux3D 0.01 RMLoad <Obey$Dir>.Linux3D
+RMEnsure RISC3D 0.02 Error Install riscos-risc3d first (see !ReadMe)
+RMEnsure Linux3D 0.01 Error Install riscos-risc3d first (see !ReadMe)
 Run <Obey$Dir>.r3dcube -overlay

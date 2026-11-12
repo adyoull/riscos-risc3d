@@ -1,0 +1,8 @@
+| RISC3D test: OpenGL ES 1.1 and OpenGL ES 2's extensions (RISC3D 0.4),
+| every function found by name as riscos-mesa's EGL finds them. Writes
+| ESResults, ESes1 and ESes2 (PPM pictures) in this folder.
+RMEnsure RISC3D 0.02 Error Install riscos-risc3d first (see !ReadMe)
+RMEnsure Linux3D 0.01 Error Install riscos-risc3d first (see !ReadMe)
+Run <Obey$Dir>.estest both <Obey$Dir>.ES { > <Obey$Dir>.ESResults }
+SetType <Obey$Dir>.ESResults Text
+Filer_Run <Obey$Dir>.ESResults

@@ -59,7 +59,7 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
-#define ROL3D_VERSION "0.3"
+#define ROL3D_VERSION "0.4"
 #define GLDIR "/opt/riscos/gl"		/* a private Mesa, if the image has one */
 
 /* The helper's own textures and buffers have names the program's never
@@ -159,6 +159,8 @@ sentinel_count (const uint32_t *r, size_t n, int size)
 }
 
 #include "server_gen.c"
+#include "es1_conversion.c"
+#include "es1.c"
 
 /* --- EGL, loaded at run time -------------------------------------------- */
 
@@ -215,7 +217,7 @@ static EGLDisplay display;
    which has the same functions (ARB_ES2_compatibility) and takes GLES
    shaders marked "#version 100" (OP_glShaderSource adds the mark); or
    desktop OpenGL's compatibility profile, for OpenGL 1.x and 2.x. */
-static int have_context, desktop_gl, es_on_desktop, pack_ext;
+static int have_context, desktop_gl, es_on_desktop, pack_ext, es1;
 
 /* Linux's EGL, and a display on the GPU's render node, or Mesa's
    software renderer: 1, or 0 with gl_error */
@@ -326,6 +328,10 @@ make_context (int desktop)
 {
   EGLContext c = 0;
   int es_desk = 0;
+  /* GLES 1.1: on desktop OpenGL (Debian's Mesa has no GLES 1: es1.c) */
+  es1 = desktop == 2;
+  if (es1)
+    desktop = 1;
   for (int tries = 0; tries < 2 && !c; tries++)
     {
       if (tries && (!hardware || !software_display ()))
@@ -339,13 +345,16 @@ make_context (int desktop)
     }
   if (!c)
     {
-      snprintf (gl_error, sizeof gl_error, "no %s context (EGL error &%X)", desktop ? "OpenGL" : "GLES 2 or OpenGL", egl.GetError ());
+      snprintf (gl_error, sizeof gl_error, "no %s context (EGL error &%X)",
+		es1 ? "OpenGL (for GLES 1.1)" : desktop ? "OpenGL" : "GLES 2 or OpenGL", egl.GetError ());
       return 0;
     }
   desktop_gl = desktop || es_desk;
   es_on_desktop = es_desk;
   if (!load_table (desktop_gl))
     return 0;
+  if (es1)
+    es1_install ();
   /* the pack and unpack settings past alignment: OpenGL, and GLES 3 */
   const char *v = (const char *) gl.GetString (GL_VERSION);
   pack_ext = desktop_gl || (v && strstr (v, "OpenGL ES ") && v[10] >= '3');
@@ -797,7 +806,7 @@ static GLsizei feedback_size, select_size;
 static void
 fixed_array (const uint32_t *a)
 {
-  uint32_t which = a[0], unit = a[1], slot = which < 7 ? which : 8 + (unit & 7);
+  uint32_t which = a[0], unit = a[1], slot = which < 8 ? which : 8 + (unit & 7);
   GLint size = (GLint) a[2], stride = (GLint) a[4];
   GLenum type = a[3];
   GLint was = 0;
@@ -813,6 +822,7 @@ fixed_array (const uint32_t *a)
     case 4: if (gl.EdgeFlagPointer) gl.EdgeFlagPointer (stride, 0); break;
     case 5: if (gl.FogCoordPointer) gl.FogCoordPointer (type, stride, 0); break;
     case 6: if (gl.SecondaryColorPointer) gl.SecondaryColorPointer (size, type, stride, 0); break;
+    case 7: if (gl.PointSizePointerOES) gl.PointSizePointerOES (type, stride, 0); break;
     default:
       if (gl.TexCoordPointer && gl.ClientActiveTexture)
 	{
@@ -925,6 +935,143 @@ own_buffer (GLenum b)
       return GL_COLOR_ATTACHMENT0;
     }
   return b;
+}
+
+/* the draws with instances or a base vertex (lib/r3d_gl.c:
+   draw_elements_ex): how (1 instanced, 2 base vertex, 4 range; 0x100: the
+   indices follow), mode, count, type, instances, base vertex, start, end,
+   then the offset in the element buffer, or the indices' bytes and them */
+static void
+draw_elements_ex (const uint32_t *a)
+{
+  uint32_t how = a[0];
+  GLenum mode = a[1], type = a[3];
+  GLsizei count = (GLsizei) a[2], inst = (GLsizei) a[4];
+  GLint base = (GLint) a[5];
+  const void *at = (const void *) (uintptr_t) a[8];
+  if (how & 0x100)
+    {
+      gl.BindBuffer (GL_ELEMENT_ARRAY_BUFFER, PRIV_ELEMENTS);
+      gl.BufferData (GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr) a[8], a + 9, GL_STREAM_DRAW);
+      at = 0;
+    }
+  switch (how & 7)
+    {
+    case 1:
+      if (gl.DrawElementsInstanced)
+	gl.DrawElementsInstanced (mode, count, type, at, inst);
+      break;
+    case 2:
+      if (gl.DrawElementsBaseVertex)
+	gl.DrawElementsBaseVertex (mode, count, type, at, base);
+      break;
+    case 3:
+      if (gl.DrawElementsInstancedBaseVertex)
+	gl.DrawElementsInstancedBaseVertex (mode, count, type, at, inst, base);
+      break;
+    case 6:
+      if (gl.DrawRangeElementsBaseVertex)
+	gl.DrawRangeElementsBaseVertex (mode, a[6], a[7], count, type, at, base);
+      break;
+    }
+  if (how & 0x100)
+    gl.BindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0);
+}
+
+/* debug messages kept for the program's callback (it can't be called from
+   here): the driver calls ours, which keeps them until the library asks */
+#define DEBUG_KEEP 256
+static struct dmsg { GLenum source, type, severity; GLuint id; char *text; } dq[DEBUG_KEEP];
+static int dq_head, dq_n, debug_kept;
+
+static void
+#ifdef __GNUC__
+__attribute__ ((unused))
+#endif
+on_debug (GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *user)
+{
+  (void) user;
+  if (dq_n == DEBUG_KEEP)
+    {
+      free (dq[dq_head].text);
+      dq_head = (dq_head + 1) % DEBUG_KEEP;
+      dq_n--;
+    }
+  struct dmsg *m = &dq[(dq_head + dq_n) % DEBUG_KEEP];
+  size_t l = length >= 0 ? (size_t) length : strlen (message);
+  m->text = malloc (l + 1);
+  if (!m->text)
+    return;
+  memcpy (m->text, message, l);
+  m->text[l] = 0;
+  m->source = source;
+  m->type = type;
+  m->id = id;
+  m->severity = severity;
+  dq_n++;
+  __atomic_store_n (&area->debug_pending, (uint32_t) dq_n, __ATOMIC_RELEASE);
+}
+
+static void
+debug_callback (uint32_t on)
+{
+  if (!gl.DebugMessageCallback)
+    return;
+  debug_kept = (int) on;
+  gl.DebugMessageCallback (on ? (GLDEBUGPROC) on_debug : 0, 0);
+}
+
+/* glGetDebugMessageLog's answer: a count, then for each source, type, id,
+   severity, length (with the 0), the text padded to a word */
+static void
+debug_log (uint32_t count, uint32_t bufsize)
+{
+  uint32_t *r = (uint32_t *) reply_area, *w = r + 1;
+  size_t room = area->reply_bytes / 4, used = 1, n = 0, text = 0;
+  if (debug_kept)
+    {
+      while (n < count && dq_n)
+	{
+	  struct dmsg *m = &dq[dq_head];
+	  size_t l = strlen (m->text) + 1, need = 5 + (l + 3) / 4;
+	  if (used + need > room || text + l > bufsize)
+	    break;
+	  w[0] = m->source; w[1] = m->type; w[2] = m->id; w[3] = m->severity; w[4] = (uint32_t) l;
+	  memcpy (w + 5, m->text, l);
+	  w += need;
+	  used += need;
+	  text += l;
+	  n++;
+	  free (m->text);
+	  dq_head = (dq_head + 1) % DEBUG_KEEP;
+	  dq_n--;
+	}
+      __atomic_store_n (&area->debug_pending, (uint32_t) dq_n, __ATOMIC_RELEASE);
+    }
+  else if (gl.GetDebugMessageLog)
+    {
+      /* the driver's own log, one message at a time */
+      static GLchar t[65536];
+      while (n < count)
+	{
+	  GLenum src, type, sev;
+	  GLuint id;
+	  GLsizei l = 0;
+	  if (!gl.GetDebugMessageLog (1, (GLsizei) sizeof t, &src, &type, &id, &sev, &l, t) || l <= 0)
+	    break;
+	  size_t need = 5 + ((size_t) l + 3) / 4;
+	  if (used + need > room || text + (size_t) l > bufsize)
+	    break;			/* (that one is lost) */
+	  w[0] = src; w[1] = type; w[2] = id; w[3] = sev; w[4] = (uint32_t) l;
+	  memcpy (w + 5, t, (size_t) l);
+	  w += need;
+	  used += need;
+	  text += (size_t) l;
+	  n++;
+	}
+    }
+  r[0] = (uint32_t) n;
+  area->reply_len = (uint32_t) used * 4;
 }
 
 static void
@@ -1406,6 +1553,98 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
     case OP_glDrawRangeElements:
       if (gl.DrawRangeElements)
 	gl.DrawRangeElements (a[0], a[1], a[2], (GLsizei) a[3], a[4], (const void *) (uintptr_t) a[5]);
+      break;
+    case OP_glPointSizePointerOES:
+      if (gl.PointSizePointerOES)
+	gl.PointSizePointerOES (a[1], (GLsizei) a[2], (const void *) (uintptr_t) a[3]);
+      break;
+    case OP_glQueryMatrixxOES:
+      {
+	uint32_t r[33];
+	memset (r, 0, sizeof r);
+	r[0] = gl.QueryMatrixxOES ? gl.QueryMatrixxOES ((GLfixed *) (r + 1), (GLint *) (r + 17)) : 0xFFFF;
+	reply (r, sizeof r);
+	break;
+      }
+    case OP_READ_BUFFER_RANGE:
+      {
+	/* glMapBufferRange with GL_MAP_READ_BIT: the range's bytes */
+	uint32_t bytes = a[2] > area->reply_bytes ? area->reply_bytes : a[2];
+	if (gl.GetBufferSubData && desktop_gl)
+	  gl.GetBufferSubData (a[0], (GLintptr) a[1], (GLsizeiptr) bytes, reply_area);
+	else if (gl.MapBufferRange && gl.UnmapBuffer)
+	  {
+	    const void *p = gl.MapBufferRange (a[0], (GLintptr) a[1], (GLsizeiptr) bytes, 0x0001);
+	    if (p)
+	      memcpy (reply_area, p, bytes);
+	    gl.UnmapBuffer (a[0]);
+	  }
+	area->reply_len = bytes;
+	break;
+      }
+    case OP_glDrawArraysInstanced:
+      if (gl.DrawArraysInstanced)
+	gl.DrawArraysInstanced (a[0], (GLint) a[1], (GLsizei) a[2], (GLsizei) a[3]);
+      break;
+    case OP_DRAW_ELEMENTS_EX:
+      draw_elements_ex (a);
+      break;
+    case OP_glCreateShaderProgramv:
+      {
+	const GLchar *src[2] = { "#version 100\n", 0 };
+	char *t = scratch (a[1] + 1);
+	memcpy (t, a + 2, a[1]);
+	t[a[1]] = 0;
+	src[1] = t;
+	int mark = es_on_desktop && !strstr (t, "#version");
+	uint32_t r = gl.CreateShaderProgramv ? gl.CreateShaderProgramv (a[0], mark ? 2 : 1, src + !mark) : 0;
+	reply (&r, 4);
+	break;
+      }
+    case OP_glGetProgramPipelineInfoLog:
+      text_reply (gl.GetProgramPipelineInfoLog, a[0], a[1]);
+      break;
+    case OP_glGetProgramBinary:
+      {
+	uint32_t max = a[1] > area->reply_bytes - 8 ? area->reply_bytes - 8 : a[1];
+	uint32_t *r = (uint32_t *) reply_area;
+	GLsizei l = 0;
+	GLenum fmt = 0;
+	if (gl.GetProgramBinary)
+	  gl.GetProgramBinary (a[0], (GLsizei) max, &l, &fmt, r + 2);
+	r[0] = (uint32_t) l;
+	r[1] = fmt;
+	area->reply_len = 8 + (uint32_t) l;
+	break;
+      }
+    case OP_glDebugMessageInsert:
+      if (gl.DebugMessageInsert)
+	gl.DebugMessageInsert (a[0], a[1], a[2], a[3], (GLsizei) a[4], (const GLchar *) (a + 5));
+      break;
+    case OP_glPushDebugGroup:
+      if (gl.PushDebugGroup)
+	gl.PushDebugGroup (a[0], a[1], (GLsizei) a[2], (const GLchar *) (a + 3));
+      break;
+    case OP_glObjectLabel:
+      if (gl.ObjectLabel)
+	gl.ObjectLabel (a[0], a[1], a[2] == 0xFFFFFFFF ? 0 : (GLsizei) a[2], a[2] == 0xFFFFFFFF ? 0 : (const GLchar *) (a + 3));
+      break;
+    case OP_glGetObjectLabel:
+      {
+	uint32_t max = a[2] > 65536 ? 65536 : a[2];
+	uint32_t *r = scratch (max + 8);
+	GLsizei l = 0;
+	if (gl.GetObjectLabel)
+	  gl.GetObjectLabel (a[0], a[1], (GLsizei) max, &l, (GLchar *) (r + 1));
+	r[0] = (uint32_t) l;
+	reply (r, (size_t) l + 4);
+	break;
+      }
+    case OP_glGetDebugMessageLog:
+      debug_log (a[0], a[1]);
+      break;
+    case OP_glDebugMessageCallback:
+      debug_callback (a[0]);
       break;
     case OP_DRAW_ELEMENTS_INLINE:
       gl.BindBuffer (GL_ELEMENT_ARRAY_BUFFER, PRIV_ELEMENTS);

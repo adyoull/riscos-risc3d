@@ -1,5 +1,4 @@
 | RISC3D test: the spinning cube in a desktop window.
-| Run "install" on the Linux side first (see !ReadMe).
-RMEnsure RISC3D 0.01 RMLoad <Obey$Dir>.RISC3D
-RMEnsure Linux3D 0.01 RMLoad <Obey$Dir>.Linux3D
+RMEnsure RISC3D 0.02 Error Install riscos-risc3d first (see !ReadMe)
+RMEnsure Linux3D 0.01 Error Install riscos-risc3d first (see !ReadMe)
 Run <Obey$Dir>.r3dcube

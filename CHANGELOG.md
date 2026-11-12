@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.4 (in testing): OpenGL ES 1.1, and GLES 2's extensions; kit 13 (12 Nov 2026)
+
+The owner: everything riscos-mesa supports, and all the hardware can do.
+Step 1 of 3 (`claude/risc3d-full-coverage-plan.md` in the project).
+
+- **What riscos-mesa supports, measured:** its Mesa 20.3.5 with all 31 of
+  its patches, built on the host: GL 2.1 (165 extensions), GLES 1.1 (44),
+  GLES 2.0 (56). The lists are in `docs/surface/`; `tools/surface.py` says
+  what RISC3D lacks.
+- **gen.py:** GLES 1.1's functions, and those of every extension in
+  riscos-mesa's GLES 1.1 and 2.0 lists, after the earlier ones (their
+  opcodes unchanged). A function an extension promoted travels as the
+  core one, the extension's name another name for it (gl.xml's alias, or
+  the name without the vendor's suffix and the same parameters). 704
+  functions, 400 other names. r3d_gl.h has the other names' prototypes
+  and the types they need (GLfixed, GLsync, GLDEBUGPROC...).
+  GL_EXTENSIONS for GLES 1.1: riscos-mesa's own list, those carried.
+- **GLES 1.1** (`r3d_create_es1`, `r3d_open_es1`; OP_CONTEXT 2). Debian's
+  Mesa has no GLES 1 contexts (`-Dgles1=disabled`; since Mesa 23.1 that
+  leaves none), so rol-3d makes a desktop compatibility context and:
+  - `linux/es1_conversion.c`: Mesa 20.3.5's own es1_conversion.c (the
+    fixed-point and float functions in desktop terms, riscos-mesa's exact
+    rules), made by `tools/port-es1.py`, in place of the driver's.
+  - `linux/es1.c`: GL_FIXED arrays in buffer objects made floats before
+    each draw; the point size array (OES_point_size_array) drawn a point
+    at a time; ETC1 textures decoded (Mesa's own decoder's rules: the
+    same pixels as riscos-mesa, even for odd blocks).
+  - The library keeps GLES 1.1's matrices as OpenGL's (glOrthof,
+    glFrustumf, the x functions), answers glGetFixedv (Mesa's
+    FLOAT_TO_FIXED, cut) and glQueryMatrixxOES itself, and sends GL_FIXED
+    arrays from the program's memory as floats.
+- **Extensions' hand-written functions:**
+  - vertex array objects: the library keeps each one's arrays (its half
+    of their state) and switches them at glBindVertexArray;
+  - glMapBufferRange and glFlushMappedBufferRange (read through
+    OP_READ_BUFFER_RANGE; written at flush or unmap);
+  - draws with instances or a base vertex, arrays and indices in the
+    program's memory or in buffers (OP_DRAW_ELEMENTS_EX);
+  - glCreateShaderProgramv, glGetProgramPipelineInfoLog,
+    glGetProgramBinary;
+  - KHR_debug: labels, groups, inserted messages, the log, and the
+    callback: rol-3d keeps the driver's messages and the library gives
+    them to the program's function at its next wait (`debug_pending` in
+    the shared area). Labels on sync objects wait for sync objects (step 2).
+- `r3d_available` reads RISC3D$Disable with OS_ReadVarVal, not getenv
+  (riscos-mesa's request: UnixLib's getenv of a $ name remakes a buffer).
+- **Host tests:** demo/es/estest finds every function by name, as
+  riscos-mesa's EGL does. GLES 2 part: through RISC3D = Mesa directly,
+  every line and the picture. GLES 1.1 part against riscos-mesa's own
+  renderer (OSMesa 20.3.5 with its patches, built here): every number the
+  same (matrices in fixed point, light, texture environment, clip plane),
+  the lit colour the same with GL_NORMALIZE (riscos-mesa lights in
+  object space when it can), the ETC1 texture the same pixel for pixel.
+  Two things riscos-mesa does wrong there, not RISC3D: its GLES 1.1
+  vertex array objects give GL_INVALID_OPERATION, and drawing with a
+  program pipeline (EXT_separate_shader_objects) crashes it (run_vp).
+  r3dtest and gl1test unchanged.
+- rol-3d 0.4. **riscos-risc3d 0.4-1** (the kit carries it). Kit 13: ES,
+  linux-tests; the kits' obey files expect the package's modules.
+
 ## 0.3: a package for RISC OS on Linux (12 Nov 2026)
 
 - **riscos-risc3d 0.3-1** (`tools/mkdeb.sh`, `packaging/riscos-risc3d/`,

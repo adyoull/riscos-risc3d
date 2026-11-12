@@ -106,6 +106,63 @@ for x in ALIAS_EXTS:
             if target in seen and n not in seen and norm(commands[n][1]) == norm(commands[target][1]):
                 aliases.append((n, target))
 
+# --- GLES 1.1, and the extensions riscos-mesa has ---------------------
+# riscos-mesa's Mesa 20.3.5 (measured: docs/surface/) offers OpenGL ES 1.1
+# too, and extensions in each API. Their functions are added here, after
+# the first set, so that the earlier opcodes keep their numbers (a newer
+# rol-3d with an older library). A function an extension promoted to a
+# core one (gl.xml's alias, or the same name without the vendor's suffix,
+# with the same parameters) travels as the core function, and the
+# extension's name is another name for it.
+def canonical(n):
+    t = n
+    for _ in range(4):
+        if commands[t][2] and commands[t][2] in commands:
+            t = commands[t][2]
+    if t != n:
+        return t
+    m = re.match(r'(gl\w+?)(OES|EXT|ARB|KHR|NV|APPLE|MESA|ATI|IBM|INGR|SGIS|SGIX)$', n)
+    if m and m.group(1) in commands and norm(commands[n][1]) == norm(commands[m.group(1)][1]):
+        return canonical(m.group(1))
+    return n
+
+for f in reg.findall('feature'):
+    if f.get('api') == 'gles1':
+        for req in f.findall('require'):
+            take(req)
+
+def surface_list(name):
+    with open(os.path.join(here, '..', 'docs', 'surface', name)) as fh:
+        return [l.strip() for l in fh if l.strip()]
+
+have_alias = {n for n, _ in aliases}
+for listname, api in (('riscos-mesa-20.3.5-es11-extensions.txt', 'gles1'),
+                      ('riscos-mesa-20.3.5-es20-extensions.txt', 'gles2')):
+    for x in surface_list(listname):
+        e = ext.get(x)
+        if e is None:
+            continue
+        for req in e.findall('require'):
+            if req.get('api') and req.get('api') != api:
+                continue
+            for en in req.findall('enum'):
+                if en.get('name') not in seen_e:
+                    seen_e.add(en.get('name'))
+                    enums_wanted.append(en.get('name'))
+            for c in req.findall('command'):
+                n = c.get('name')
+                if n in seen or n in have_alias:
+                    continue
+                t = canonical(n)
+                if n == 'glTexImage3DOES':
+                    t = 'glTexImage3D'
+                if t not in seen:
+                    seen.add(t)
+                    want.append(t)
+                if t != n:
+                    aliases.append((n, t))
+                    have_alias.add(n)
+
 # --- how each function travels -------------------------------------------
 
 HAND = {
@@ -137,6 +194,15 @@ HAND = {
     'glDisableClientState', 'glClientActiveTexture', 'glArrayElement',
     'glDrawArrays', 'glDrawElements', 'glDrawRangeElements',
     'glMultiDrawArrays', 'glMultiDrawElements',
+    # GLES 1.1 and the extensions (see below)
+    'glGetFixedv', 'glPointSizePointerOES', 'glQueryMatrixxOES',
+    'glMapBufferRange', 'glFlushMappedBufferRange',
+    'glDrawArraysInstanced', 'glDrawElementsInstanced', 'glDrawElementsBaseVertex',
+    'glDrawRangeElementsBaseVertex', 'glDrawElementsInstancedBaseVertex',
+    'glMultiDrawElementsBaseVertex', 'glCreateShaderProgramv', 'glGetProgramPipelineInfoLog',
+    'glDebugMessageInsert', 'glDebugMessageCallback', 'glGetDebugMessageLog',
+    'glPushDebugGroup', 'glObjectLabel', 'glGetObjectLabel', 'glObjectPtrLabel',
+    'glGetObjectPtrLabel', 'glGetProgramBinary',
 }
 # the library notes these before sending them (lib/r3d_gl.c: r3d_track_*)
 TRACK = {
@@ -149,6 +215,9 @@ TRACK = {
     'glOrtho', 'glFrustum', 'glActiveTexture', 'glViewport', 'glListBase',
     'glNewList', 'glEndList', 'glCallList', 'glPushAttrib', 'glPopAttrib',
     'glDeleteLists', 'glBindTexture', 'glBegin', 'glEnd',
+    # GLES 1.1's matrices, and vertex array objects (the arrays' state)
+    'glOrthof', 'glFrustumf', 'glOrthox', 'glFrustumx', 'glLoadMatrixx', 'glMultMatrixx',
+    'glRotatex', 'glTranslatex', 'glScalex', 'glBindVertexArray', 'glDeleteVertexArrays',
 }
 # answers whose length only the driver knows: it marks the end
 SENTINEL = {'glGetUniformfv', 'glGetUniformiv', 'glGetMapdv', 'glGetMapfv', 'glGetMapiv'}
@@ -160,7 +229,8 @@ for n in HAND | TRACK | SENTINEL | PIXMAP:
 
 SIZES = {'GLdouble': 8, 'GLclampd': 8, 'GLfloat': 4, 'GLclampf': 4, 'GLint': 4, 'GLuint': 4,
          'GLenum': 4, 'GLsizei': 4, 'GLbitfield': 4, 'GLshort': 2, 'GLushort': 2,
-         'GLbyte': 1, 'GLubyte': 1, 'GLboolean': 1, 'GLchar': 1, 'void': 1}
+         'GLbyte': 1, 'GLubyte': 1, 'GLboolean': 1, 'GLchar': 1, 'void': 1,
+         'GLfixed': 4, 'GLclampx': 4, 'GLhalfNV': 2, 'GLint64': 8, 'GLuint64': 8}
 
 def is_ptr(t): return '*' in t
 def is_const_ptr(t): return is_ptr(t) and t.startswith('const')
@@ -199,9 +269,19 @@ def kind(name):
     if len(ptrs) == 1 and al[-1] == ptrs[0] and not is_ptr(ret):
         len_expr(ptrs[0][2])
         return 'out'
-    raise SystemExit('gen.py: no rule for ' + name)
+    NORULE.append(name)
+    return 'none'
 
-kinds = {n: kind(n) for n in want}
+NORULE = []
+def kind_safe(n):
+    try:
+        return kind(n)
+    except ValueError:
+        NORULE.append(n)
+        return 'none'
+kinds = {n: kind_safe(n) for n in want}
+if NORULE:
+    raise SystemExit('gen.py: no rule for ' + ' '.join(NORULE))
 
 # immediate mode, collected on the RISC OS side between glBegin and glEnd
 # (lib/r3d_gl.c: r3d_imm). The vertex, colour, normal and texture
@@ -243,6 +323,10 @@ for es in reg.findall('enums'):
     for e in es.findall('enum'):
         if e.get('api') in (None, 'gl') and e.get('name') not in enum_values:
             enum_values[e.get('name')] = e.get('value')
+for es in reg.findall('enums'):
+    for e in es.findall('enum'):
+        if e.get('name') not in enum_values:
+            enum_values[e.get('name')] = e.get('value')
 
 with open(os.path.join(out, 'r3d_gl.h'), 'w') as f:
     f.write('/* Generated by proto/gen.py from Khronos\'s gl.xml: do not edit.\n'
@@ -269,11 +353,27 @@ typedef char GLchar;
 typedef khronos_int32_t GLfixed;
 typedef khronos_intptr_t GLintptr;
 typedef khronos_ssize_t GLsizeiptr;
+typedef khronos_int32_t GLclampx;
+typedef unsigned int GLhandleARB;
+typedef char GLcharARB;
+typedef khronos_intptr_t GLintptrARB;
+typedef khronos_ssize_t GLsizeiptrARB;
+typedef khronos_uint16_t GLhalf;
+typedef khronos_uint16_t GLhalfNV;
+typedef khronos_int64_t GLint64;
+typedef khronos_uint64_t GLuint64;
+typedef struct __GLsync *GLsync;
+typedef void (*GLDEBUGPROC) (GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam);
+typedef GLDEBUGPROC GLDEBUGPROCKHR;
 ''')
     for e in enums_wanted:
         if e in enum_values:
             f.write('#define %s %s\n' % (e, enum_values[e]))
     for n in want:
+        ret, al, _ = commands[n]
+        f.write('%s %s (%s);\n' % (ret, n, cargs(al)))
+    f.write('/* the other names (r3d_gl_functions[] gives the same functions) */\n')
+    for n, _ in aliases:
         ret, al, _ = commands[n]
         f.write('%s %s (%s);\n' % (ret, n, cargs(al)))
     f.write('#endif\n')
@@ -287,7 +387,10 @@ with open(os.path.join(out, 'r3d_ops.h'), 'w') as f:
             '  OP_OVERLAY, OP_PRESENT_OVERLAY,\n')
     for n, o in ops:
         f.write('  OP_%s = %d,\n' % (n, o))
-    f.write('  OP_END\n};\n#endif\n')
+    f.write('  OP_END,\n')
+    # commands of the library's own added later: numbered apart, so that
+    # the functions' numbers above stay as they were
+    f.write('  OP_READ_BUFFER_RANGE = 0x7F00, OP_DRAW_ELEMENTS_EX\n};\n#endif\n')
 
 # --- both ends ------------------------------------------------------------
 
@@ -502,10 +605,22 @@ def ext_ok(e, api):
 with open(os.path.join(out, 'r3d_exts.h'), 'w') as f:
     f.write('/* Generated by proto/gen.py from gl.xml: do not edit.\n')
     f.write('   The extensions whose functions the stream carries, sorted. */\n')
-    for api, var in (('gl', 'r3d_exts_gl'), ('gles2', 'r3d_exts_gles2')):
+    es11 = set(surface_list('riscos-mesa-20.3.5-es11-extensions.txt'))
+    # (gl.xml lists it for GLES 2 only; riscos-mesa has it in 1.1 too, and
+    # rol-3d decodes ETC1 for GLES 1.1 as riscos-mesa does: linux/es1.c)
+    ES1_EXTRA = {'GL_EXT_compressed_ETC1_RGB8_sub_texture'}
+    for api, var in (('gl', 'r3d_exts_gl'), ('gles1', 'r3d_exts_gles1'), ('gles2', 'r3d_exts_gles2')):
+        # GLES 1.1 runs on desktop OpenGL, whose list names other
+        # extensions: its list is riscos-mesa's own, those carried
         names = sorted(n for n, e in ext.items()
-                       if api in (e.get('supported') or '').split('|') and ext_ok(e, api))
+                       if api in (e.get('supported') or '').split('|') and ext_ok(e, api)
+                       and (api != 'gles1' or n in es11))
+        if api == 'gles1':
+            names = sorted(set(names) | ES1_EXTRA)
         f.write('static const char *const %s[] = {\n' % var)
         for n in names:
             f.write('  "%s",\n' % n)
         f.write('};\n')
+if os.environ.get('R3D_LIST_NEW'):
+    for n in want[want.index('glAlphaFuncx'):]:
+        print(kinds[n], commands[n][0], n, [p[0]+' '+p[1]+('['+str(p[2])+']' if p[2] else '') for p in commands[n][1]])

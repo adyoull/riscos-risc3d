@@ -1,7 +1,7 @@
 | RISC3D test: draws 300 frames two ways, checks the pixels and writes
 | what happened to Results in this folder. Takes a few seconds.
-RMEnsure RISC3D 0.01 RMLoad <Obey$Dir>.RISC3D
-RMEnsure Linux3D 0.01 RMLoad <Obey$Dir>.Linux3D
+RMEnsure RISC3D 0.02 Error Install riscos-risc3d first (see !ReadMe)
+RMEnsure Linux3D 0.01 Error Install riscos-risc3d first (see !ReadMe)
 Echo RISC3D test { > <Obey$Dir>.Results }
 Run <Obey$Dir>.r3dtest 300 { >> <Obey$Dir>.Results }
 Run <Obey$Dir>.r3dtest 300 vbo { >> <Obey$Dir>.Results }

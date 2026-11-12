@@ -1,4 +1,4 @@
-RISC3D test kit 7 (prototype, 12 November 2026)
+RISC3D test kit 8 (prototype, 12 November 2026)
 ===============================================
 
 RISC3D is a 3D driver interface for RISC OS. On RISC OS on Linux its
@@ -9,9 +9,10 @@ OS ports use (GL), and drew it exactly as Linux does; kit 3 made the
 calls cheaper on the RISC OS side; kit 4 said where a frame's time goes
 (GL's bench lines: the renderer's own time, empty frames, the calls
 alone): on the Linux side; kit 5 made that side cheaper; kit 6 sent each
-glBegin ... glEnd as one draw, as Mesa does itself; kit 7 sends a long
+glBegin ... glEnd as one draw, as Mesa does itself; kit 7 sent a long
 one in pieces, so Linux draws while the program is still calling, and
-GL's bench measures the processor too (RISC OS against Linux). The SWI numbers are provisional.
+GL's bench measures the processor too (RISC OS against Linux); kit 8
+writes the vertices straight into the shared memory (no copy). The SWI numbers are provisional.
 
 Needs
 -----

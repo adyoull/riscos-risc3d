@@ -1216,9 +1216,15 @@ serve (int c)
   for (;;)
     {
       drain ();
-      /* a little longer awake: the next command is often on its way */
-      for (int i = 0; i < 2000 && area->tail == __atomic_load_n (&area->head, __ATOMIC_SEQ_CST); i++)
-	R3D_PAUSE ();
+      /* a little longer awake (0.2 ms): the next batch is often on its way,
+	 and waking a sleeping renderer costs the program a call into Linux */
+      uint64_t until = now_ns () + 200000;
+      for (int i = 1; area->tail == __atomic_load_n (&area->head, __ATOMIC_ACQUIRE) && !area->asking; i++)
+	{
+	  R3D_PAUSE ();
+	  if (!(i & 63) && now_ns () > until)
+	    break;
+	}
       if (area->tail != area->head)
 	continue;
       __atomic_store_n (&area->sleeping, 1, __ATOMIC_SEQ_CST);

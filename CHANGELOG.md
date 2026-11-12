@@ -1,5 +1,31 @@
 # Changelog
 
+## Collected straight into the ring (12 Nov 2026)
+
+- Kit 7 on the Pi 4: picture and answers the same as Linux's (files byte
+  for byte). The processor loop: 0.56 s as a RISC OS program, 0.39 s as
+  a Linux one (1.44 times: 32-bit code, VFP and no NEON; not a fault).
+  The bench 171.4 frames a second (from 117.6), the renderer working
+  0.21 s of 0.35 and woken 998 times; the calls alone took 0.33 s to
+  issue, about 180 ns a call: the library copied every collected vertex
+  twice (into its own buffer, then into the ring; 3.6 MB a frame).
+- Now the vertices are written straight into the ring: the first vertex
+  makes room for a draw (OP_IMMEDIATE) of up to 1024 vertices (whole
+  primitives), filled in place and finished when full or at glEnd. A
+  long strip, fan, loop or polygon (which can't be cut) moves to the
+  library's own memory when the room is full. The usual case of each
+  collected call is inlined into it (kind, unit and size known there).
+- The renderer stays awake 0.2 ms (by the clock) after the last batch
+  before sleeping, so the program seldom has to wake it; and the program
+  marks in the shared memory (`asking`, from a spare word: the layout is
+  unchanged) when it is about to wait for an answer, so an awake
+  renderer goes to the socket at once.
+- gl1test: a 3000-vertex triangle list (cut into draws) and a 3000-vertex
+  strip (gathered whole). Build machine: picture identical to Mesa
+  directly, answers the same; bench 347-448 frames a second through
+  RISC3D against 330 directly; empty frames 0.19-0.23 ms.
+- Kit 8 (`out/RISC3DTest-8.zip`). Modules unchanged.
+
 ## Collected immediate mode in pieces; the processor measured (12 Nov 2026)
 
 - Kit 6 on the Pi 4: picture identical to Linux's (7cc6caa0 both, the

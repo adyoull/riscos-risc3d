@@ -156,8 +156,12 @@ struct r3d_context
   GLenum imm_mode;
   uint32_t imm_specified, imm_layout;
   GLfloat imm_cur[6][4];		/* colour, normal, texture coordinates 0-3 */
-  GLfloat *imm_v;
+  GLfloat *imm_v;			/* gathered here (strips and the like) */
   size_t imm_count, imm_cap, imm_stride;
+  size_t imm_capv;			/* room for this many vertices */
+  GLfloat *imm_w;			/* where the next one goes */
+  uint32_t *imm_cmd;			/* the draw being filled in the ring */
+  uint32_t imm_cmd_head;		/* where it starts */
 };
 static struct r3d_context none = { .handle = -1 };
 static struct r3d_context *cur = &none;
@@ -173,7 +177,11 @@ static long r3d_nonneg (long n) { return n < 0 ? 0 : n; }
 static int
 kick (int wait)
 {
+  if (wait)
+    __atomic_store_n (&cur->area->asking, 1, __ATOMIC_SEQ_CST);
   _kernel_oserror *e = _swix (RISC3D_Sync, _INR (0, 1), cur->handle, wait);
+  if (wait)
+    __atomic_store_n (&cur->area->asking, 0, __ATOMIC_RELAXED);
   if (e)
     {
       strncpy (error_text, e->errmess, sizeof error_text - 1);
@@ -2448,23 +2456,29 @@ glPopClientAttrib (void)
 /* --- immediate mode, collected -------------------------------------------
 
    Between glBegin and glEnd the vertex, colour, normal and texture
-   coordinate calls are collected here, and glEnd sends them as one draw
-   from an array (OP_IMMEDIATE), as Mesa itself does with immediate mode;
-   then the current colour, normal and texture coordinates are set to the
-   last ones given, as the calls would have left them. Not while a display
-   list is made, nor for anything else between glBegin and glEnd (a
-   glMaterial, an edge flag...): then what was collected goes as the calls
-   themselves, and the rest of the primitive too. An attribute is in the
-   array only if it was given before the first vertex; one first given
-   later does the same. */
+   coordinate calls are collected, and sent as draws from an array
+   (OP_IMMEDIATE), as Mesa itself does with immediate mode; at glEnd the
+   current colour, normal and texture coordinates are set to the last ones
+   given, as the calls would have left them. The vertices are written
+   straight into the ring, into a command made room for at the first
+   vertex and finished when it is full or at glEnd: a long primitive of
+   points, lines, triangles or quads goes a draw at a time, so the
+   renderer draws while the program is still calling; a long strip, fan,
+   loop or polygon is gathered here first (it can't be cut).
+
+   Not while a display list is made, nor for anything else between glBegin
+   and glEnd (a glMaterial, an edge flag...): then what was collected goes
+   as the calls themselves, and the rest of the primitive too. An
+   attribute is in the array only if it was given before the first
+   vertex; one first given later does the same. */
 
 enum { IMM_VERTEX, IMM_COLOR, IMM_NORMAL, IMM_TEX };
 #define IMM_UNITS 4
 #define IMM_SMALL 8			/* fewer vertices than this go as calls */
-#define IMM_CHUNK 1024			/* a long primitive goes a draw at a time,
-					   so the renderer draws while the program
-					   is still calling */
-#define IMM_MAX_FLOATS (4u << 20)
+#define IMM_CHUNK 1024			/* vertices a draw, for those that can be cut */
+#define IMM_MAX_FLOATS (4u << 20)	/* gathered here, at most */
+
+static const int imm_per[GL_POLYGON + 1] = { 1, 2, 0, 0, 3, 0, 0, 4, 0, 0 };
 
 static int
 r3d_imm_begin (GLenum mode)
@@ -2475,6 +2489,8 @@ r3d_imm_begin (GLenum mode)
   cur->imm_mode = mode;
   cur->imm_specified = 0;
   cur->imm_count = 0;
+  cur->imm_capv = 0;			/* no room yet: the first vertex makes it */
+  cur->imm_cmd = 0;
   return 1;
 }
 
@@ -2492,6 +2508,78 @@ imm_stride (uint32_t layout)
   return n;
 }
 
+/* the program's own arrays: none enabled or in a buffer object, so the
+   renderer needn't save and restore them around ours */
+static int
+arrays_untouched (void)
+{
+  for (int i = 0; i < MAX_ATTRIBS; i++)
+    if (cur->attribs[i].enabled || cur->attribs[i].in_buffer)
+      return 0;
+  for (int s = 0; s < FIXED_SLOTS; s++)
+    if (cur->fixed[s].enabled || cur->fixed[s].in_buffer)
+      return 0;
+  return 1;
+}
+
+/* room in the ring for a draw of up to cap vertices: 1, or 0 */
+static int
+imm_room (size_t cap)
+{
+  size_t words = 4 + cap * cur->imm_stride;
+  cur->imm_on = 0;			/* (making room is a command) */
+  uint32_t *a = r3d_put (OP_IMMEDIATE, words);
+  cur->imm_on = 1;
+  if (!a)
+    return 0;
+  cur->imm_cmd = a;
+  cur->imm_cmd_head = cur->local_head - (uint32_t) (words + 2);
+  cur->imm_capv = cap;
+  cur->imm_w = (GLfloat *) (a + 4);
+  return 1;
+}
+
+/* the draw in the ring finished with the vertices it has */
+static void
+imm_finish (void)
+{
+  uint32_t *a = cur->imm_cmd;
+  size_t words = 4 + cur->imm_count * cur->imm_stride;
+  a[-1] = (uint32_t) (words + 2);
+  a[0] = cur->imm_mode;
+  a[1] = (uint32_t) cur->imm_count;
+  a[2] = cur->imm_layout;
+  a[3] = (uint32_t) arrays_untouched ();
+  cur->local_head = cur->imm_cmd_head + (uint32_t) (words + 2);
+  cur->imm_cmd = 0;
+}
+
+/* what the ring holds of it moved here (the room given back) */
+static int
+imm_to_heap (size_t cap)
+{
+  size_t floats = cur->imm_count * cur->imm_stride, want = cap * cur->imm_stride;
+  if (want < floats)
+    want = floats;
+  if (want > cur->imm_cap)
+    {
+      GLfloat *p = realloc (cur->imm_v, want * sizeof *p);
+      if (!p)
+	return 0;
+      cur->imm_v = p;
+      cur->imm_cap = want;
+    }
+  if (cur->imm_cmd)
+    {
+      memcpy (cur->imm_v, cur->imm_cmd + 4, floats * sizeof (GLfloat));
+      cur->local_head = cur->imm_cmd_head;
+      cur->imm_cmd = 0;
+    }
+  cur->imm_capv = cur->imm_cap / cur->imm_stride;
+  cur->imm_w = cur->imm_v + floats;
+  return 1;
+}
+
 /* the current values given so far, as calls */
 static void
 imm_current (void)
@@ -2507,17 +2595,22 @@ imm_current (void)
 }
 
 /* what was collected, as the calls themselves (glBegin, then each
-   vertex with its attributes, then the current values) */
+   vertex with its attributes, then the current values); collecting
+   ends */
 static void
 imm_as_calls (void)
 {
+  if (cur->imm_cmd && !imm_to_heap (0))
+    cur->imm_count = 0;			/* (no memory: the vertices are lost) */
+  cur->imm_on = 0;
   uint32_t *a = r3d_put (OP_glBegin, 1);
   if (!a)
     return;
   a[0] = cur->imm_mode;
+  const GLfloat *all = cur->imm_v;
   for (size_t i = 0; i < cur->imm_count; i++)
     {
-      const GLfloat *v = cur->imm_v + i * cur->imm_stride, *p = v + 4;
+      const GLfloat *v = all + i * cur->imm_stride, *p = v + 4;
       if (cur->imm_layout & 1)
 	{
 	  glColor4f (p[0], p[1], p[2], p[3]);
@@ -2542,142 +2635,135 @@ imm_as_calls (void)
 static void
 imm_fallback (void)
 {
-  cur->imm_on = 0;
   imm_as_calls ();
 }
 
-/* the program's own arrays: none enabled or in a buffer object, so the
-   renderer needn't save and restore them around ours */
-static int
-arrays_untouched (void)
-{
-  for (int i = 0; i < MAX_ATTRIBS; i++)
-    if (cur->attribs[i].enabled || cur->attribs[i].in_buffer)
-      return 0;
-  for (int s = 0; s < FIXED_SLOTS; s++)
-    if (cur->fixed[s].enabled || cur->fixed[s].in_buffer)
-      return 0;
-  return 1;
-}
-
+/* the vertices gathered here, as one draw */
 static void
-imm_draw (void)
+imm_draw_heap (void)
 {
-  int on = cur->imm_on;
-  cur->imm_on = 0;
-  size_t floats = cur->imm_count * cur->imm_stride;
   uint32_t f[4] = { cur->imm_mode, (uint32_t) cur->imm_count, cur->imm_layout, (uint32_t) arrays_untouched () };
-  r3d_put_data (OP_IMMEDIATE, f, 4, cur->imm_v, floats * 4);
-  cur->imm_on = on;
+  cur->imm_on = 0;
+  r3d_put_data (OP_IMMEDIATE, f, 4, cur->imm_v, cur->imm_count * cur->imm_stride * 4);
+  cur->imm_on = 1;
 }
 
 static void
 r3d_imm_end (void)
 {
-  cur->imm_on = 0;
   if (cur->imm_count < IMM_SMALL)
     {
       imm_as_calls ();
       r3d_put (OP_glEnd, 0);
       return;
     }
-  imm_draw ();
+  if (cur->imm_cmd)
+    imm_finish ();
+  else
+    imm_draw_heap ();
+  cur->imm_on = 0;
   imm_current ();
 }
 
-/* one call between glBegin and glEnd: 1 if collected */
+/* the room is full (or there is none yet): 1 if the vertex can go on */
 static int
+imm_full (void)
+{
+  int k = imm_per[cur->imm_mode];
+  if (!cur->imm_capv && !cur->imm_count)
+    {
+      /* the first vertex: its layout, and room in the ring */
+      cur->imm_layout = cur->imm_specified;
+      cur->imm_stride = imm_stride (cur->imm_layout);
+      return imm_room (k ? IMM_CHUNK / (size_t) k * (size_t) k : IMM_CHUNK) || imm_to_heap (IMM_CHUNK);
+    }
+  if (cur->imm_cmd && k)
+    {
+      /* whole primitives: this draw goes, the next one has room */
+      imm_finish ();
+      publish ();
+      cur->imm_count = 0;
+      return imm_room (cur->imm_capv);
+    }
+  /* gathered here: more room */
+  size_t floats = cur->imm_count * cur->imm_stride;
+  if (floats * 2 > IMM_MAX_FLOATS)
+    {
+      if (k && !cur->imm_cmd)
+	{
+	  imm_draw_heap ();
+	  cur->imm_count = 0;
+	  cur->imm_w = cur->imm_v;
+	  return 1;
+	}
+      return 0;
+    }
+  return imm_to_heap (cur->imm_count * 2);
+}
+
+static int
+imm_attr_late (void)
+{
+  imm_fallback ();			/* (sends this one's value too) */
+  return 1;
+}
+
+/* one call between glBegin and glEnd: 1 if collected. Inlined into each
+   call, with kind, unit and n known there. */
+static inline __attribute__ ((always_inline)) int
 r3d_imm (int kind, int unit, int n, const GLfloat *val)
 {
-  GLfloat v[4] = { 0, 0, 0, 1 };
-  for (int i = 0; i < n; i++)
-    v[i] = val[i];
+  struct r3d_context *c = cur;
   if (kind != IMM_VERTEX)
     {
-      int at = kind == IMM_COLOR ? 0 : kind == IMM_NORMAL ? 1 : 2 + unit;
-      if (kind == IMM_TEX && (unit < 0 || unit >= IMM_UNITS))
+      if (kind == IMM_TEX && (unsigned) unit >= IMM_UNITS)
 	{
 	  imm_fallback ();
 	  return 0;
 	}
-      memcpy (cur->imm_cur[at], v, sizeof v);
-      cur->imm_specified |= 1u << at;
-      if (cur->imm_count && !(cur->imm_layout & (1u << at)))
-	{
-	  imm_fallback ();		/* (sends this one's value too) */
-	  return 1;
-	}
+      int at = kind == IMM_COLOR ? 0 : kind == IMM_NORMAL ? 1 : 2 + unit;
+      GLfloat *d = c->imm_cur[at];
+      d[0] = val[0];
+      d[1] = n > 1 ? val[1] : 0;
+      d[2] = n > 2 ? val[2] : 0;
+      d[3] = n > 3 ? val[3] : 1;
+      c->imm_specified |= 1u << at;
+      if (__builtin_expect (c->imm_count && !(c->imm_layout & (1u << at)), 0))
+	return imm_attr_late ();
       return 1;
     }
-  if (!cur->imm_count)
+  if (__builtin_expect (c->imm_count >= c->imm_capv, 0) && !imm_full ())
     {
-      cur->imm_layout = cur->imm_specified;
-      cur->imm_stride = imm_stride (cur->imm_layout);
+      imm_fallback ();
+      return 0;
     }
-  size_t need = (cur->imm_count + 1) * cur->imm_stride;
-  if (need > cur->imm_cap)
-    {
-      if (need > IMM_MAX_FLOATS)
-	{
-	  /* very long: a draw now, if whole primitives can be cut off */
-	  static const int per[GL_POLYGON + 1] = { 1, 2, 0, 0, 3, 0, 0, 4, 0, 0 };
-	  int k = per[cur->imm_mode];
-	  if (k && cur->imm_count % (size_t) k == 0)
-	    {
-	      imm_draw ();
-	      cur->imm_count = 0;
-	      need = cur->imm_stride;
-	    }
-	  else
-	    {
-	      imm_fallback ();
-	      return 0;
-	    }
-	}
-      if (need > cur->imm_cap)
-	{
-	  size_t cap = need * 2 + 1024;
-	  GLfloat *p = realloc (cur->imm_v, cap * sizeof *p);
-	  if (!p)
-	    {
-	      imm_fallback ();
-	      return 0;
-	    }
-	  cur->imm_v = p;
-	  cur->imm_cap = cap;
-	}
-    }
-  GLfloat *d = cur->imm_v + cur->imm_count * cur->imm_stride;
-  memcpy (d, v, sizeof v);
+  c = cur;
+  GLfloat *d = c->imm_w;
+  uint32_t l = c->imm_layout;
+  d[0] = val[0];
+  d[1] = n > 1 ? val[1] : 0;
+  d[2] = n > 2 ? val[2] : 0;
+  d[3] = n > 3 ? val[3] : 1;
   d += 4;
-  if (cur->imm_layout & 1)
+  if (l & 1)
     {
-      memcpy (d, cur->imm_cur[0], 16);
+      d[0] = c->imm_cur[0][0]; d[1] = c->imm_cur[0][1]; d[2] = c->imm_cur[0][2]; d[3] = c->imm_cur[0][3];
       d += 4;
     }
-  if (cur->imm_layout & 2)
+  if (l & 2)
     {
-      memcpy (d, cur->imm_cur[1], 12);
+      d[0] = c->imm_cur[1][0]; d[1] = c->imm_cur[1][1]; d[2] = c->imm_cur[1][2];
       d += 3;
     }
-  for (int u = 0; u < IMM_UNITS; u++)
-    if (cur->imm_layout & (4u << u))
-      {
-	memcpy (d, cur->imm_cur[2 + u], 16);
-	d += 4;
-      }
-  cur->imm_count++;
-  if (cur->imm_count >= IMM_CHUNK)
-    {
-      static const int per[GL_POLYGON + 1] = { 1, 2, 0, 0, 3, 0, 0, 4, 0, 0 };
-      int k = per[cur->imm_mode];
-      if (k && cur->imm_count % (size_t) k == 0)
+  if (__builtin_expect (l & 0x3c, 0))
+    for (int u = 0; u < IMM_UNITS; u++)
+      if (l & (4u << u))
 	{
-	  imm_draw ();
-	  publish ();
-	  cur->imm_count = 0;
+	  memcpy (d, c->imm_cur[2 + u], 16);
+	  d += 4;
 	}
-    }
+  c->imm_w = d;
+  c->imm_count++;
   return 1;
 }
 

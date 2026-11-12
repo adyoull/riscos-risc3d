@@ -418,6 +418,24 @@ main (int argc, char **argv)
     }
   glEnd ();
   GLfloat cc[4];
+  /* long ones: triangles cut into draws (3000 vertices), and a strip
+     gathered whole (3000 vertices) */
+  glBegin (GL_TRIANGLES);
+  for (int i = 0; i < 3000; i++)
+    {
+      float t = (float) i / 3000.0f;
+      glColor3f (t, 1 - t, 0.5f);
+      glVertex2f (-1.0f + 2.0f * t + (i % 3 == 1 ? 0.004f : 0), -1.4f + (i % 3 == 2 ? 0.05f : 0));
+    }
+  glEnd ();
+  glBegin (GL_TRIANGLE_STRIP);
+  for (int i = 0; i < 3000; i++)
+    {
+      float t = (float) (i / 2) / 1500.0f;
+      glColor3f (0.5f, t, 1 - t);
+      glVertex2f (-1.0f + 2.0f * t, 1.3f + (float) (i % 2) * 0.04f);
+    }
+  glEnd ();
   glGetFloatv (GL_CURRENT_COLOR, cc);
   printf ("current colour after a collected strip: %.4f %.4f %.4f %.4f\n", cc[0], cc[1], cc[2], cc[3]);
   glEnable (GL_LIGHTING);

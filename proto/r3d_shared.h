@@ -29,7 +29,10 @@ struct r3d_area
   volatile uint32_t tail;		/* words read, ever */
   volatile uint32_t sleeping;		/* the renderer is waiting to be woken */
   volatile uint32_t reply_len;		/* the last answer's length in bytes */
-  uint32_t pad[7];
+  volatile uint32_t asking;		/* the program is about to wait for an
+					   answer (so the renderer, if awake,
+					   goes to the socket at once) */
+  uint32_t pad[6];
 };
 
 /* what the program sends down the context's socket (through RISC3D_Sync) */

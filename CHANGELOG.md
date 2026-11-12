@@ -1,5 +1,20 @@
 # Changelog
 
+## Kit 11 on the Pi 4 (12 Nov 2026)
+
+- The leaked contexts were the cause: after a restart, kit 11's GL ran to
+  the end. Picture identical to Linux's (04ecca57, the files byte for
+  byte), every answer the same.
+- Overlapped frames: each frame came back a frame later ("ok"). The
+  bench 250.0 frames a second overlapped against 240.0 with r3d_swap
+  (Linux directly 341.1); the calls alone 16.4 million a second
+  overlapped, more than Linux's own 11.1.
+- What limits a frame now is the renderer reading it back (about 2 ms a
+  frame on the Pi: the GPU finishing, the read from the GPU's memory,
+  the copies): overlapping hides the program's wait but not that work.
+  Zero-copy presentation (handed to the RISC OS on Linux conversation)
+  is what removes it.
+
 ## Contexts closed when a program ends (12 Nov 2026)
 
 - Kits 9 and 10 on the Pi 4: GL stopped after its first bench, at the

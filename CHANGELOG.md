@@ -1,5 +1,21 @@
 # Changelog
 
+## Contexts closed when a program ends (12 Nov 2026)
+
+- Kits 9 and 10 on the Pi 4: GL stopped after its first bench, at the
+  overlapped-frames check, and `*RISC3D` showed 8 contexts still open,
+  task &00000000, each with 36 MB mapped (from &F547C000 down to
+  &E5875000) and a Linux helper process. `gl1test bench` ended without
+  closing its context, and a program run from an Obey file isn't a Wimp
+  task, so RISC3D's Service_WimpCloseDown never closed them. Each run
+  left one more, mapped lower; the stop is probably the address space,
+  not the overlapped frames themselves.
+- The library now keeps a list of its open contexts and closes them
+  with atexit, so they go however a program ends. gl1test closes its
+  context after the bench, and its output is a line at a time (with a
+  line per overlapped frame), so a stop part way shows where.
+- Kit 11 (`out/RISC3DTest-11.zip`). Modules unchanged from kit 10.
+
 ## 0.02: drivers of a second kind, for the native GPU driver (12 Nov 2026)
 
 - RISC3D 0.02. `RISC3D_Register` takes flags in r4: bit 0 = a DRM

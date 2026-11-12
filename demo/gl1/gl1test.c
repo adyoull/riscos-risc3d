@@ -239,6 +239,8 @@ bench (void)
 int
 main (int argc, char **argv)
 {
+  /* (a line at a time: a stop part way still shows how far it got) */
+  setvbuf (stdout, 0, _IOLBF, 0);
   const char *e = open_gl ();
   if (e)
     {
@@ -269,6 +271,7 @@ main (int argc, char **argv)
       int ok = 1;
       for (int i = 0; i < 4; i++)
 	{
+	  printf ("  overlapped frame %d\n", i + 1);
 	  glClearColor (col[i][0], col[i][1], col[i][2], 1);
 	  glClear (GL_COLOR_BUFFER_BIT);
 	  finish_frame ();
@@ -280,6 +283,9 @@ main (int argc, char **argv)
       printf ("frames overlapped: each one back a frame later: %s\n", ok ? "ok" : "WRONG");
       printf ("with frames overlapped:\n");
       bench ();
+#endif
+#ifndef DIRECT
+      r3d_close ();
 #endif
       return 0;
     }

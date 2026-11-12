@@ -2776,6 +2776,38 @@ r3d_imm (int kind, int unit, int n, const GLfloat *val)
 
 /* --- contexts ----------------------------------------------------------- */
 
+/* the contexts open, closed when the program ends however it ends (a
+   program that isn't a Wimp task, run from an Obey file or the command
+   line, isn't seen ending by RISC3D: its contexts would stay open, each
+   with a Linux process and 36 MB mapped) */
+#define MAX_OPEN 16
+static struct r3d_context *open_ctx[MAX_OPEN];
+static int atexit_set;
+
+static void
+close_all (void)
+{
+  for (int i = 0; i < MAX_OPEN; i++)
+    if (open_ctx[i])
+      {
+	_swix (RISC3D_Close, _IN (0), open_ctx[i]->handle);
+	open_ctx[i] = 0;
+      }
+}
+
+static void
+remember (struct r3d_context *c, int on)
+{
+  for (int i = 0; i < MAX_OPEN; i++)
+    if (on ? !open_ctx[i] : open_ctx[i] == c)
+      {
+	open_ctx[i] = on ? c : 0;
+	break;
+      }
+  if (on && !atexit_set)
+    atexit_set = atexit (close_all) == 0;
+}
+
 static void
 free_context (struct r3d_context *c)
 {
@@ -2867,6 +2899,7 @@ create (int desktop)
       free_context (c);
       return 0;
     }
+  remember (c, 1);
   return c;
 }
 
@@ -2892,6 +2925,7 @@ r3d_destroy (struct r3d_context *c)
       publish ();
       cur = &none;
     }
+  remember (c, 0);
   _swix (RISC3D_Close, _IN (0), c->handle);
   free_context (c);
 }

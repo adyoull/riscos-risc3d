@@ -15,8 +15,12 @@
  * asks it to finish everything and answer ('S': a query, or the end of a
  * frame). Answers and finished frames go back in the shared reply area.
  *
- * PROTOTYPE: frames are read back and copied (no zero-copy to the screen
- * yet), and the wire format will change.
+ * Frames are read back into the reply area, or (zero-copy) copied by the
+ * GPU into buffers that rol-fb shows on a display plane under the
+ * desktop. The main process stays root to open the display's card for
+ * each connection; each context's process runs as RISC OS's Linux user.
+ *
+ * PROTOTYPE: the wire format will change.
  *
  * Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE).
  */
@@ -34,12 +38,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <time.h>
 #include <unistd.h>
+#include <drm/drm.h>
+#include <drm/drm_fourcc.h>
+#include <drm/drm_mode.h>
 #include "r3d_gl.h"
 #include "r3d_ops.h"
 #include "r3d_shared.h"
@@ -166,6 +174,14 @@ typedef unsigned EGLBoolean, EGLenum;
 #define EGL_CONTEXT_CLIENT_VERSION 0x3098
 #define EGL_PLATFORM_GBM_KHR 0x31D7
 #define EGL_PLATFORM_SURFACELESS_MESA 0x31DD
+#define EGL_WIDTH 0x3057
+#define EGL_HEIGHT 0x3056
+#define EGL_LINUX_DMA_BUF_EXT 0x3270
+#define EGL_LINUX_DRM_FOURCC_EXT 0x3271
+#define EGL_DMA_BUF_PLANE0_FD_EXT 0x3272
+#define EGL_DMA_BUF_PLANE0_OFFSET_EXT 0x3273
+#define EGL_DMA_BUF_PLANE0_PITCH_EXT 0x3274
+typedef void *EGLImage;
 
 static struct
 {
@@ -457,6 +473,295 @@ present_frame (char *dst, size_t room)
   return n;
 }
 
+
+/* --- zero-copy: the frame on a display plane (rol-fb's overlays) --------
+
+   With the program's window placed (OP_OVERLAY), each frame is copied by
+   the GPU into one of two buffers that the display itself shows, on a
+   plane under the desktop, through rol-fb's socket "rol-fb-overlay"
+   (images/fe/rol-fb.c in riscos-linux-testbed). Nothing is read back. The
+   picture shows where the desktop has the key colour (0x080008) inside the
+   window's rectangle: the program paints its work area so, and windows over
+   it clip it for nothing.
+
+   The buffers are dumb buffers of the display's card (contiguous memory the
+   display can scan out), shared with the GPU as dma-bufs. The main process
+   (root) opens the card for each connection: card_fd. Any failure stops
+   the overlay (area->overlay_error); the program goes back to read-back. */
+
+static int card_fd = -1;
+static int ov_sock = -1, ov_on, ov_failed, ov_formats, ov_under, ov_shown = -1;
+static int ov_x, ov_y, ov_w, ov_h, ov_visible;
+static struct ovbuf
+{
+  int fd;
+  uint32_t handle, pitch;
+  int w, h;
+  EGLImage image;
+  GLuint rb, fb;
+} ov_buf[2];
+static EGLImage (*CreateImageKHR) (EGLDisplay, EGLContext, EGLenum, void *, const EGLint *);
+static EGLBoolean (*DestroyImageKHR) (EGLDisplay, EGLImage);
+static void (*ImageTargetRenderbuffer) (GLenum, void *);
+
+/* one message (with fd if >= 0) and its reply: the reply's [0] */
+static int
+ov_call (const int32_t *m, int fd, int32_t *r)
+{
+  union { char buf[CMSG_SPACE (sizeof (int))]; struct cmsghdr align; } ctl;
+  struct iovec iov = { (void *) m, 16 * sizeof (int32_t) };
+  struct msghdr msg = { .msg_iov = &iov, .msg_iovlen = 1 };
+  if (fd >= 0)
+    {
+      msg.msg_control = ctl.buf;
+      msg.msg_controllen = sizeof ctl.buf;
+      struct cmsghdr *c = CMSG_FIRSTHDR (&msg);
+      c->cmsg_level = SOL_SOCKET;
+      c->cmsg_type = SCM_RIGHTS;
+      c->cmsg_len = CMSG_LEN (sizeof (int));
+      memcpy (CMSG_DATA (c), &fd, sizeof fd);
+    }
+  memset (r, 0, 16 * sizeof (int32_t));
+  if (sendmsg (ov_sock, &msg, MSG_NOSIGNAL) < 0)
+    return -errno;
+  ssize_t n = recv (ov_sock, r, 16 * sizeof (int32_t), 0);
+  return n <= 0 ? -EPIPE : r[0];
+}
+
+static void
+ov_free_bufs (void)
+{
+  for (int i = 0; i < 2; i++)
+    {
+      struct ovbuf *b = &ov_buf[i];
+      if (b->fb)
+	gl.DeleteFramebuffers (1, &b->fb);
+      if (b->rb)
+	gl.DeleteRenderbuffers (1, &b->rb);
+      if (b->image)
+	DestroyImageKHR (display, b->image);
+      if (b->fd >= 0)
+	close (b->fd);
+      if (b->handle)
+	{
+	  struct drm_mode_destroy_dumb dd = { .handle = b->handle };
+	  ioctl (card_fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dd);
+	}
+      memset (b, 0, sizeof *b);
+      b->fd = -1;
+    }
+  ov_shown = -1;
+}
+
+/* the overlay stops: the program goes back to reading frames */
+static void
+ov_fail (const char *what, int e)
+{
+  if (!ov_failed)
+    logmsg ("rol-3d: overlay: %s (%s); frames are read back\n", what, e < 0 ? strerror (-e) : "failed");
+  ov_failed = 1;
+  ov_on = 0;
+  __atomic_store_n (&area->overlay_error, e < 0 ? (uint32_t) -e : 1u, __ATOMIC_RELEASE);
+  if (have_context && gl.DeleteFramebuffers)
+    ov_free_bufs ();
+  if (ov_sock >= 0)
+    close (ov_sock);
+  ov_sock = -1;
+}
+
+/* connects and opens an RGB overlay: 0, or -errno */
+static int
+ov_open (void)
+{
+  if (card_fd < 0)
+    return -ENODEV;
+  if (!hardware)
+    return -ENODEV;		/* (the software renderer can't share buffers) */
+  CreateImageKHR = (void *) egl.GetProcAddress ("eglCreateImageKHR");
+  DestroyImageKHR = (void *) egl.GetProcAddress ("eglDestroyImageKHR");
+  ImageTargetRenderbuffer = (void *) egl.GetProcAddress ("glEGLImageTargetRenderbufferStorageOES");
+  if (!CreateImageKHR || !DestroyImageKHR || !ImageTargetRenderbuffer || !gl.BlitFramebuffer
+      || !gl.DeleteFramebuffers || !gl.DeleteRenderbuffers || !gl.Finish)
+    return -ENOSYS;
+  for (int i = 0; i < 2; i++)
+    ov_buf[i].fd = -1;
+  ov_sock = socket (AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0);
+  struct sockaddr_un a = { .sun_family = AF_UNIX };
+  memcpy (a.sun_path, "\0rol-fb-overlay", 15);
+  if (ov_sock < 0 || connect (ov_sock, (struct sockaddr *) &a, offsetof (struct sockaddr_un, sun_path) + 15))
+    {
+      int e = -errno;
+      if (ov_sock >= 0)
+	close (ov_sock);
+      ov_sock = -1;
+      return e;
+    }
+  int32_t m[16] = { 1, 1, 1 }, r[16];
+  int e = ov_call (m, -1, r);
+  if (e)
+    {
+      close (ov_sock);
+      ov_sock = -1;
+      return e;
+    }
+  ov_under = r[2];
+  ov_formats = r[4];
+  if (!(ov_formats & 5))
+    {
+      close (ov_sock);
+      ov_sock = -1;
+      return -EINVAL;
+    }
+  ov_on = 1;
+  logmsg ("rol-3d: overlay open (formats %d, under the desktop %d, screen %dx%d)\n", r[4], r[2], r[5], r[6]);
+  return 0;
+}
+
+/* two buffers the surface's size: 0, or -errno */
+static int
+ov_bufs (void)
+{
+  if (ov_buf[0].fb && ov_buf[0].w == fb_w && ov_buf[0].h == fb_h)
+    return 0;
+  if (ov_buf[0].fb)
+    {
+      int32_t m[16] = { 5 }, r[16];	/* FORGET */
+      ov_call (m, -1, r);
+      ov_free_bufs ();
+    }
+  uint32_t fourcc = ov_formats & 4 ? DRM_FORMAT_XBGR8888 : DRM_FORMAT_XRGB8888;
+  GLint rb = 0;
+  gl.GetIntegerv (GL_RENDERBUFFER_BINDING, &rb);
+  for (int i = 0; i < 2; i++)
+    {
+      struct ovbuf *b = &ov_buf[i];
+      struct drm_mode_create_dumb cd = { .width = (uint32_t) fb_w, .height = (uint32_t) fb_h, .bpp = 32 };
+      if (ioctl (card_fd, DRM_IOCTL_MODE_CREATE_DUMB, &cd))
+	return -errno;
+      b->handle = cd.handle;
+      b->pitch = cd.pitch;
+      b->w = fb_w;
+      b->h = fb_h;
+      struct drm_prime_handle ph = { .handle = cd.handle, .flags = DRM_CLOEXEC | DRM_RDWR, .fd = -1 };
+      if (ioctl (card_fd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &ph))
+	return -errno;
+      b->fd = ph.fd;
+      const EGLint at[] = { EGL_WIDTH, fb_w, EGL_HEIGHT, fb_h, EGL_LINUX_DRM_FOURCC_EXT, (EGLint) fourcc,
+			    EGL_DMA_BUF_PLANE0_FD_EXT, b->fd, EGL_DMA_BUF_PLANE0_OFFSET_EXT, 0,
+			    EGL_DMA_BUF_PLANE0_PITCH_EXT, (EGLint) b->pitch, EGL_NONE };
+      b->image = CreateImageKHR (display, 0, EGL_LINUX_DMA_BUF_EXT, 0, at);
+      if (!b->image)
+	return -EINVAL;
+      gl.GenRenderbuffers (1, &b->rb);
+      gl.BindRenderbuffer (GL_RENDERBUFFER, b->rb);
+      ImageTargetRenderbuffer (GL_RENDERBUFFER, b->image);
+      gl.GenFramebuffers (1, &b->fb);
+      gl.BindFramebuffer (GL_FRAMEBUFFER, b->fb);
+      gl.FramebufferRenderbuffer (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, b->rb);
+      GLenum st = gl.CheckFramebufferStatus ? gl.CheckFramebufferStatus (GL_FRAMEBUFFER) : GL_FRAMEBUFFER_COMPLETE;
+      gl.BindFramebuffer (GL_FRAMEBUFFER, app_fb ? app_fb : fbo);
+      if (st != GL_FRAMEBUFFER_COMPLETE)
+	return -EINVAL;
+      int32_t m[16] = { 2, i, fb_w, fb_h, (int32_t) fourcc, (int32_t) b->pitch, 0 }, r[16];
+      int e = ov_call (m, b->fd, r);
+      if (e)
+	return e;
+    }
+  gl.BindRenderbuffer (GL_RENDERBUFFER, (GLuint) rb);
+  return 0;
+}
+
+/* SHOW buffer i at the window's place: 0, or -errno */
+static int
+ov_show (int i)
+{
+  int32_t m[16] = { 3, i, ov_x, ov_y, ov_w, ov_h, 0, 0, ov_buf[i].w, ov_buf[i].h, 0 }, r[16];
+  int e = ov_call (m, -1, r);
+  if (!e)
+    ov_shown = i;
+  return e;
+}
+
+/* OP_OVERLAY: the window's place on the screen, in RISC OS pixels from
+   the top left (w 0: hidden). Answers [0] 1 (frames go to the overlay),
+   0 (they can't: [1] the error number), [1] the key colour, [2] 1 if the
+   overlay is under the desktop */
+static void
+overlay_place (const uint32_t *a)
+{
+  int32_t r[3] = { 0, 0, 0 };
+  if (ov_failed)
+    {
+      /* (asked again after a failure: try once more, e.g. after a mode change) */
+      ov_failed = 0;
+      __atomic_store_n (&area->overlay_error, 0, __ATOMIC_RELEASE);
+    }
+  int e = ov_on ? 0 : ov_open ();
+  if (e)
+    {
+      r[1] = -e;
+      reply (r, sizeof r);
+      return;
+    }
+  ov_x = (int32_t) a[0];
+  ov_y = (int32_t) a[1];
+  ov_w = (int32_t) a[2];
+  ov_h = (int32_t) a[3];
+  ov_visible = ov_w > 0 && ov_h > 0;
+  if (!ov_visible && ov_shown >= 0)
+    {
+      int32_t m[16] = { 4 }, rr[16];	/* HIDE */
+      ov_call (m, -1, rr);
+      ov_shown = -1;
+    }
+  else if (ov_visible && ov_shown >= 0 && (e = ov_show (ov_shown)))
+    {
+      ov_fail ("SHOW at the window's new place", e);
+      r[1] = -e;
+      reply (r, sizeof r);
+      return;
+    }
+  r[0] = 1;
+  r[1] = 0x080008;
+  r[2] = ov_under;
+  reply (r, sizeof r);
+}
+
+/* OP_PRESENT_OVERLAY: frame n, upside down (GL's rows are bottom first)
+   into the buffer not on the screen, then shown; SHOW's answer comes at
+   the display's next frame, so this paces the program at the display's
+   rate, a frame behind (the program waits only for frame n - 1) */
+static void
+present_overlay (uint32_t n)
+{
+  uint64_t t = now_ns ();
+  int e = 0;
+  if (!ov_on || !fbo)
+    e = -ENODEV;
+  else if ((e = ov_bufs ()))
+    ov_fail ("the buffers (dumb buffers shared with the GPU)", e);
+  else if (ov_visible)
+    {
+      int i = ov_shown == 0 ? 1 : 0;
+      GLboolean scissor = gl.IsEnabled (GL_SCISSOR_TEST);
+      if (scissor)
+	gl.Disable (GL_SCISSOR_TEST);
+      gl.BindFramebuffer (GL_READ_FRAMEBUFFER, fbo);
+      gl.BindFramebuffer (GL_DRAW_FRAMEBUFFER, ov_buf[i].fb);
+      gl.BlitFramebuffer (0, 0, fb_w, fb_h, 0, fb_h, fb_w, 0, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+      gl.BindFramebuffer (GL_FRAMEBUFFER, app_fb ? app_fb : fbo);
+      if (scissor)
+	gl.Enable (GL_SCISSOR_TEST);
+      gl.Finish ();
+      if ((e = ov_show (i)))
+	ov_fail ("SHOW (a mode change?)", e);
+    }
+  if (e && !ov_failed)
+    __atomic_store_n (&area->overlay_error, (uint32_t) -e, __ATOMIC_RELEASE);
+  __atomic_store_n (&area->frame_done, n, __ATOMIC_RELEASE);
+  st_present += now_ns () - t;
+}
+
 /* --- the commands written by hand at both ends (lib/r3d_gl.c) ----------- */
 
 static void
@@ -672,6 +977,12 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
       break;
     case OP_PRESENT_SLOT:
       present_slot (a[0]);
+      break;
+    case OP_OVERLAY:
+      overlay_place (a);
+      break;
+    case OP_PRESENT_OVERLAY:
+      present_overlay (a[0]);
       break;
     case OP_SYNC:
       area->reply_len = 0;
@@ -1263,6 +1574,44 @@ serve (int c)
     }
 }
 
+/* the display's card: the one that makes dumb buffers (needs root), into
+   name (32 bytes), else "" */
+static void
+find_card (char *card)
+{
+  card[0] = 0;
+  for (int i = 0; i < 4 && !card[0]; i++)
+    {
+      char name[32];
+      snprintf (name, sizeof name, "/dev/dri/card%d", i);
+      int fd = open (name, O_RDWR | O_CLOEXEC);
+      struct drm_mode_create_dumb cd = { .width = 16, .height = 16, .bpp = 32 };
+      if (fd >= 0 && ioctl (fd, DRM_IOCTL_MODE_CREATE_DUMB, &cd) == 0)
+	{
+	  struct drm_mode_destroy_dumb dd = { .handle = cd.handle };
+	  ioctl (fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dd);
+	  strcpy (card, name);
+	}
+      if (fd >= 0)
+	close (fd);
+    }
+}
+
+/* HOME was root's, so Mesa couldn't make its shader cache and compiled
+   every shader again for each program */
+static void
+home (void)
+{
+  struct passwd *pw = getpwuid (getuid ());
+  if (getuid () == RO_UID)
+    setenv ("HOME", pw && pw->pw_dir && access (pw->pw_dir, W_OK) == 0 ? pw->pw_dir : "/tmp", 1);
+  if (!getenv ("MESA_SHADER_CACHE_DIR") && access (getenv ("HOME") ? getenv ("HOME") : "/", W_OK) != 0)
+    {
+      mkdir ("/tmp/rol-3d-cache", 0700);
+      setenv ("MESA_SHADER_CACHE_DIR", "/tmp/rol-3d-cache", 1);
+    }
+}
+
 int
 main (int argc, char **argv)
 {
@@ -1284,7 +1633,9 @@ main (int argc, char **argv)
 	  else
 	    printf ("; no desktop OpenGL (%s)", gl_error);
 	}
-      printf ("\n");
+      char card[32];
+      find_card (card);
+      printf ("\nrol-3d: zero-copy frames: %s\n", card[0] ? card : "no display card makes buffers (read back only)");
       return 0;
     }
   int l = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
@@ -1294,16 +1645,24 @@ main (int argc, char **argv)
   if (l < 0 || bind (l, (struct sockaddr *) &a, offsetof (struct sockaddr_un, sun_path) + sizeof nm)
       || listen (l, 8))
     return 1;
-  /* As RISC OS's own Linux user, with the group that reaches the GPU. The
-     images have no udev, so the render nodes are root's until now: they
-     go to Linux's render group (or video), which only this helper joins.
-     Render nodes can draw; they can't set modes or take the display. */
+  /* The display's card (for zero-copy frames: dumb buffers the display
+     can show): the one that makes dumb buffers. Opened again as root for
+     each connection, so that each context's buffers are its own and go
+     when it does. */
+  char card[32] = "";
+  if (getuid () == 0)
+    find_card (card);
+  /* The images have no udev, so the render nodes are root's until now:
+     they go to Linux's render group (or video), which only this helper
+     joins. Render nodes can draw; they can't set modes or take the
+     display. */
+  gid_t g[2] = { RO_GID, RO_GID };
   if (getuid () == 0)
     {
       struct group *gr = getgrnam ("render");
       if (!gr)
 	gr = getgrnam ("video");
-      gid_t g[2] = { RO_GID, gr ? gr->gr_gid : RO_GID };
+      g[1] = gr ? gr->gr_gid : RO_GID;
       for (int n = 128; n < 132; n++)
 	{
 	  char node[40];
@@ -1311,17 +1670,6 @@ main (int argc, char **argv)
 	  if (chown (node, 0, g[1]) == 0)
 	    chmod (node, 0660);
 	}
-      if (setgroups (2, g) || setgid (RO_GID) || setuid (RO_UID))
-	return 1;
-      /* HOME was root's, so Mesa couldn't make its shader cache and
-	 compiled every shader again for each program */
-      struct passwd *pw = getpwuid (RO_UID);
-      setenv ("HOME", pw && pw->pw_dir && access (pw->pw_dir, W_OK) == 0 ? pw->pw_dir : "/tmp", 1);
-    }
-  if (!getenv ("MESA_SHADER_CACHE_DIR") && access (getenv ("HOME") ? getenv ("HOME") : "/", W_OK) != 0)
-    {
-      mkdir ("/tmp/rol-3d-cache", 0700);
-      setenv ("MESA_SHADER_CACHE_DIR", "/tmp/rol-3d-cache", 1);
     }
   signal (SIGCHLD, SIG_IGN);
   signal (SIGPIPE, SIG_IGN);
@@ -1330,12 +1678,21 @@ main (int argc, char **argv)
       int c = accept4 (l, 0, 0, SOCK_CLOEXEC);
       if (c < 0)
 	continue;
+      int cf = card[0] ? open (card, O_RDWR | O_CLOEXEC) : -1;
       if (fork () == 0)
 	{
 	  close (l);
+	  card_fd = cf;
+	  /* each context runs as RISC OS's own Linux user, with the group
+	     that reaches the GPU */
+	  if (getuid () == 0 && (setgroups (2, g) || setgid (RO_GID) || setuid (RO_UID)))
+	    _exit (1);
+	  home ();
 	  serve (c);
 	  _exit (0);
 	}
+      if (cf >= 0)
+	close (cf);
       close (c);
     }
 }

@@ -248,6 +248,15 @@ main (int argc, char **argv)
       return 1;
     }
   printf ("gl1test (%s)\n", WHO);
+  {
+    /* (these differ from Linux's own, as they should: RISC3D says 2.1) */
+    const char *x = (const char *) glGetString (GL_EXTENSIONS);
+    int nx = 0;
+    for (const char *p = x; p && *p; p++)
+      nx += (p == x || p[-1] == ' ') && *p != ' ';
+    printf ("version: %s; GLSL %s; %d extensions\n", (const char *) glGetString (GL_VERSION),
+	    (const char *) glGetString (GL_SHADING_LANGUAGE_VERSION), nx);
+  }
   if (argc > 1 && !strcmp (argv[1], "bench"))
     {
       /* the processor alone, as a measure of this side: the same loop

@@ -1,4 +1,4 @@
-RISC3D test kit 11 (prototype, 12 November 2026)
+RISC3D test kit 12 (prototype, 12 November 2026)
 ===============================================
 
 RISC3D is a 3D driver interface for RISC OS. On RISC OS on Linux its
@@ -16,7 +16,10 @@ wrote the vertices straight into the shared memory (no copy); kit 9
 overlaps frames: Linux finishes one while the program draws the next
 (Cube uses it; GL's bench runs both ways); kit 10 has RISC3D 0.02
 (a second kind of driver, for the native one: nothing changes here);
-kit 11 closes its contexts however a program ends. The SWI numbers are provisional.
+kit 11 closes its contexts however a program ends; kit 12 tries
+zero-copy frames (Overlay: the GPU's frame shown on a display plane,
+never read back) and says "2.1 RISC3D" as its OpenGL version, as the
+stream carries. The SWI numbers are provisional.
 
 Needs
 -----
@@ -46,19 +49,31 @@ Steps
     Linux's Mesa directly, into LinuxResults: the two should match, apart
     from the first line and the list names.
 
+ 6. Zero-copy (needs RISC OS on Linux's PlaneTest kit installed first,
+    its rol-fb with several overlays): double-click Overlay. The same
+    cube, but the window is painted in the key colour and the frames
+    show through it from a display plane. Its title says "zero-copy" if
+    so, or why not ("no overlay", "16M colours", "the overlay
+    stopped"). Try: dragging the window, a menu or another window over
+    it, two Overlays at once, Cube beside it for the rate with
+    read-back, and a mode change while it runs.
+
 After a restart, do step 2 again (the helper isn't started
 automatically yet).
 
 To report
 ---------
 Results, GLResults, LinuxResults, GLPicture and LinuxPicture, the
-title bar of the cube window, and the output of step 2. If something fails: helper-log in this folder, and the LOGS
+title bars of the Cube and Overlay windows (a photo of Overlay with
+something over it), and the output of step 2 (its last line says which
+card zero-copy uses). If something fails: helper-log in this folder, and the LOGS
 folder as usual.
 
 Known limits
 ------------
- * Each frame is copied back from Linux and plotted as a sprite: the
-   frame rate shows that copy as much as the GPU.
+ * Cube copies each frame back from Linux and plots it as a sprite: the
+   frame rate shows that copy as much as the GPU. Overlay doesn't, and
+   runs at the display's rate at most.
  * Programs don't use it through Mesa's EGL yet: only these tests.
  * The window can't be resized.
 

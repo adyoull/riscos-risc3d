@@ -1,5 +1,45 @@
 # Changelog
 
+## Zero-copy frames and RISC3D's own version strings; kit 12 (12 Nov 2026)
+
+- **Version strings (riscos-mesa's request):** `glGetString` answers for
+  what the stream carries, not what Linux made. OpenGL: "2.1 RISC3D
+  (Mesa x.y.z)", GLSL "1.20"; GLES 2: "OpenGL ES 2.0 RISC3D (Mesa
+  x.y.z)", "OpenGL ES GLSL ES 1.00". The renderer's own version stays in
+  the brackets.
+- **GL_EXTENSIONS trimmed** to the extensions whose functions the stream
+  carries (by name or another name), from gl.xml (`r3d_exts.h`, made by
+  gen.py). Extensions with no functions (formats, tokens, shader
+  features) are the renderer's to say. GL_OES_EGL_image(_external) is
+  kept, as riscos-mesa's EGL gives its function. On the build machine:
+  181 of llvmpipe's 310.
+- **Zero-copy frames, through rol-fb's overlays** (RISC OS on Linux's
+  test build: several overlays, RGB buffers, SHOW answered at the
+  display's frame):
+  - `r3d_overlay (x, y, w, h, &key)` places the frame on the screen (the
+    window's visible area, RISC OS pixels from the top left; width 0
+    hides it). 1: frames go to the screen, and the program paints its
+    work area in the key colour (&080008); 0: stay with read-back.
+  - `r3d_swap_overlay ()` ends a frame. rol-3d copies it with the GPU
+    (upside down: GL's rows are bottom first) into one of two dumb
+    buffers of the display's card, shared with the GPU as dma-bufs, and
+    shows it. The program waits only for the frame before (the
+    display's rate). -1: the overlay stopped (a mode change): back to
+    read-back.
+  - New commands OP_OVERLAY (13) and OP_PRESENT_OVERLAY (14);
+    `overlay_error` in the shared area (from the spare words). An older
+    rol-3d answers nothing to OP_OVERLAY: no overlay.
+  - rol-3d's main process now stays root, to open the display's card for
+    each connection (so each context's buffers go with it); each
+    context's process still runs as uid 1000 with the render group.
+    `rol-3d --check` says which card zero-copy uses.
+  - Not tried on a Pi yet: rol-fb's plane side itself is unproven
+    (ROL's PlaneTest kit).
+- r3dcube `-overlay` (the kit's Overlay) uses it, and says in its title
+  which way frames go. gl1test prints the version, GLSL and the number
+  of extensions.
+- Kit 12.
+
 ## Kit 11 on the Pi 4 (12 Nov 2026)
 
 - The leaked contexts were the cause: after a restart, kit 11's GL ran to

@@ -20,7 +20,7 @@ dmesg 2>/dev/null | grep -i "v3d\|vc4-drm" | tail -5
 setsid /opt/riscos/rol-3d </dev/null >"$d/helper-log" 2>&1 &
 sleep 1
 echo "--- what will draw:"
-/opt/riscos/rol-3d --check 2>&1 | tail -3
+/opt/riscos/rol-3d --check 2>&1 | tail -4
 # the OpenGL test drawn by Linux's Mesa directly, to compare with GL's
 g=$(ls "$d"/gl1test-linux* 2>/dev/null | head -1)
 if [ -n "$g" ]; then

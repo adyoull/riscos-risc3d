@@ -1,0 +1,7 @@
+#!/bin/sh
+# Copyright (c) 2026 Andrew Youll. MIT licence.
+set -e
+if [ "$1" = remove ]; then
+  for p in $(pidof rol-3d 2>/dev/null); do kill "$p" 2>/dev/null || true; done
+fi
+exit 0

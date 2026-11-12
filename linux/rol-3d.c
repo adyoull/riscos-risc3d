@@ -59,6 +59,7 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
+#define ROL3D_VERSION "0.3"
 #define GLDIR "/opt/riscos/gl"		/* a private Mesa, if the image has one */
 
 /* The helper's own textures and buffers have names the program's never
@@ -1576,6 +1577,18 @@ serve (int c)
 
 /* the display's card: the one that makes dumb buffers (needs root), into
    name (32 bytes), else "" */
+/* a card, never kept as its master: a file that opens a card with no
+   master becomes it, and rol-fb (started after this helper) then couldn't
+   set a mode. -1 if it won't open. */
+static int
+open_card (const char *name)
+{
+  int fd = open (name, O_RDWR | O_CLOEXEC);
+  if (fd >= 0)
+    ioctl (fd, DRM_IOCTL_DROP_MASTER, 0);	/* (an error if it wasn't: fine) */
+  return fd;
+}
+
 static void
 find_card (char *card)
 {
@@ -1584,7 +1597,7 @@ find_card (char *card)
     {
       char name[32];
       snprintf (name, sizeof name, "/dev/dri/card%d", i);
-      int fd = open (name, O_RDWR | O_CLOEXEC);
+      int fd = open_card (name);
       struct drm_mode_create_dumb cd = { .width = 16, .height = 16, .bpp = 32 };
       if (fd >= 0 && ioctl (fd, DRM_IOCTL_MODE_CREATE_DUMB, &cd) == 0)
 	{
@@ -1623,7 +1636,7 @@ main (int argc, char **argv)
 	  printf ("rol-3d: %s\n", gl_error);
 	  return 1;
 	}
-      printf ("rol-3d: %s; %s; %s", hardware ? "GPU" : "software", (const char *) gl.GetString (GL_RENDERER),
+      printf ("rol-3d %s: %s; %s; %s", ROL3D_VERSION, hardware ? "GPU" : "software", (const char *) gl.GetString (GL_RENDERER),
 	      (const char *) gl.GetString (GL_VERSION));
       if (!es_on_desktop)
 	{
@@ -1638,6 +1651,23 @@ main (int argc, char **argv)
       printf ("\nrol-3d: zero-copy frames: %s\n", card[0] ? card : "no display card makes buffers (read back only)");
       return 0;
     }
+  /* Started by init, output goes nowhere (/dev/null): then it goes to
+     /riscos/3d/log.txt (the one before kept as log.prev.txt), as rol-snd's
+     and rol-netd's do. Started from a shell, it stays where it was sent. */
+  struct stat es, ns;
+  if (fstat (2, &es) == 0 && stat ("/dev/null", &ns) == 0 && S_ISCHR (es.st_mode) && es.st_rdev == ns.st_rdev)
+    {
+      mkdir ("/riscos/3d", 0755);
+      rename ("/riscos/3d/log.txt", "/riscos/3d/log.prev.txt");
+      int f = open ("/riscos/3d/log.txt", O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+      if (f >= 0)
+	{
+	  dup2 (f, 1);
+	  dup2 (f, 2);
+	  close (f);
+	}
+    }
+  logmsg ("rol-3d %s: started\n", ROL3D_VERSION);
   int l = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
   struct sockaddr_un a = { .sun_family = AF_UNIX };
   static const char nm[] = "rol-3d";
@@ -1649,9 +1679,11 @@ main (int argc, char **argv)
      can show): the one that makes dumb buffers. Opened again as root for
      each connection, so that each context's buffers are its own and go
      when it does. */
+  /* The display's card is looked for at the first connection, not here:
+     init starts this helper before rol-fb, and RISC OS (so any program)
+     after both. */
   char card[32] = "";
-  if (getuid () == 0)
-    find_card (card);
+  int card_looked = 0;
   /* The images have no udev, so the render nodes are root's until now:
      they go to Linux's render group (or video), which only this helper
      joins. Render nodes can draw; they can't set modes or take the
@@ -1678,7 +1710,13 @@ main (int argc, char **argv)
       int c = accept4 (l, 0, 0, SOCK_CLOEXEC);
       if (c < 0)
 	continue;
-      int cf = card[0] ? open (card, O_RDWR | O_CLOEXEC) : -1;
+      if (!card_looked && getuid () == 0)
+	{
+	  find_card (card);
+	  card_looked = 1;
+	  logmsg ("rol-3d: zero-copy frames: %s\n", card[0] ? card : "no display card makes buffers (read back only)");
+	}
+      int cf = card[0] ? open_card (card) : -1;
       if (fork () == 0)
 	{
 	  close (l);

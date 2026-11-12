@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.3: a package for RISC OS on Linux (12 Nov 2026)
+
+- **riscos-risc3d 0.3-1** (`tools/mkdeb.sh`, `packaging/riscos-risc3d/`,
+  into out/): `/opt/riscos/rol-3d`, the modules in
+  `HardDisc4.TestBed.RISC3D`, and a start-up file
+  `!Boot.Choices.Boot.PreDesk.RISC3D` made once (each line guarded with
+  IfThere, so removing the package leaves no boot error). Depends on
+  riscos-support and riscos-harddisc; Debian's Mesa recommended (as agreed
+  with ROL). postinst starts the new rol-3d at once; init starts it at
+  start-up from riscos-support 1.0.0049-1, and postinst says so if the
+  installed init doesn't. Purge removes the start-up file and the log.
+- rol-3d 0.3, for being started by init (before rol-fb, output to
+  /dev/null), as ROL asked:
+  - drops master on any display card it opens (else rol-fb, started
+    after it, couldn't set a mode);
+  - looks for the display card at the first connection, not at start-up;
+  - with its output on /dev/null, logs to /riscos/3d/log.txt (the one
+    before kept as log.prev.txt);
+  - says its version ("rol-3d 0.3: started"; `--check`).
+- Client library and modules unchanged (0.2's; RISC3D 0.02, Linux3D 0.01).
+
 ## 0.2 (12 Nov 2026)
 
 - Release of the client library for riscos-mesa (`RISC3D-client-0.2.tgz`):

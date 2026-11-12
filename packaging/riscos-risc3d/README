@@ -1,0 +1,24 @@
+RISC3D 0.3 for RISC OS on Linux (prototype)
+===========================================
+
+What it puts where:
+  /opt/riscos/rol-3d                        Linux's side: draws for RISC OS
+                                            programs with Linux's Mesa (the
+                                            GPU's driver: v3d on a Pi 4/5)
+  HardDisc4.TestBed.RISC3D.RISC3D           the RISC3D module (driver interface)
+  HardDisc4.TestBed.RISC3D.Linux3D          its driver for RISC OS on Linux
+  HardDisc4.!Boot.Choices.Boot.PreDesk.RISC3D   loads the two at start-up
+                                            (made once; yours to delete)
+
+init (riscos-support 1.0.0049-1 or later) starts rol-3d at start-up; with
+an earlier one, this package starts it when installed, and it has to be
+started again after each restart (as root: setsid /opt/riscos/rol-3d &).
+Its log: /riscos/3d/log.txt.
+
+Programs use it through riscos-mesa's EGL (from riscos-mesa's release with
+RISC3D). Set RISC3D$Disable to turn it off for programs started after.
+
+Zero-copy frames (straight onto the screen) need rol-fb's overlays
+(riscos-support 1.0.0048-1 or later) and a 16 million colour mode.
+
+The SWI chunk (&C3D00) and error numbers (&81D3xx) are provisional.

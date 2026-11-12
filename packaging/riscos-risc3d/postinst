@@ -1,0 +1,35 @@
+#!/bin/sh
+# RISC3D: the modules belong to RISC OS (uid 1000), load at start-up, and
+# rol-3d runs now.
+# Copyright (c) 2026 Andrew Youll. MIT licence.
+set -e
+ro () { if [ -e "$1" ]; then echo "$1"; else echo "$1,$2"; fi; }
+if [ "$1" = configure ]; then
+  chown -R 1000:1000 /riscos/HardDisc4/TestBed/RISC3D
+  pd=/riscos/HardDisc4/!Boot/Choices/Boot/PreDesk
+  st=/var/lib/riscos/risc3d-predesk
+  # the start-up file, once (deleting it to stop RISC3D loading is kept)
+  if [ -d "$pd" ] && [ ! -e "$st" ]; then
+    f=$(ro "$pd/RISC3D" feb)
+    printf '%s\n' \
+      "| RISC3D: GPU drawing for RISC OS programs (riscos-risc3d). Delete this" \
+      "| file to stop it loading; it's put here once." \
+      "IfThere <IXFS\$HardDisc4>.TestBed.RISC3D.RISC3D Then RMEnsure RISC3D 0.02 RMLoad <IXFS\$HardDisc4>.TestBed.RISC3D.RISC3D" \
+      "IfThere <IXFS\$HardDisc4>.TestBed.RISC3D.Linux3D Then RMEnsure Linux3D 0.01 RMLoad <IXFS\$HardDisc4>.TestBed.RISC3D.Linux3D" > "$f"
+    chown 1000:1000 "$f"
+    mkdir -p /var/lib/riscos
+    : > "$st"
+  fi
+  # the new rol-3d now (init starts it at each start-up from riscos-support
+  # 1.0.0049-1)
+  for p in $(pidof rol-3d 2>/dev/null); do kill "$p" 2>/dev/null || true; done
+  setsid /opt/riscos/rol-3d </dev/null >/dev/null 2>&1 &
+  echo "RISC3D is installed. Restart (shut down and switch on) to load its modules,"
+  echo "or in RISC OS: *RMLoad <IXFS\$HardDisc4>.TestBed.RISC3D.RISC3D then"
+  echo "*RMLoad <IXFS\$HardDisc4>.TestBed.RISC3D.Linux3D"
+  if ! grep -qa /opt/riscos/rol-3d /usr/sbin/init 2>/dev/null; then
+    echo "This riscos-support's init doesn't start rol-3d: after each restart, until"
+    echo "you have riscos-support 1.0.0049-1, start it as root: setsid /opt/riscos/rol-3d &"
+  fi
+fi
+exit 0

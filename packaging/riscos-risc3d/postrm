@@ -1,0 +1,9 @@
+#!/bin/sh
+# Copyright (c) 2026 Andrew Youll. MIT licence.
+set -e
+if [ "$1" = purge ]; then
+  pd=/riscos/HardDisc4/!Boot/Choices/Boot/PreDesk
+  rm -f "$pd/RISC3D" "$pd/RISC3D,feb" /var/lib/riscos/risc3d-predesk
+  rm -rf /riscos/3d
+fi
+exit 0

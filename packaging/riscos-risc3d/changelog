@@ -1,0 +1,7 @@
+riscos-risc3d (0.3-1) rol; urgency=medium
+
+  * RISC3D 0.3: rol-3d drops master on the display card, looks for it at
+    the first connection (init starts it before rol-fb), logs to
+    /riscos/3d/log.txt when started by init. First package.
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Thu, 12 Nov 2026 18:00:00 +0000

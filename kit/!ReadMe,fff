@@ -1,0 +1,54 @@
+RISC3D test kit (prototype, 12 November 2026)
+=============================================
+
+RISC3D is a 3D driver interface for RISC OS. On RISC OS on Linux its
+driver (Linux3D) has Linux's graphics driver do the drawing. This kit is
+for trying it on a Raspberry Pi 4 running RISC OS on Linux. It has only
+been run under QEMU with a software renderer: this is the first test on a
+real GPU. The SWI numbers are provisional.
+
+Needs
+-----
+ * RISC OS on Linux with RiSH (Apps), and the network up.
+ * For the GPU: riscos-kernel-pi 6.6.78-9 or later from Updates (it adds
+   Linux's driver for the Pi 4 and 5's GPU, v3d), and a restart. With an
+   earlier kernel everything still runs, drawn by Linux in software.
+ * A 16 million colour screen mode (the cube is plotted as a 32 bits a
+   pixel sprite).
+ * About 150 MB free on the Linux side for Debian's Mesa.
+
+Steps
+-----
+ 1. Copy the RISC3DTest folder to the top of HardDisc4.
+ 2. Run RiSH (in Apps), choose "Root shell" from its icon bar menu, give
+    the root password, and type:
+        sh /riscos/HardDisc4/RISC3DTest/install,fff
+    The last lines say what will draw: "GPU" and V3D for the Pi's GPU,
+    or "software" and llvmpipe.
+ 3. Double-click Cube: a spinning cube in a window. Its title bar says
+    what is drawing and the frames a second. Run it twice for two at once.
+ 4. Double-click Test: it draws 300 frames two ways, checks the pixels
+    and opens Results.
+
+After a restart, do step 2 again (the helper isn't started
+automatically yet).
+
+To report
+---------
+The Results file, the title bar of the cube window, and the output of
+step 2. If something fails: helper-log in this folder, and the LOGS
+folder as usual.
+
+Known limits
+------------
+ * Each frame is copied back from Linux and plotted as a sprite: the
+   frame rate shows that copy as much as the GPU.
+ * GLES 2 only; programs don't use it through Mesa's EGL yet.
+ * The window can't be resized.
+
+To remove
+---------
+In a root terminal: kill $(pidof rol-3d); rm /opt/riscos/rol-3d
+*RMKill Linux3D and *RMKill RISC3D. Debian's Mesa can stay.
+
+Copyright (c) 2026 Andrew Youll. MIT licence.

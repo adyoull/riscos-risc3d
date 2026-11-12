@@ -22,3 +22,9 @@
   one call into RISC3D a frame. r3dcube alone then ran at about 13
   frames a second.
 - Not tested: any real GPU.
+- **Test kit for a Raspberry Pi 4** (`kit/`: !ReadMe, Cube, Test, and
+  `install`, which installs Debian's Mesa on the Linux side, places and
+  starts rol-3d and says what will draw). Its Test file ran under QEMU:
+  both r3dtest runs ok. The install script's apt-get step could not be
+  run here (no Debian mirror). The Pi's GPU needs riscos-kernel-pi
+  6.6.78-9 (Linux's v3d driver was not in the kernel before).

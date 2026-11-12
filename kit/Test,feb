@@ -1,0 +1,13 @@
+| RISC3D test: draws 300 frames two ways, checks the pixels and writes
+| what happened to Results in this folder. Takes a few seconds.
+RMEnsure RISC3D 0.01 RMLoad <Obey$Dir>.RISC3D
+RMEnsure Linux3D 0.01 RMLoad <Obey$Dir>.Linux3D
+Spool <Obey$Dir>.Results
+Echo RISC3D test
+Run <Obey$Dir>.r3dtest 300
+Run <Obey$Dir>.r3dtest 300 vbo
+RISC3D
+Linux3D
+Spool
+SetType <Obey$Dir>.Results Text
+Filer_Run <Obey$Dir>.Results

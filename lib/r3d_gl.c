@@ -106,6 +106,8 @@ struct r3d_context
   uint32_t *ring;
   uint32_t ring_words;
   uint32_t local_head;
+  uint32_t published;			/* the head the renderer has been shown */
+  uint32_t tail_seen;			/* the renderer's tail when last read */
   int desktop;				/* OpenGL (compatibility), not GLES */
 
   struct attrib attribs[MAX_ATTRIBS];
@@ -180,8 +182,9 @@ kick (int wait)
 static void
 publish (void)
 {
-  if (cur->area->head == cur->local_head)
+  if (cur->published == cur->local_head)
     return;
+  cur->published = cur->local_head;
   __atomic_store_n (&cur->area->head, cur->local_head, __ATOMIC_SEQ_CST);
   if (__atomic_load_n (&cur->area->sleeping, __ATOMIC_SEQ_CST))
     kick (0);
@@ -195,22 +198,53 @@ r3d_flush (void)
 }
 
 /* room for a command of n argument words: its arguments, or 0 */
-static uint32_t *
+static uint32_t *r3d_put_slow (uint32_t op, size_t n);
+
+static inline __attribute__ ((always_inline)) uint32_t *
 r3d_put (uint32_t op, size_t n)
+{
+  /* the usual case, in each function: room, no batch to show yet */
+  struct r3d_context *c = cur;
+  uint32_t need = (uint32_t) n + 2, h = c->local_head, at = h & (c->ring_words - 1);
+  if (__builtin_expect (c->handle >= 0 && op != OP_glFlush && op != OP_glFinish && n < 4096
+			&& h - c->published <= c->ring_words / 16 && at + need <= c->ring_words
+			&& c->ring_words - (h - c->tail_seen) >= need, 1))
+    {
+      uint32_t *a = c->ring + at;
+      a[0] = op;
+      a[1] = need;
+      c->local_head = h + need;
+      return a + 2;
+    }
+  return r3d_put_slow (op, n);
+}
+
+static uint32_t *
+r3d_put_slow (uint32_t op, size_t n)
 {
   if (cur->handle < 0 || n + 2 > cur->ring_words / 2)
     return 0;
   /* the renderer is shown commands a batch at a time (and always before a
      wait): shown one by one, a renderer faster than the program goes to
      sleep between them and has to be woken for each */
-  if (cur->local_head - cur->area->head > cur->ring_words / 16 || op == OP_glFlush || op == OP_glFinish)
+  /* (nothing here touches the shared memory but the command itself: the
+     head is published, and the tail read, only now and then. Each would
+     be a memory barrier on ARM, and immediate mode is a call a vertex) */
+  if (cur->local_head - cur->published > cur->ring_words / 16 || op == OP_glFlush || op == OP_glFinish)
     publish ();
   uint32_t need = (uint32_t) n + 2;
   uint32_t at = cur->local_head & (cur->ring_words - 1);
   uint32_t skip = at + need > cur->ring_words ? cur->ring_words - at : 0;
-  if (cur->ring_words - (cur->local_head - __atomic_load_n (&cur->area->tail, __ATOMIC_SEQ_CST)) < need + skip)
-    if (kick (1) < 0)			/* full: let the renderer catch up */
-      return 0;
+  if (cur->ring_words - (cur->local_head - cur->tail_seen) < need + skip)
+    {
+      cur->tail_seen = __atomic_load_n (&cur->area->tail, __ATOMIC_SEQ_CST);
+      if (cur->ring_words - (cur->local_head - cur->tail_seen) < need + skip)
+	{
+	  if (kick (1) < 0)		/* full: let the renderer catch up */
+	    return 0;
+	  cur->tail_seen = __atomic_load_n (&cur->area->tail, __ATOMIC_SEQ_CST);
+	}
+    }
   if (skip)
     {
       cur->ring[at] = OP_WRAP;
@@ -270,10 +304,14 @@ r3d_sync (void *reply, size_t max)
   if (cur->handle < 0)
     return -1;
   cur->area->reply_len = 0;
-  if (cur->area->head != cur->local_head)
-    __atomic_store_n (&cur->area->head, cur->local_head, __ATOMIC_SEQ_CST);
+  if (cur->published != cur->local_head)
+    {
+      cur->published = cur->local_head;
+      __atomic_store_n (&cur->area->head, cur->local_head, __ATOMIC_SEQ_CST);
+    }
   if (kick (1) < 0)
     return -1;
+  cur->tail_seen = __atomic_load_n (&cur->area->tail, __ATOMIC_SEQ_CST);
   uint32_t n = cur->area->reply_len;
   if (reply && n)
     memcpy (reply, (const char *) cur->area + cur->area->reply_offset, n < max ? n : max);
@@ -2436,7 +2474,7 @@ create (int desktop)
     }
   c->ring = (uint32_t *) ((char *) c->area + c->area->ring_offset);
   c->ring_words = c->area->ring_words;
-  c->local_head = c->area->head;
+  c->local_head = c->published = c->tail_seen = c->area->head;
   c->unpack.alignment = c->pack.alignment = 4;
   c->next_texture = c->next_buffer = c->next_list = 1;
   c->matrix_mode = GL_MODELVIEW;

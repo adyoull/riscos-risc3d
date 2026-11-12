@@ -1,5 +1,26 @@
 # Changelog
 
+## Kit 2 on the Pi 4, and cheaper calls (12 Nov 2026)
+
+- Kit 2 on the owner's Pi 4 (V3D 4.2, Debian Mesa 25.0.7; desktop
+  OpenGL there is 3.1, compatibility profile): gl1test through RISC3D drew
+  **the same picture, pixel for pixel,** as Linux's Mesa drawing directly
+  (GLPicture = LinuxPicture), and gave the same answers, bar list names
+  and one matrix entry outside [-1, 1] read as an integer (C leaves that
+  conversion undefined: Mesa itself gives -2147483648 on x86 and
+  -2147483645 on the Pi). r3dtest ok at 147.1 and 148.5; r3dcube 179.
+- But immediate mode was 2.7 times slower than Linux's own (bench: 115
+  frames a second, 3.5 million calls a second, against 306 and 9.2):
+  each call read the shared head and tail with full barriers (cheap on
+  x86, where the two were level, not on ARM). Now the library keeps the
+  head it has published and the tail it last saw, reads the tail only
+  when the ring looks full and publishes a batch at a time; the usual
+  case of each call is inlined (glVertex2f: about 25 instructions, no
+  barrier, no call). Build machine unchanged (same pictures and answers;
+  bench 288 frames a second).
+- Kit 3 (`out/RISC3DTest-3.zip`): the library and tests rebuilt with it;
+  the modules are unchanged (byte for byte).
+
 ## Desktop OpenGL (12 Nov 2026)
 
 - **OpenGL 1.0 to 2.1 (the compatibility profile) in the command stream,**

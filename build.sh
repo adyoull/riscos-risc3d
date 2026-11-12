@@ -71,6 +71,6 @@ direct aarch64-linux-gnu-gcc out/gl1test-linux
 ls -la out/modules out/libRISC3D.a "out/r3dtest,ff8" "out/gl1test,ff8" out/rol-3d
 
 # the Pi test kit: a zip for RISC OS, with file types
-python3 tools/mkkit.py out/RISC3DTest-5.zip RISC3DTest "kit/!ReadMe,fff" kit/Cube,feb kit/Test,feb \
+python3 tools/mkkit.py out/RISC3DTest-6.zip RISC3DTest "kit/!ReadMe,fff" kit/Cube,feb kit/Test,feb \
   kit/GL,feb kit/install,fff out/modules/RISC3D,ffa out/modules/Linux3D,ffa "out/r3dcube,ff8" \
   "out/r3dtest,ff8" "out/gl1test,ff8" out/rol-3d out/gl1test-linux

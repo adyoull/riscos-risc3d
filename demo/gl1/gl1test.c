@@ -392,6 +392,53 @@ main (int argc, char **argv)
   glDrawArrays (GL_TRIANGLES, 0, 6);
   glDisableClientState (GL_VERTEX_ARRAY);
 
+  /* immediate mode collected by the library: a long strip, then the
+     current colour it leaves; one that falls back (a normal first given
+     after the first vertex); one with glMaterial inside (falls back) */
+  glPushMatrix ();
+  glTranslatef (0.9f, 0.6f, 0.2f);
+  glScalef (0.3f, 0.3f, 1);
+  glBegin (GL_TRIANGLE_STRIP);
+  for (int i = 0; i < 24; i++)
+    {
+      glColor4ub ((GLubyte) (i * 10), (GLubyte) (255 - i * 10), 128, 255);
+      glVertex2f ((float) (i / 2) * 0.1f - 0.6f, (float) (i % 2) * 0.3f);
+    }
+  glEnd ();
+  GLfloat cc[4];
+  glGetFloatv (GL_CURRENT_COLOR, cc);
+  printf ("current colour after a collected strip: %.4f %.4f %.4f %.4f\n", cc[0], cc[1], cc[2], cc[3]);
+  glEnable (GL_LIGHTING);
+  glBegin (GL_QUADS);
+  for (int i = 0; i < 12; i++)
+    {
+      if (i == 5)
+	glNormal3f (0.3f, 0.3f, 0.9f);	/* first given after a vertex */
+      glColor3f (1, (float) i / 12, 0.2f);
+      glVertex3f ((float) (i / 4) * 0.4f - 0.6f + (i % 4 == 1 || i % 4 == 2 ? 0.3f : 0),
+		  -0.5f + (i % 4 >= 2 ? 0.3f : 0), 0);
+    }
+  glEnd ();
+  glBegin (GL_TRIANGLES);
+  for (int i = 0; i < 9; i++)
+    {
+      if (i == 3)
+	{
+	  static const GLfloat em[4] = { 0.2f, 0.0f, 0.4f, 1 };
+	  glMaterialfv (GL_FRONT_AND_BACK, GL_EMISSION, em);
+	}
+      glNormal3f (0, 0, 1);
+      glColor3f (0.2f, 0.4f, (float) i / 9);
+      glVertex2f ((float) (i / 3) * 0.5f - 0.7f + (i % 3 == 1 ? 0.4f : 0), -1.2f + (i % 3 == 2 ? 0.4f : 0));
+    }
+  glEnd ();
+  static const GLfloat noem[4] = { 0, 0, 0, 1 };
+  glMaterialfv (GL_FRONT_AND_BACK, GL_EMISSION, noem);
+  glDisable (GL_LIGHTING);
+  glGetFloatv (GL_CURRENT_NORMAL, cc);
+  printf ("current normal after a fallen-back primitive: %.4f %.4f %.4f\n", cc[0], cc[1], cc[2]);
+  glPopMatrix ();
+
   /* bitmaps and pixels, in window coordinates */
   glDisable (GL_DEPTH_TEST);
   static const GLubyte bm[16] = { 0xff, 0x00, 0x81, 0x00, 0x81, 0x00, 0xff, 0x00,

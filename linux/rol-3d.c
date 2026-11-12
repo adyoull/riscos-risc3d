@@ -60,6 +60,7 @@
 #define PRIV_ARRAY(i) (PRIV + 16 + (i))		/* generic attributes 0..15 */
 #define PRIV_ELEMENTS (PRIV + 40)
 #define PRIV_FIXED(i) (PRIV + 48 + (i))		/* fixed-function arrays 0..15 */
+#define PRIV_IMMEDIATE (PRIV + 64)
 
 static struct r3d_area *area;
 static uint32_t *ring;
@@ -510,6 +511,90 @@ fixed_array (const uint32_t *a)
   gl.BindBuffer (GL_ARRAY_BUFFER, (GLuint) was);
 }
 
+/* immediate mode the library collected: mode, count, layout (colour 1,
+   normal 2, texture coordinates 4 << unit), whether the program's own
+   arrays are all off (else they are saved and restored around ours), then
+   the vertices: position, colour, normal, texture coordinates (floats) */
+static void
+immediate (const uint32_t *a)
+{
+  uint32_t layout = a[2], stride = 4, fast = a[3];
+  GLsizei count = (GLsizei) a[1];
+  if (layout & 1) stride += 4;
+  if (layout & 2) stride += 3;
+  for (int u = 0; u < 4; u++)
+    if (layout & (4u << u))
+      stride += 4;
+  if (!gl.VertexPointer || !gl.EnableClientState || count <= 0)
+    return;
+  GLint was = 0, cat = GL_TEXTURE0;
+  gl.GetIntegerv (GL_ARRAY_BUFFER_BINDING, &was);
+  gl.GetIntegerv (GL_CLIENT_ACTIVE_TEXTURE, &cat);
+  if (!fast)
+    {
+      static GLint attribs;
+      if (!attribs)
+	gl.GetIntegerv (GL_MAX_VERTEX_ATTRIBS, &attribs);
+      gl.PushClientAttrib (GL_CLIENT_VERTEX_ARRAY_BIT);
+      static const GLenum off[] = { GL_NORMAL_ARRAY, GL_COLOR_ARRAY, GL_INDEX_ARRAY, GL_EDGE_FLAG_ARRAY,
+				    GL_FOG_COORD_ARRAY, GL_SECONDARY_COLOR_ARRAY };
+      for (unsigned i = 0; i < sizeof off / sizeof off[0]; i++)
+	gl.DisableClientState (off[i]);
+      for (int u = 0; u < 8; u++)
+	{
+	  gl.ClientActiveTexture (GL_TEXTURE0 + (GLenum) u);
+	  gl.DisableClientState (GL_TEXTURE_COORD_ARRAY);
+	}
+      for (GLint i = 0; i < attribs && i < 16; i++)
+	gl.DisableVertexAttribArray ((GLuint) i);
+    }
+  GLsizei bytes = (GLsizei) (stride * 4);
+  gl.BindBuffer (GL_ARRAY_BUFFER, PRIV_IMMEDIATE);
+  gl.BufferData (GL_ARRAY_BUFFER, (GLsizeiptr) count * bytes, a + 4, GL_STREAM_DRAW);
+  uintptr_t at = 16;
+  gl.VertexPointer (4, GL_FLOAT, bytes, 0);
+  gl.EnableClientState (GL_VERTEX_ARRAY);
+  if (layout & 1)
+    {
+      gl.ColorPointer (4, GL_FLOAT, bytes, (const void *) at);
+      gl.EnableClientState (GL_COLOR_ARRAY);
+      at += 16;
+    }
+  if (layout & 2)
+    {
+      gl.NormalPointer (GL_FLOAT, bytes, (const void *) at);
+      gl.EnableClientState (GL_NORMAL_ARRAY);
+      at += 12;
+    }
+  for (int u = 0; u < 4; u++)
+    if (layout & (4u << u))
+      {
+	gl.ClientActiveTexture (GL_TEXTURE0 + (GLenum) u);
+	gl.TexCoordPointer (4, GL_FLOAT, bytes, (const void *) at);
+	gl.EnableClientState (GL_TEXTURE_COORD_ARRAY);
+	at += 16;
+      }
+  gl.DrawArrays (a[0], 0, count);
+  if (fast)
+    {
+      gl.DisableClientState (GL_VERTEX_ARRAY);
+      if (layout & 1)
+	gl.DisableClientState (GL_COLOR_ARRAY);
+      if (layout & 2)
+	gl.DisableClientState (GL_NORMAL_ARRAY);
+      for (int u = 0; u < 4; u++)
+	if (layout & (4u << u))
+	  {
+	    gl.ClientActiveTexture (GL_TEXTURE0 + (GLenum) u);
+	    gl.DisableClientState (GL_TEXTURE_COORD_ARRAY);
+	  }
+    }
+  else
+    gl.PopClientAttrib ();
+  gl.ClientActiveTexture ((GLenum) cat);
+  gl.BindBuffer (GL_ARRAY_BUFFER, (GLuint) was);
+}
+
 /* framebuffer 0 is ours: what the program says of its back and front
    buffers is said of our framebuffer's colour */
 static GLenum
@@ -926,6 +1011,9 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
       }
     case OP_FIXED_ARRAY:
       fixed_array (a);
+      break;
+    case OP_IMMEDIATE:
+      immediate (a);
       break;
     /* fixed-function arrays in buffer objects: size type stride offset */
     case OP_glVertexPointer:

@@ -1,5 +1,30 @@
 # Changelog
 
+## Immediate mode collected (12 Nov 2026)
+
+- Kit 5 on the Pi 4: immediate mode 181.8 frames a second (5.5 million
+  calls a second), from 142.9; the calls alone 7.2 million against
+  Linux's 11.7; the renderer still busy throughout, about 128 ns a
+  command against 85 ns a call directly. Pictures identical.
+- So immediate mode no longer goes a command a call: between glBegin and
+  glEnd the library collects glVertex, glColor (float and unsigned byte),
+  glNormal and glTexCoord/glMultiTexCoord (units 0-3) into an array, and
+  glEnd sends it as one draw (OP_IMMEDIATE), as Mesa does itself; then
+  the current colour, normal and texture coordinates are set to the last
+  given. The renderer draws it from a buffer of its own, saving and
+  restoring the program's arrays only if any are on or in a buffer
+  object. Anything else between glBegin and glEnd (glMaterial, an edge
+  flag, other types), an attribute first given after the first vertex,
+  a display list being made, or fewer than 8 vertices: what was collected
+  goes as the calls themselves, as before. Very long primitives are cut
+  into draws where whole primitives allow it.
+- gl1test has three more cases: a collected strip and the current
+  colour it leaves, a primitive that falls back (a normal first given
+  after a vertex), one with glMaterial inside. Build machine: picture
+  identical to Mesa directly, every answer the same. The bench's 1.8
+  million commands are now 541.
+- Kit 6 (`out/RISC3DTest-6.zip`). Modules unchanged.
+
 ## The renderer's side cheaper (12 Nov 2026)
 
 - Kit 4 on the Pi 4 said where the time went: the renderer was busy 0.38

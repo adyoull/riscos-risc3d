@@ -203,6 +203,34 @@ def kind(name):
 
 kinds = {n: kind(n) for n in want}
 
+# immediate mode, collected on the RISC OS side between glBegin and glEnd
+# (lib/r3d_gl.c: r3d_imm). The vertex, colour, normal and texture
+# coordinate calls of the types whose conversion to float is exact or the
+# same as Mesa's; any other call there ends the collecting.
+IMM_KIND = {'Vertex': 'IMM_VERTEX', 'Color': 'IMM_COLOR', 'Normal': 'IMM_NORMAL',
+            'TexCoord': 'IMM_TEX', 'MultiTexCoord': 'IMM_TEX'}
+IMM_TYPES = {'Vertex': 'fdis', 'Color': ('f', 'd', 'ub'), 'Normal': 'fd',
+             'TexCoord': 'fdis', 'MultiTexCoord': 'fdis'}
+def imm_code(name):
+    m = re.match(r'gl(Vertex|Color|Normal|TexCoord|MultiTexCoord)([1234])(ub|f|d|i|s)(v?)$', name)
+    if not m or m.group(3) not in IMM_TYPES[m.group(1)]:
+        return None
+    what, n, t, v = m.group(1), int(m.group(2)), m.group(3), m.group(4)
+    al = commands[name][1]
+    if what == 'MultiTexCoord':
+        unit = '(int) (%s - GL_TEXTURE0)' % al[0][1]
+        vals = al[1:]
+    else:
+        unit = '0'
+        vals = al
+    if v:
+        src = ['%s[%d]' % (vals[0][1], i) for i in range(n)]
+    else:
+        src = [x[1] for x in vals]
+    conv = ['%s / 255.0F' % x if t == 'ub' else '(GLfloat) %s' % x for x in src]
+    return '  if (cur->imm_on && r3d_imm (%s, %s, %d, (const GLfloat[4]) { %s }))\n    return;\n' % (
+        IMM_KIND[what], unit, n, ', '.join(conv + ['0'] * (4 - n)))
+
 FIRST = 16
 ops = [(n, FIRST + i) for i, n in enumerate(want)]
 
@@ -255,7 +283,7 @@ with open(os.path.join(out, 'r3d_ops.h'), 'w') as f:
     f.write('#ifndef R3D_OPS_H\n#define R3D_OPS_H\n')
     f.write('#define R3D_PROTOCOL 2\n')
     f.write('enum {\n  OP_SURFACE = 1, OP_PRESENT, OP_CLIENT_ARRAY, OP_DRAW_ELEMENTS_INLINE,\n'
-            '  OP_SYNC, OP_INFO, OP_CONTEXT, OP_FIXED_ARRAY, OP_LIMITS, OP_STATS,\n')
+            '  OP_SYNC, OP_INFO, OP_CONTEXT, OP_FIXED_ARRAY, OP_LIMITS, OP_STATS, OP_IMMEDIATE,\n')
     for n, o in ops:
         f.write('  OP_%s = %d,\n' % (n, o))
     f.write('  OP_END\n};\n#endif\n')
@@ -316,6 +344,13 @@ for name in want:
     call_args = []
     c.write('\n%s\n%s (%s)\n{\n' % (ret, name, cargs(al)))
     c.write(track)
+    ic = imm_code(name)
+    if ic:
+        c.write(ic)
+    if name == 'glBegin':
+        c.write('  if (r3d_imm_begin (mode))\n    return;\n')
+    if name == 'glEnd':
+        c.write('  if (cur->imm_on)\n    {\n      r3d_imm_end ();\n      return;\n    }\n')
     if k == 'auto':
         if nw:
             c.write('  uint32_t *a = r3d_put (%s, %d);\n' % (op, nw))

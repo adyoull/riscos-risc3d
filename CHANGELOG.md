@@ -17,5 +17,8 @@
   (480 by 360, everything emulated); two copies run at once, each with
   its own context and shared memory.
 - Commands are shown to the renderer in batches: shown one at a time, the
-  renderer slept between them and was woken about 8 times a frame.
+  renderer slept between them and was woken about 8 times a frame
+  (3,033 wakes in 388 frames). Batched: 688 frames, 688 waits, no wakes:
+  one call into RISC3D a frame. r3dcube alone then ran at about 13
+  frames a second.
 - Not tested: any real GPU.

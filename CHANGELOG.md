@@ -1,5 +1,22 @@
 # Changelog
 
+## Kit 12 on the Pi 4 (12 Nov 2026)
+
+- **Zero-copy works:** Overlay at 59.0 frames a second (the display's 60
+  Hz, 1920 x 1200, 16M colours), the right way up, the right colours, in
+  place. ROL's PlaneTest rol-fb; dumb buffers from card0 (vc4) imported
+  by v3d. helper-log: "overlay open (formats 15, under the desktop 1,
+  screen 1920x1200)" for each, no failures.
+- Three Overlays at once, all zero-copy: 19.2, 19.2, 19.4 frames a
+  second: rol-fb sets one plane per display frame, so they share the 60.
+  Asked of ROL: all planes in one atomic commit per frame.
+- Read-back for comparison: Cube 196 frames a second alone, 117 each for
+  two.
+- Version strings on the Pi: "OpenGL ES 2.0 RISC3D (Mesa
+  25.0.7-2+deb13u1)" / GLSL ES 1.00; "2.1 RISC3D (...)" / GLSL 1.20, 130
+  extensions. Test ok (145.6 / 147.1); GL's picture 04ecca57 as kit 11,
+  bench 240 / 250 as kit 11.
+
 ## Zero-copy frames and RISC3D's own version strings; kit 12 (12 Nov 2026)
 
 - **Version strings (riscos-mesa's request):** `glGetString` answers for

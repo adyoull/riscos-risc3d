@@ -32,7 +32,9 @@ struct r3d_area
   volatile uint32_t asking;		/* the program is about to wait for an
 					   answer (so the renderer, if awake,
 					   goes to the socket at once) */
-  uint32_t pad[6];
+  volatile uint32_t frame_done;		/* overlapped frames: the last one read
+					   back into its half of the reply area */
+  uint32_t pad[5];
 };
 
 /* what the program sends down the context's socket (through RISC3D_Sync) */

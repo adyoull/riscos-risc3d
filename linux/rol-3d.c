@@ -408,25 +408,35 @@ pack_restore (void)
 }
 
 /* the finished frame, top row first, into the reply area */
-static void present_frame (void);
+static size_t present_frame (char *dst, size_t room);
 
 static void
 present (void)
 {
   uint64_t t = now_ns ();
-  present_frame ();
+  area->reply_len = (uint32_t) present_frame (reply_area, area->reply_bytes);
   st_present += now_ns () - t;
 }
 
+/* overlapped frames: frame n into its half of the reply area, while the
+   program goes on with the next; the program waits only for frame n - 1 */
 static void
-present_frame (void)
+present_slot (uint32_t n)
+{
+  uint64_t t = now_ns ();
+  size_t half = area->reply_bytes / 2;
+  present_frame (reply_area + (n & 1) * half, half);
+  __atomic_store_n (&area->frame_done, n, __ATOMIC_RELEASE);
+  st_present += now_ns () - t;
+}
+
+/* the finished frame, top row first, at dst: its size, or 0 */
+static size_t
+present_frame (char *dst, size_t room)
 {
   size_t row = (size_t) fb_w * 4, n = row * (size_t) fb_h;
-  if (!fbo || n > area->reply_bytes)
-    {
-      area->reply_len = 0;
-      return;
-    }
+  if (!fbo || n > room)
+    return 0;
   GLint pbo = 0;
   if (pack_ext)
     {
@@ -439,12 +449,12 @@ present_frame (void)
   char *t = scratch (n);
   gl.ReadPixels (0, 0, fb_w, fb_h, GL_RGBA, GL_UNSIGNED_BYTE, t);
   for (int y = 0; y < fb_h; y++)
-    memcpy (reply_area + row * (size_t) y, t + row * (size_t) (fb_h - 1 - y), row);
-  area->reply_len = (uint32_t) n;
+    memcpy (dst + row * (size_t) y, t + row * (size_t) (fb_h - 1 - y), row);
   pack_restore ();
   if (pbo)
     gl.BindBuffer (GL_PIXEL_PACK_BUFFER, (GLuint) pbo);
   gl.BindFramebuffer (GL_FRAMEBUFFER, app_fb ? app_fb : fbo);
+  return n;
 }
 
 /* --- the commands written by hand at both ends (lib/r3d_gl.c) ----------- */
@@ -659,6 +669,9 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
       break;
     case OP_PRESENT:
       present ();
+      break;
+    case OP_PRESENT_SLOT:
+      present_slot (a[0]);
       break;
     case OP_SYNC:
       area->reply_len = 0;

@@ -49,6 +49,11 @@ void r3d_surface (int width, int height);
 /* finishes the frame and copies it out: width * height * 4 bytes.
    Returns the bytes copied, or -1 */
 int r3d_swap (void *pixels, size_t bytes);
+/* the same, overlapped: the renderer finishes and reads back this frame
+   while the program draws the next, and the frame that comes back is the
+   one before (no wait for the GPU; a frame of latency). Not to be mixed
+   with r3d_swap in one context. */
+int r3d_swap_overlapped (void *pixels, size_t bytes);
 /* lets the renderer see everything so far (nothing comes back) */
 void r3d_flush (void);
 /* for measuring: the renderer's time since the last call (ns working,

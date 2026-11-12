@@ -1,5 +1,21 @@
 # Changelog
 
+## Overlapped frames (12 Nov 2026)
+
+- `r3d_swap_overlapped (pixels, bytes)`: the renderer finishes and reads
+  back this frame into one half of the reply area (OP_PRESENT_SLOT, and
+  `frame_done` in the shared area, from a spare word) while the program
+  goes on with the next; what comes back is the frame before (the first
+  time, this one). The program no longer waits for the GPU at the end of
+  a frame; a frame of latency. Frames up to half the reply area (16 MB,
+  2048 x 2048); larger ones fall back to r3d_swap. Not to be mixed with
+  r3d_swap in one context.
+- r3dcube uses it. `gl1test bench` checks that each frame comes back a
+  frame later, then runs the bench both ways.
+- Build machine: the bench 466 frames a second overlapped, 316 with
+  r3d_swap, 276 for Mesa directly.
+- Kit 9 (`out/RISC3DTest-9.zip`). Modules unchanged.
+
 ## Kit 8 on the Pi 4 (12 Nov 2026)
 
 - Picture identical to Linux's (04ecca57, the files byte for byte), every

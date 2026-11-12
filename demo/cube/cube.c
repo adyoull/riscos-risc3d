@@ -93,7 +93,7 @@ main (void)
 	case 0:
 	  scene_draw (W, H, angle);
 	  angle += 0.05f;
-	  if (r3d_swap (pixels, W * H * 4) != W * H * 4)
+	  if (r3d_swap_overlapped (pixels, W * H * 4) != W * H * 4)
 	    {
 	      quit = 1;
 	      break;

@@ -151,6 +151,10 @@ struct r3d_context
   struct mapping maps[4];
   char *strings[6];
 
+  /* overlapped frames: the surface's size, the last frame sent */
+  int surface_w, surface_h;
+  uint32_t frame;
+
   /* immediate mode being collected (r3d_imm) */
   int imm_on;
   GLenum imm_mode;
@@ -2921,6 +2925,8 @@ r3d_surface (int width, int height)
     return;
   a[0] = (uint32_t) width;
   a[1] = (uint32_t) height;
+  cur->surface_w = width;
+  cur->surface_h = height;
   /* the first surface sets the viewport (and scissor box) to fit */
   if (!cur->viewport_known && width > 0 && height > 0)
     st_viewport (0, 0, width, height);
@@ -2938,6 +2944,42 @@ r3d_stats (unsigned long long v[4])
   for (int i = 0; i < 4; i++)
     v[i] = r[i];
   return 0;
+}
+
+/* Overlapped frames: this frame is finished and read back by the renderer
+   while the program goes on with the next one; what comes back is the
+   frame before (the first time, this one). So the program never waits for
+   the GPU to finish a frame, at the cost of a frame of latency. Each frame
+   must be at most half the reply area (16 MB: 2048 x 2048), else this is
+   r3d_swap. Don't mix the two in one context. Returns the bytes copied,
+   or -1. */
+int
+r3d_swap_overlapped (void *pixels, size_t bytes)
+{
+  size_t half = cur->handle >= 0 ? cur->area->reply_bytes / 2 : 0;
+  if ((size_t) cur->surface_w * (size_t) cur->surface_h * 4 > half)
+    return r3d_swap (pixels, bytes);
+  uint32_t n = ++cur->frame;
+  uint32_t *a = r3d_put (OP_PRESENT_SLOT, 1);
+  if (!a)
+    return -1;
+  a[0] = n;
+  publish ();
+  uint32_t want = n > 1 ? n - 1 : n;
+  /* (usually there already: the renderer read it back during this frame) */
+  for (unsigned i = 0; (int32_t) (__atomic_load_n (&cur->area->frame_done, __ATOMIC_ACQUIRE) - want) < 0; i++)
+    if (i > 200000)
+      {
+	if (r3d_sync (0, 0) < 0)
+	  return -1;
+	break;
+      }
+  size_t size = (size_t) cur->surface_w * (size_t) cur->surface_h * 4;
+  if (size > bytes)
+    size = bytes;
+  if (pixels)
+    memcpy (pixels, (const char *) cur->area + cur->area->reply_offset + (want & 1) * half, size);
+  return (int) size;
 }
 
 int

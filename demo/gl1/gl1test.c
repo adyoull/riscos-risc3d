@@ -91,10 +91,15 @@ open_gl (void)
   return e;
 }
 
+static int overlapped;
+
 static void
 finish_frame (void)
 {
-  r3d_swap (frame, sizeof frame);
+  if (overlapped)
+    r3d_swap_overlapped (frame, sizeof frame);
+  else
+    r3d_swap (frame, sizeof frame);
 }
 #define WHO "RISC3D"
 #endif
@@ -254,6 +259,28 @@ main (int argc, char **argv)
 	}
       printf ("processor: 100 million steps in %.2f s\n", now () - c0);
       bench ();
+#ifndef DIRECT
+      /* again, with the frames overlapped (r3d_swap_overlapped): first a
+	 check that what comes back is the frame before (the first time,
+	 this one) */
+      overlapped = 1;
+      static const GLfloat col[4][3] = { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 }, { 1, 1, 0 } };
+      static const int expect[4] = { 0, 0, 1, 2 };
+      int ok = 1;
+      for (int i = 0; i < 4; i++)
+	{
+	  glClearColor (col[i][0], col[i][1], col[i][2], 1);
+	  glClear (GL_COLOR_BUFFER_BIT);
+	  finish_frame ();
+	  const GLfloat *c = col[expect[i]];
+	  if (frame[0] != (c[0] > 0 ? 255 : 0) || frame[1] != (c[1] > 0 ? 255 : 0) || frame[2] != (c[2] > 0 ? 255 : 0))
+	    ok = 0;
+	}
+      glClearColor (0.1f, 0.12f, 0.3f, 1);
+      printf ("frames overlapped: each one back a frame later: %s\n", ok ? "ok" : "WRONG");
+      printf ("with frames overlapped:\n");
+      bench ();
+#endif
       return 0;
     }
 

@@ -14,6 +14,10 @@
   with buffer objects (300 frames each). With r3dcube running beside it:
   r3dtest 145.6 and 147.8, the cube 169, and the cube's context showed
   636 calls, 636 waits, 0 wakes (one wait a frame, as designed).
+- The kit's Test wrote Results with *Spool, which also caught the
+  screen's control codes (the command window being opened), so Results
+  began with a few lines of unreadable bytes. It now redirects each
+  command's output into Results ({ > } then { >> }) instead.
 
 ## After riscos-mesa's reply (12 Nov 2026)
 

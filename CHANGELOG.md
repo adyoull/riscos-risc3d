@@ -8,6 +8,12 @@
   `sh /riscos/HardDisc4/RISC3DTest/install` (found by the owner).
 - On the owner's Pi 4 with riscos-kernel-pi 6.6.78-9 and Debian's Mesa
   25.0.7, `rol-3d --check` says: GPU; V3D 4.2.14.0; OpenGL ES 3.1.
+- First run on a real GPU (the owner's Pi 4, 16 million colours, Debian
+  Mesa 25.0.7, V3D 4.2): r3dcube 179 frames a second; r3dtest ok both
+  ways, 140.8 a second with arrays from the program's memory and 149.3
+  with buffer objects (300 frames each). With r3dcube running beside it:
+  r3dtest 145.6 and 147.8, the cube 169, and the cube's context showed
+  636 calls, 636 waits, 0 wakes (one wait a frame, as designed).
 
 ## After riscos-mesa's reply (12 Nov 2026)
 

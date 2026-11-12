@@ -51,6 +51,9 @@ void r3d_surface (int width, int height);
 int r3d_swap (void *pixels, size_t bytes);
 /* lets the renderer see everything so far (nothing comes back) */
 void r3d_flush (void);
+/* for measuring: the renderer's time since the last call (ns working,
+   ns of that reading frames back, sleeps, commands). 0, or -1 */
+int r3d_stats (unsigned long long v[4]);
 /* the last RISC OS error from the module, or 0 */
 const char *r3d_error (void);
 

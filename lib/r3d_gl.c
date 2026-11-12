@@ -2586,6 +2586,20 @@ r3d_surface (int width, int height)
     st_viewport (0, 0, width, height);
 }
 
+/* for measuring: the renderer's time since the last call, in
+   nanoseconds: working through commands, of that reading frames back;
+   then times it slept, and commands. 0, or -1 */
+int
+r3d_stats (unsigned long long v[4])
+{
+  uint64_t r[4] = { 0, 0, 0, 0 };
+  if (!r3d_put (OP_STATS, 0) || r3d_sync (r, sizeof r) < (int) sizeof r)
+    return -1;
+  for (int i = 0; i < 4; i++)
+    v[i] = r[i];
+  return 0;
+}
+
 int
 r3d_swap (void *pixels, size_t bytes)
 {

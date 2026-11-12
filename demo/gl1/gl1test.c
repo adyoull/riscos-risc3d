@@ -152,6 +152,10 @@ bench (void)
   glOrtho (-1, 1, -1, 1, -1, 1);
   glMatrixMode (GL_MODELVIEW);
   GLfloat m[16];
+#ifndef DIRECT
+  unsigned long long st0[4];
+  r3d_stats (st0);			/* (from here) */
+#endif
   double t0 = now ();
   for (int f = 0; f < FRAMES; f++)
     {
@@ -176,9 +180,53 @@ bench (void)
       finish_frame ();
     }
   double s = now () - t0;
+#ifndef DIRECT
+  unsigned long long st[4];
+  int have = r3d_stats (st) == 0;
+#endif
   printf ("bench: %d frames of %d immediate-mode vertices in %.2f s: "
 	  "%.1f frames a second, %.1f million calls a second\n", FRAMES, QUADS * 4, s, FRAMES / s,
 	  FRAMES * (double) QUADS * 6 / s / 1e6);
+#ifndef DIRECT
+  if (have)
+    printf ("  of which the renderer worked %.2f s (reading frames back %.2f s), slept %llu times, %llu commands\n",
+	    st[0] / 1e9, st[1] / 1e9, st[2], st[3]);
+#endif
+  /* frames with nothing in them: what a frame costs on its own */
+  t0 = now ();
+  for (int f = 0; f < FRAMES; f++)
+    {
+      glClear (GL_COLOR_BUFFER_BIT);
+      finish_frame ();
+    }
+  s = now () - t0;
+  printf ("empty frames: %.1f a second (%.2f ms each)\n", FRAMES / s, s * 1000 / FRAMES);
+  /* the calls alone: the same 60 frames' calls, one frame at the end */
+  t0 = now ();
+  for (int f = 0; f < FRAMES; f++)
+    {
+      glBegin (GL_QUADS);
+      for (int i = 0; i < QUADS; i++)
+	{
+	  float x = (float) (i % 100) / 50.0f - 1.0f, y = (float) (i / 100) / 25.0f - 1.0f;
+	  glColor3f (x * 0.5f + 0.5f, y * 0.5f + 0.5f, 0.5f);
+	  glNormal3f (0, 0, 1);
+	  glVertex2f (x, y);
+	  glVertex2f (x + 0.015f, y);
+	  glVertex2f (x + 0.015f, y + 0.03f);
+	  glVertex2f (x, y + 0.03f);
+	}
+      glEnd ();
+    }
+  double issued = now () - t0;
+  finish_frame ();
+  s = now () - t0;
+  printf ("the calls alone: %.1f million calls a second (issued in %.2f s, done in %.2f s)\n",
+	  FRAMES * (double) QUADS * 6 / s / 1e6, issued, s);
+#ifndef DIRECT
+  if (r3d_stats (st) == 0)
+    printf ("  of which the renderer worked %.2f s, slept %llu times, %llu commands\n", st[0] / 1e9, st[2], st[3]);
+#endif
 }
 
 int

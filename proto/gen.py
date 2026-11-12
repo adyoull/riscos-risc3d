@@ -255,7 +255,7 @@ with open(os.path.join(out, 'r3d_ops.h'), 'w') as f:
     f.write('#ifndef R3D_OPS_H\n#define R3D_OPS_H\n')
     f.write('#define R3D_PROTOCOL 2\n')
     f.write('enum {\n  OP_SURFACE = 1, OP_PRESENT, OP_CLIENT_ARRAY, OP_DRAW_ELEMENTS_INLINE,\n'
-            '  OP_SYNC, OP_INFO, OP_CONTEXT, OP_FIXED_ARRAY, OP_LIMITS,\n')
+            '  OP_SYNC, OP_INFO, OP_CONTEXT, OP_FIXED_ARRAY, OP_LIMITS, OP_STATS,\n')
     for n, o in ops:
         f.write('  OP_%s = %d,\n' % (n, o))
     f.write('  OP_END\n};\n#endif\n')

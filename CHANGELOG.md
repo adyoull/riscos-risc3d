@@ -1,5 +1,21 @@
 # Changelog
 
+## Where the time goes (12 Nov 2026)
+
+- Kit 3 on the Pi 4: immediate mode 142.9 frames a second (4.3 million
+  calls a second), from 115; Linux's Mesa directly 342.5 (10.3). The
+  cube 183. Pictures still identical to Linux's (GLPicture =
+  LinuxPicture), answers unchanged.
+- The renderer counts its time (OP_STATS; `r3d_stats ()` in r3d.h, for
+  measuring): working through commands, of that reading frames back,
+  times it slept, commands. `gl1test bench` prints it, and two more
+  lines: empty frames (what a frame costs on its own) and the calls
+  alone (60 frames' calls, one frame at the end).
+- Build machine: the renderer is busy for the whole run (server-bound),
+  about a third more time a call than Mesa directly; empty frames 0.23 ms
+  through RISC3D against 0.12 directly.
+- Kit 4 (`out/RISC3DTest-4.zip`): that bench. Modules unchanged.
+
 ## Kit 2 on the Pi 4, and cheaper calls (12 Nov 2026)
 
 - Kit 2 on the owner's Pi 4 (V3D 4.2, Debian Mesa 25.0.7; desktop

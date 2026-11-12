@@ -38,6 +38,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
+#include <time.h>
 #include <unistd.h>
 #include "r3d_gl.h"
 #include "r3d_ops.h"
@@ -80,6 +81,18 @@ logmsg (const char *fmt, ...)
       close (k);
     }
   if (write (2, b, strlen (b)) < 0) { }
+}
+
+/* where the time goes (OP_STATS): working through commands, of that the
+   frames' read-back, times asleep, commands */
+static uint64_t st_busy, st_present, st_sleeps, st_commands;
+
+static uint64_t
+now_ns (void)
+{
+  struct timespec t;
+  clock_gettime (CLOCK_MONOTONIC, &t);
+  return (uint64_t) t.tv_sec * 1000000000u + (uint64_t) t.tv_nsec;
 }
 
 static void
@@ -394,8 +407,18 @@ pack_restore (void)
 }
 
 /* the finished frame, top row first, into the reply area */
+static void present_frame (void);
+
 static void
 present (void)
+{
+  uint64_t t = now_ns ();
+  present_frame ();
+  st_present += now_ns () - t;
+}
+
+static void
+present_frame (void)
 {
   size_t row = (size_t) fb_w * 4, n = row * (size_t) fb_h;
   if (!fbo || n > area->reply_bytes)
@@ -559,6 +582,13 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
     case OP_SYNC:
       area->reply_len = 0;
       break;
+    case OP_STATS:
+      {
+	uint64_t r[4] = { st_busy, st_present, st_sleeps, st_commands };
+	reply (r, sizeof r);
+	st_busy = st_present = st_sleeps = st_commands = 0;
+	break;
+      }
     case OP_LIMITS:
       {
 	/* what the library keeps on its side: matrix stack depths, texture
@@ -984,8 +1014,20 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
 static char *blob;
 static size_t blob_len, blob_cap;
 
+static void drain_ring (void);
+
 static void
 drain (void)
+{
+  if (area->tail == __atomic_load_n (&area->head, __ATOMIC_SEQ_CST))
+    return;
+  uint64_t t = now_ns ();
+  drain_ring ();
+  st_busy += now_ns () - t;
+}
+
+static void
+drain_ring (void)
 {
   uint32_t mask = area->ring_words - 1;
   for (;;)
@@ -1028,6 +1070,7 @@ drain (void)
 	}
       else
 	dispatch (op, a, n - 2);
+      st_commands++;
       __atomic_store_n (&area->tail, tail + n, __ATOMIC_SEQ_CST);
     }
 }
@@ -1086,6 +1129,7 @@ serve (int c)
 	  continue;
 	}
       char b[64];
+      st_sleeps++;
       ssize_t n = read (c, b, sizeof b);
       __atomic_store_n (&area->sleeping, 0, __ATOMIC_SEQ_CST);
       if (n == 0 || (n < 0 && errno != EINTR))

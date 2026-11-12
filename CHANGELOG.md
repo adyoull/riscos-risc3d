@@ -1,5 +1,20 @@
 # Changelog
 
+## Kit 8 on the Pi 4 (12 Nov 2026)
+
+- Picture identical to Linux's (04ecca57, the files byte for byte), every
+  answer the same, including the long triangle list and strip.
+- Immediate-mode bench 230.8 frames a second (115 with kit 2, 171 with
+  kit 7), against 345.3 for Linux's Mesa directly: two thirds of it. The
+  renderer worked 0.23 s of the 0.26, 0.12 s of that reading frames
+  back: what is left is a frame's end (waiting for the GPU, the copy
+  back, the copy into the program and the round trip: an empty frame
+  1.50 ms against 1.01 directly), which zero-copy presentation and
+  overlapping frames address, not the calls.
+- "The calls alone" (60 frames' calls, no frame between) is no longer a
+  fair measure: with nothing presented the GPU's queue grows and the
+  renderer waits on it (4.0 million calls a second; issued in 0.40 s).
+
 ## Collected straight into the ring (12 Nov 2026)
 
 - Kit 7 on the Pi 4: picture and answers the same as Linux's (files byte

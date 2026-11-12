@@ -1,5 +1,25 @@
 # Changelog
 
+## The renderer's side cheaper (12 Nov 2026)
+
+- Kit 4 on the Pi 4 said where the time went: the renderer was busy 0.38
+  s of the bench's 0.43 (reading frames back 0.11); the calls alone, 5.1
+  million a second against Linux's own 11.5, with the renderer busy
+  throughout: about 180 ns a command, against 87 ns a call for Mesa
+  directly. Empty frames 1.33 ms against 0.91 (the copy-back and the
+  round trip: zero-copy presentation's job). Pictures still identical.
+- The cause, the same as on the RISC OS side before: the renderer moved
+  the shared tail after every command with a full barrier, and read the
+  head with one before each. Now it reads the head once per batch
+  (acquire) and moves the tail every 16K words and at the end (release);
+  the common command goes straight to dispatch, the two buffer
+  translations (glDrawBuffer/glReadBuffer) cost a compare.
+- Build machine: immediate mode through RISC3D now level with Mesa
+  directly (310-340 frames a second against 331; the calls alone 11.0-
+  11.7 million a second against 10.2: two cores). Same pictures and
+  answers; r3dtest ok both ways.
+- Kit 5 (`out/RISC3DTest-5.zip`). Modules unchanged.
+
 ## Where the time goes (12 Nov 2026)
 
 - Kit 3 on the Pi 4: immediate mode 142.9 frames a second (4.3 million

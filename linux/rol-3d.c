@@ -529,7 +529,7 @@ own_buffer (GLenum b)
 static void
 dispatch (uint32_t op, const uint32_t *a, uint32_t n)
 {
-  if (!have_context)
+  if (__builtin_expect (!have_context, 0))
     {
       int desktop = op == OP_CONTEXT ? (int) a[0] : 0;
       int ok = make_context (desktop);
@@ -557,16 +557,12 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
       reply (w, 8);
       return;
     }
-  switch (op)
+  /* the generated ones that need a word from us first */
+  if (__builtin_expect (op == OP_glDrawBuffer || op == OP_glReadBuffer, 0))
     {
-    /* the generated ones that need a word from us first */
-    case OP_glDrawBuffer:
-      if (gl.DrawBuffer)
-	gl.DrawBuffer (own_buffer (a[0]));
-      return;
-    case OP_glReadBuffer:
-      if (gl.ReadBuffer)
-	gl.ReadBuffer (own_buffer (a[0]));
+      void (*f) (GLenum) = op == OP_glDrawBuffer ? gl.DrawBuffer : gl.ReadBuffer;
+      if (f)
+	f (own_buffer (a[0]));
       return;
     }
   if (dispatch_gen (op, a, n))
@@ -1026,30 +1022,41 @@ drain (void)
   st_busy += now_ns () - t;
 }
 
+/* Commands up to the head as last read; the head is read again only when
+   they are done, and the tail (how far the program may write) is moved
+   every 16K words and at the end, not after each command: each is a
+   memory barrier on ARM, and immediate mode is a command a vertex. */
 static void
 drain_ring (void)
 {
-  uint32_t mask = area->ring_words - 1;
+  uint32_t words = area->ring_words, mask = words - 1;
+  uint32_t tail = area->tail, shown = tail;
+  uint32_t head = __atomic_load_n (&area->head, __ATOMIC_ACQUIRE);
   for (;;)
     {
-      uint32_t tail = area->tail;
-      if (tail == __atomic_load_n (&area->head, __ATOMIC_SEQ_CST))
-	return;
+      if (tail == head)
+	{
+	  head = __atomic_load_n (&area->head, __ATOMIC_ACQUIRE);
+	  if (tail == head)
+	    break;
+	}
       uint32_t at = tail & mask;
       uint32_t op = ring[at];
       if (op == OP_WRAP)
 	{
-	  __atomic_store_n (&area->tail, tail + (area->ring_words - at), __ATOMIC_SEQ_CST);
+	  tail += words - at;
 	  continue;
 	}
       uint32_t n = ring[at + 1];
-      if (n < 2 || at + n > area->ring_words)
+      if (n < 2 || at + n > words)
 	{
 	  logmsg ("rol-3d: a bad command (&%X, %u words): the context ends\n", op, n);
 	  _exit (1);
 	}
       const uint32_t *a = ring + at + 2;
-      if (op == OP_BLOB)
+      if (__builtin_expect (op < OP_BLOB, 1))
+	dispatch (op, a, n - 2);
+      else if (op == OP_BLOB)
 	{
 	  if (blob_len + a[0] > blob_cap)
 	    blob = realloc (blob, blob_cap = (blob_len + a[0]) * 2 + 65536);
@@ -1068,11 +1075,15 @@ drain_ring (void)
 	  free (all);
 	  blob_len = 0;
 	}
-      else
-	dispatch (op, a, n - 2);
       st_commands++;
-      __atomic_store_n (&area->tail, tail + n, __ATOMIC_SEQ_CST);
+      tail += n;
+      if (tail - shown >= 16384)
+	{
+	  __atomic_store_n (&area->tail, tail, __ATOMIC_RELEASE);
+	  shown = tail;
+	}
     }
+  __atomic_store_n (&area->tail, tail, __ATOMIC_SEQ_CST);
 }
 
 static void

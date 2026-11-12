@@ -1,5 +1,26 @@
 # Changelog
 
+## Collected immediate mode in pieces; the processor measured (12 Nov 2026)
+
+- Kit 6 on the Pi 4: picture identical to Linux's (7cc6caa0 both, the
+  files byte for byte), every answer the same, including the current
+  colour and normal after collected and fallen-back primitives. But the
+  bench fell to 117.6 frames a second: the renderer now idle half the
+  time (worked 0.27 s of 0.51). Collecting a whole 20000-vertex
+  glBegin/glEnd before sending it took away the overlap: the program
+  called (about 4.3 ms a frame), then the renderer drew (2.7 ms), then
+  read the frame back (1.8 ms), one after another.
+- Now a long primitive of points, lines, triangles or quads goes as a
+  draw every 1024 vertices (whole primitives), published at once, so
+  the renderer draws while the program is still calling. Build machine:
+  the bench 470 frames a second through RISC3D against 314 for Mesa
+  directly (the two sides on two cores); pictures and answers the same.
+- The RISC OS side took about 140 ns a call on the Pi in kits 5 and 6,
+  slow for the code (the usual case is a few dozen instructions). `gl1test
+  bench` first times a plain processor loop, the same in the RISC OS and
+  Linux builds, to tell whether RISC OS programs simply run slower there.
+- Kit 7 (`out/RISC3DTest-7.zip`). Modules unchanged.
+
 ## Immediate mode collected (12 Nov 2026)
 
 - Kit 5 on the Pi 4: immediate mode 181.8 frames a second (5.5 million

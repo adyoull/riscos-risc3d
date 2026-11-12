@@ -2461,6 +2461,9 @@ glPopClientAttrib (void)
 enum { IMM_VERTEX, IMM_COLOR, IMM_NORMAL, IMM_TEX };
 #define IMM_UNITS 4
 #define IMM_SMALL 8			/* fewer vertices than this go as calls */
+#define IMM_CHUNK 1024			/* a long primitive goes a draw at a time,
+					   so the renderer draws while the program
+					   is still calling */
 #define IMM_MAX_FLOATS (4u << 20)
 
 static int
@@ -2560,9 +2563,12 @@ arrays_untouched (void)
 static void
 imm_draw (void)
 {
+  int on = cur->imm_on;
+  cur->imm_on = 0;
   size_t floats = cur->imm_count * cur->imm_stride;
   uint32_t f[4] = { cur->imm_mode, (uint32_t) cur->imm_count, cur->imm_layout, (uint32_t) arrays_untouched () };
   r3d_put_data (OP_IMMEDIATE, f, 4, cur->imm_v, floats * 4);
+  cur->imm_on = on;
 }
 
 static void
@@ -2661,6 +2667,17 @@ r3d_imm (int kind, int unit, int n, const GLfloat *val)
 	d += 4;
       }
   cur->imm_count++;
+  if (cur->imm_count >= IMM_CHUNK)
+    {
+      static const int per[GL_POLYGON + 1] = { 1, 2, 0, 0, 3, 0, 0, 4, 0, 0 };
+      int k = per[cur->imm_mode];
+      if (k && cur->imm_count % (size_t) k == 0)
+	{
+	  imm_draw ();
+	  publish ();
+	  cur->imm_count = 0;
+	}
+    }
   return 1;
 }
 

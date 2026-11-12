@@ -99,6 +99,8 @@ finish_frame (void)
 #define WHO "RISC3D"
 #endif
 
+volatile float sink[64];		/* (for the processor measure) */
+
 static void
 show_f (const char *what, const GLfloat *v, int n)
 {
@@ -241,6 +243,16 @@ main (int argc, char **argv)
   printf ("gl1test (%s)\n", WHO);
   if (argc > 1 && !strcmp (argv[1], "bench"))
     {
+      /* the processor alone, as a measure of this side: the same loop
+	 in the RISC OS and Linux builds */
+      float acc = 0;
+      double c0 = now ();
+      for (int i = 0; i < 100000000; i++)
+	{
+	  acc = acc * 0.999f + (float) (i & 255);
+	  sink[i & 63] = acc;
+	}
+      printf ("processor: 100 million steps in %.2f s\n", now () - c0);
       bench ();
       return 0;
     }

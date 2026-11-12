@@ -8,6 +8,8 @@
 #include <time.h>
 #include <swis.h>
 #include <kernel.h>
+#include <GLES2/gl2.h>
+#define R3D_DIRECT
 #include "r3d.h"
 #include "scene.h"
 

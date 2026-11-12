@@ -19,7 +19,26 @@
 #define RISC3D_Close	0xC3D03
 #define RISC3D_Sync	0xC3D04
 
-/* 0, or a RISC OS error's text (no module, no backend, no Linux helper) */
+/* For Mesa's EGL (the real front end): the gl functions are r3d_glXxx,
+   listed by their GL names so that a dispatch table can be built from
+   them; contexts are made, made current and destroyed; r3d_swap finishes
+   the current context's frame into a buffer. */
+struct r3d_gl_function { const char *name; void (*fn) (void); };
+extern const struct r3d_gl_function r3d_gl_functions[];	/* ends with a null name */
+struct r3d_context;
+int r3d_available (void);		/* a driver is registered, and RISC3D$Disable isn't set */
+struct r3d_context *r3d_create (void);	/* 0: see r3d_error */
+void r3d_make_current (struct r3d_context *);
+void r3d_destroy (struct r3d_context *);
+
+/* For test programs: after <GLES2/gl2.h>, define R3D_DIRECT before this
+   header and the program's own glXxx calls are RISC3D's. */
+#ifdef R3D_DIRECT
+#include "r3d_gl_names.h"
+#endif
+
+/* The simple form (one context). 0, or a RISC OS error's text (no module,
+   no driver, no Linux helper) */
 const char *r3d_open (void);
 void r3d_close (void);
 /* the size of what is drawn on, in pixels */

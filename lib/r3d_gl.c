@@ -18,17 +18,11 @@
 #include "r3d.h"
 #include "r3d_ops.h"
 #include "r3d_shared.h"
+#include "r3d_gl_names.h"
 
 #define MAX_ATTRIBS 16
 
-static struct r3d_area *area;
-static uint32_t *ring;
-static uint32_t ring_words;
-static int handle = -1;
-static const char *last_error;
-static char error_text[256];
-
-static struct attrib
+struct attrib
 {
   int enabled, client;			/* client: its pointer is the program's memory */
   GLint size;
@@ -36,9 +30,25 @@ static struct attrib
   GLboolean normalized;
   GLsizei stride;
   const void *pointer;
-} attribs[MAX_ATTRIBS];
-static GLuint array_buffer, element_buffer;
-static int unpack_align = 4, pack_align = 4;
+};
+
+/* One context: its RISC3D handle, the shared memory, and what the library
+   has to remember of GL's state. The gl functions work on the current one. */
+struct r3d_context
+{
+  int handle;
+  struct r3d_area *area;
+  uint32_t *ring;
+  uint32_t ring_words;
+  uint32_t local_head;
+  struct attrib attribs[MAX_ATTRIBS];
+  GLuint array_buffer, element_buffer;
+  int unpack_align, pack_align;
+};
+static struct r3d_context none = { .handle = -1 };
+static struct r3d_context *cur = &none;
+static const char *last_error;
+static char error_text[256];
 
 static uint32_t r3d_f2u (float f) { union { float f; uint32_t u; } v = { f }; return v.u; }
 
@@ -46,7 +56,7 @@ static uint32_t r3d_f2u (float f) { union { float f; uint32_t u; } v = { f }; re
 static int
 kick (int wait)
 {
-  _kernel_oserror *e = _swix (RISC3D_Sync, _INR (0, 1), handle, wait);
+  _kernel_oserror *e = _swix (RISC3D_Sync, _INR (0, 1), cur->handle, wait);
   if (e)
     {
       strncpy (error_text, e->errmess, sizeof error_text - 1);
@@ -60,22 +70,21 @@ kick (int wait)
    shared head moved) in batches: when a sixteenth of the ring is waiting,
    at glFlush, at r3d_flush and before any wait. It is woken only if it
    has gone to sleep. */
-static uint32_t local_head;
 
 static void
 publish (void)
 {
-  if (area->head == local_head)
+  if (cur->area->head == cur->local_head)
     return;
-  __atomic_store_n (&area->head, local_head, __ATOMIC_SEQ_CST);
-  if (__atomic_load_n (&area->sleeping, __ATOMIC_SEQ_CST))
+  __atomic_store_n (&cur->area->head, cur->local_head, __ATOMIC_SEQ_CST);
+  if (__atomic_load_n (&cur->area->sleeping, __ATOMIC_SEQ_CST))
     kick (0);
 }
 
 void
 r3d_flush (void)
 {
-  if (handle >= 0)
+  if (cur->handle >= 0)
     publish ();
 }
 
@@ -83,29 +92,29 @@ r3d_flush (void)
 static uint32_t *
 r3d_put (uint32_t op, size_t n)
 {
-  if (handle < 0 || n + 2 > ring_words / 2)
+  if (cur->handle < 0 || n + 2 > cur->ring_words / 2)
     return 0;
   /* the renderer is shown commands a batch at a time (and always before a
      wait): shown one by one, a renderer faster than the program goes to
      sleep between them and has to be woken for each */
-  if (local_head - area->head > ring_words / 16 || op == OP_glFlush || op == OP_glFinish)
+  if (cur->local_head - cur->area->head > cur->ring_words / 16 || op == OP_glFlush || op == OP_glFinish)
     publish ();
   uint32_t need = (uint32_t) n + 2;
-  uint32_t at = local_head & (ring_words - 1);
-  uint32_t skip = at + need > ring_words ? ring_words - at : 0;
-  if (ring_words - (local_head - __atomic_load_n (&area->tail, __ATOMIC_SEQ_CST)) < need + skip)
+  uint32_t at = cur->local_head & (cur->ring_words - 1);
+  uint32_t skip = at + need > cur->ring_words ? cur->ring_words - at : 0;
+  if (cur->ring_words - (cur->local_head - __atomic_load_n (&cur->area->tail, __ATOMIC_SEQ_CST)) < need + skip)
     if (kick (1) < 0)			/* full: let the renderer catch up */
       return 0;
   if (skip)
     {
-      ring[at] = OP_WRAP;
-      local_head += skip;
+      cur->ring[at] = OP_WRAP;
+      cur->local_head += skip;
       at = 0;
     }
-  uint32_t *a = ring + at;
+  uint32_t *a = cur->ring + at;
   a[0] = op;
   a[1] = need;
-  local_head += need;
+  cur->local_head += need;
   return a + 2;
 }
 
@@ -116,8 +125,8 @@ static void
 r3d_put_data (uint32_t op, const uint32_t *fixed, size_t nfixed, const void *data, size_t bytes)
 {
   size_t dw = data ? (bytes + 3) / 4 : 0;
-  size_t piece = ring_words / 8;
-  if (handle < 0)
+  size_t piece = cur->ring_words / 8;
+  if (cur->handle < 0)
     return;
   if (nfixed + dw <= piece)
     {
@@ -152,16 +161,16 @@ r3d_put_data (uint32_t op, const uint32_t *fixed, size_t nfixed, const void *dat
 static int
 r3d_sync (void *reply, size_t max)
 {
-  if (handle < 0)
+  if (cur->handle < 0)
     return -1;
-  area->reply_len = 0;
-  if (area->head != local_head)
-    __atomic_store_n (&area->head, local_head, __ATOMIC_SEQ_CST);
+  cur->area->reply_len = 0;
+  if (cur->area->head != cur->local_head)
+    __atomic_store_n (&cur->area->head, cur->local_head, __ATOMIC_SEQ_CST);
   if (kick (1) < 0)
     return -1;
-  uint32_t n = area->reply_len;
+  uint32_t n = cur->area->reply_len;
   if (reply && n)
-    memcpy (reply, (const char *) area + area->reply_offset, n < max ? n : max);
+    memcpy (reply, (const char *) cur->area + cur->area->reply_offset, n < max ? n : max);
   return (int) n;
 }
 
@@ -171,43 +180,93 @@ r3d_error (void)
   return last_error;
 }
 
+/* RISC3D has a driver, and the program hasn't been told to do without
+   (the system variable RISC3D$Disable, for comparing with software) */
+int
+r3d_available (void)
+{
+  const char *drv = 0;
+  if (getenv ("RISC3D$Disable"))
+    return 0;
+  if (_swix (RISC3D_Info, _OUT (3), &drv))
+    return 0;
+  return drv != 0;
+}
+
+struct r3d_context *
+r3d_create (void)
+{
+  struct r3d_context *c = calloc (1, sizeof *c);
+  unsigned bytes = 0;
+  if (!c)
+    {
+      last_error = "No memory for a RISC3D context";
+      return 0;
+    }
+  _kernel_oserror *e = _swix (RISC3D_Open, _IN (0) | _OUTR (0, 2), 0, &c->handle, &c->area, &bytes);
+  if (e)
+    {
+      strncpy (error_text, e->errmess, sizeof error_text - 1);
+      last_error = error_text;
+      free (c);
+      return 0;
+    }
+  if (!c->area || c->area->magic != R3D_MAGIC)
+    {
+      _swix (RISC3D_Close, _IN (0), c->handle);
+      last_error = "RISC3D's driver gave no shared memory";
+      free (c);
+      return 0;
+    }
+  c->ring = (uint32_t *) ((char *) c->area + c->area->ring_offset);
+  c->ring_words = c->area->ring_words;
+  c->local_head = c->area->head;
+  c->unpack_align = c->pack_align = 4;
+  return c;
+}
+
+/* the context the gl functions draw with from now (0: none) */
+void
+r3d_make_current (struct r3d_context *c)
+{
+  if (cur != &none)
+    publish ();
+  cur = c ? c : &none;
+}
+
+void
+r3d_destroy (struct r3d_context *c)
+{
+  if (!c)
+    return;
+  if (cur == c)
+    {
+      publish ();
+      cur = &none;
+    }
+  _swix (RISC3D_Close, _IN (0), c->handle);
+  free (c);
+}
+
+/* the simple form: one context, made current */
+static struct r3d_context *only;
+
 const char *
 r3d_open (void)
 {
-  if (handle >= 0)
-    return 0;
-  unsigned bytes = 0;
-  _kernel_oserror *e = _swix (RISC3D_Open, _IN (0) | _OUTR (0, 2), 0, &handle, &area, &bytes);
-  if (e)
-    {
-      handle = -1;
-      strncpy (error_text, e->errmess, sizeof error_text - 1);
-      return last_error = error_text;
-    }
-  if (!area || area->magic != R3D_MAGIC)
-    {
-      _swix (RISC3D_Close, _IN (0), handle);
-      handle = -1;
-      return last_error = "RISC3D's backend gave no shared memory";
-    }
-  ring = (uint32_t *) ((char *) area + area->ring_offset);
-  ring_words = area->ring_words;
-  local_head = area->head;
-  memset (attribs, 0, sizeof attribs);
-  array_buffer = element_buffer = 0;
-  unpack_align = pack_align = 4;
+  if (!only)
+    only = r3d_create ();
+  if (!only)
+    return last_error;
+  r3d_make_current (only);
   return 0;
 }
 
 void
 r3d_close (void)
 {
-  if (handle < 0)
-    return;
-  publish ();
-  _swix (RISC3D_Close, _IN (0), handle);
-  handle = -1;
-  area = 0;
+  r3d_destroy (only);
+  only = 0;
 }
 
 void
@@ -235,9 +294,9 @@ static void
 r3d_track_glBindBuffer (GLenum target, GLuint buffer)
 {
   if (target == GL_ARRAY_BUFFER)
-    array_buffer = buffer;
+    cur->array_buffer = buffer;
   else if (target == GL_ELEMENT_ARRAY_BUFFER)
-    element_buffer = buffer;
+    cur->element_buffer = buffer;
 }
 
 static void
@@ -245,10 +304,10 @@ r3d_track_glDeleteBuffers (GLsizei n, const GLuint *buffers)
 {
   for (GLsizei i = 0; i < n; i++)
     {
-      if (buffers[i] == array_buffer)
-	array_buffer = 0;
-      if (buffers[i] == element_buffer)
-	element_buffer = 0;
+      if (buffers[i] == cur->array_buffer)
+	cur->array_buffer = 0;
+      if (buffers[i] == cur->element_buffer)
+	cur->element_buffer = 0;
     }
 }
 
@@ -256,23 +315,23 @@ static void
 r3d_track_glEnableVertexAttribArray (GLuint index)
 {
   if (index < MAX_ATTRIBS)
-    attribs[index].enabled = 1;
+    cur->attribs[index].enabled = 1;
 }
 
 static void
 r3d_track_glDisableVertexAttribArray (GLuint index)
 {
   if (index < MAX_ATTRIBS)
-    attribs[index].enabled = 0;
+    cur->attribs[index].enabled = 0;
 }
 
 static void
 r3d_track_glPixelStorei (GLenum pname, GLint param)
 {
   if (pname == GL_UNPACK_ALIGNMENT)
-    unpack_align = param;
+    cur->unpack_align = param;
   else if (pname == GL_PACK_ALIGNMENT)
-    pack_align = param;
+    cur->pack_align = param;
 }
 
 /* how many values a glGet...v with this name gives */
@@ -573,7 +632,7 @@ glBufferSubData (GLenum target, GLintptr offset, GLsizeiptr size, const void *da
 void
 glTexImage2D (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels)
 {
-  size_t n = pixels ? image_bytes (width, height, format, type, unpack_align) : 0;
+  size_t n = pixels ? image_bytes (width, height, format, type, cur->unpack_align) : 0;
   uint32_t f[9] = { target, (uint32_t) level, (uint32_t) internalformat, (uint32_t) width,
 		    (uint32_t) height, (uint32_t) border, format, type, (uint32_t) n };
   r3d_put_data (OP_glTexImage2D, f, 9, pixels, n);
@@ -582,7 +641,7 @@ glTexImage2D (GLenum target, GLint level, GLint internalformat, GLsizei width, G
 void
 glTexSubImage2D (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels)
 {
-  size_t n = image_bytes (width, height, format, type, unpack_align);
+  size_t n = image_bytes (width, height, format, type, cur->unpack_align);
   uint32_t f[9] = { target, (uint32_t) level, (uint32_t) xoffset, (uint32_t) yoffset,
 		    (uint32_t) width, (uint32_t) height, format, type, (uint32_t) n };
   r3d_put_data (OP_glTexSubImage2D, f, 9, pixels, n);
@@ -607,7 +666,7 @@ glCompressedTexSubImage2D (GLenum target, GLint level, GLint xoffset, GLint yoff
 void
 glReadPixels (GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void *pixels)
 {
-  size_t n = image_bytes (width, height, format, type, pack_align);
+  size_t n = image_bytes (width, height, format, type, cur->pack_align);
   uint32_t *a = r3d_put (OP_glReadPixels, 7);
   if (!a)
     return;
@@ -648,13 +707,13 @@ glVertexAttribPointer (GLuint index, GLint size, GLenum type, GLboolean normaliz
 {
   if (index >= MAX_ATTRIBS)
     return;
-  struct attrib *t = &attribs[index];
+  struct attrib *t = &cur->attribs[index];
   t->size = size;
   t->type = type;
   t->normalized = normalized;
   t->stride = stride;
   t->pointer = pointer;
-  t->client = array_buffer == 0;
+  t->client = cur->array_buffer == 0;
   if (t->client)
     return;
   uint32_t *a = r3d_put (OP_glVertexAttribPointer, 6);
@@ -672,7 +731,7 @@ void
 glGetVertexAttribPointerv (GLuint index, GLenum pname, void **pointer)
 {
   (void) pname;
-  *pointer = index < MAX_ATTRIBS ? (void *) attribs[index].pointer : 0;
+  *pointer = index < MAX_ATTRIBS ? (void *) cur->attribs[index].pointer : 0;
 }
 
 static void
@@ -680,7 +739,7 @@ send_client_arrays (size_t vertices)
 {
   for (GLuint i = 0; i < MAX_ATTRIBS; i++)
     {
-      struct attrib *t = &attribs[i];
+      struct attrib *t = &cur->attribs[i];
       if (!t->enabled || !t->client || !t->pointer || !vertices)
 	continue;
       size_t elem = (size_t) t->size * type_bytes (t->type);
@@ -710,7 +769,7 @@ glDrawElements (GLenum mode, GLsizei count, GLenum type, const void *indices)
 {
   if (count <= 0)
     return;
-  if (element_buffer)
+  if (cur->element_buffer)
     {
       /* indices in a buffer object: arrays in the program's memory can't
 	 be sized from here (PROTOTYPE: such a draw sends none) */

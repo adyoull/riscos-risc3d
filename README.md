@@ -17,7 +17,7 @@ real hardware yet.
 | `modules/Linux3D` | The driver for RISC OS on Linux. Each context is a connection to the `rol-3d` helper; it maps the shared memory into RISC OS. |
 | `linux/rol-3d.c` | The Linux helper: one process per context, with an EGL context on Linux's graphics driver (the GPU through its render node; Mesa's software renderer otherwise). GLES 2 where Linux's Mesa has it, desktop OpenGL otherwise. |
 | `proto/` | The command stream. `gen.py` writes both ends from the Khronos header (`include/GLES2/gl2.h`: 142 functions, 28 of them by hand). `r3d_shared.h` is the shared memory's layout. |
-| `lib/` | The GLES 2 functions for RISC OS programs, as commands. `r3d.h`'s `r3d_open`, `r3d_surface`, `r3d_swap` are the prototype's test harness: the real front end is to be Mesa's EGL (riscos-mesa), with this as its hardware path. |
+| `lib/` | The GLES 2 functions for RISC OS programs, as commands: `r3d_glXxx`, listed by GL name in `r3d_gl_functions[]` so that Mesa's EGL (riscos-mesa) can build a dispatch table from them. Contexts: `r3d_create`, `r3d_make_current`, `r3d_destroy`; `r3d_swap` finishes a frame into a buffer. `r3d_open`/`r3d_close` and `R3D_DIRECT` are for the test programs. |
 | `demo/test`, `demo/cube` | `r3dtest` (command line, checks the pixels) and `r3dcube` (the same cube in a desktop window). |
 | `test/host` | Stand-ins so that the library and helper can be tested on the build machine without RISC OS. |
 

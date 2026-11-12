@@ -1,5 +1,15 @@
 # Changelog
 
+## After riscos-mesa's reply (12 Nov 2026)
+
+- The forwarding functions are `r3d_glXxx`, listed by GL name in
+  `r3d_gl_functions[]` for Mesa's EGL to build a dispatch table from; the
+  library defines no `gl*` symbol (a program that links Mesa has Mesa's).
+- Contexts: `r3d_create`, `r3d_make_current`, `r3d_destroy`.
+  `r3d_available` (a driver is registered and `RISC3D$Disable` isn't
+  set). Test programs define `R3D_DIRECT`.
+- Tested: build machine, and the kit's Test under QEMU (both runs ok).
+
 ## Prototype (12 Nov 2026)
 
 - The owner's design: RISC3D is a driver interface, a pass-through for

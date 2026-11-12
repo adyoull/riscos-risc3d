@@ -1,5 +1,14 @@
 # Changelog
 
+## The Pi 4 test (12 Nov 2026)
+
+- The kit's ReadMe and install script said to run `install,fff`. Copied
+  by RISC OS onto HardDisc4 the file is plain `install` to Linux (the
+  file type isn't part of its Linux name), so the command is
+  `sh /riscos/HardDisc4/RISC3DTest/install` (found by the owner).
+- On the owner's Pi 4 with riscos-kernel-pi 6.6.78-9 and Debian's Mesa
+  25.0.7, `rol-3d --check` says: GPU; V3D 4.2.14.0; OpenGL ES 3.1.
+
 ## After riscos-mesa's reply (12 Nov 2026)
 
 - The forwarding functions are `r3d_glXxx`, listed by GL name in

@@ -1,6 +1,6 @@
 #!/bin/sh
 # RISC3D test kit: the Linux side. Run as root, from RiSH's root shell:
-#   sh /riscos/HardDisc4/RISC3DTest/install,fff
+#   sh /riscos/HardDisc4/RISC3DTest/install
 # It installs Debian's Mesa (EGL, GLES and the GPU drivers: about 150 MB
 # from the network), puts the rol-3d helper in /opt/riscos, starts it and
 # says what will draw. Until an update makes init start rol-3d, run this

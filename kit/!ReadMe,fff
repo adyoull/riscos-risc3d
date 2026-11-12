@@ -22,7 +22,7 @@ Steps
  1. Copy the RISC3DTest folder to the top of HardDisc4.
  2. Run RiSH (in Apps), choose "Root shell" from its icon bar menu, give
     the root password, and type:
-        sh /riscos/HardDisc4/RISC3DTest/install,fff
+        sh /riscos/HardDisc4/RISC3DTest/install
     The last lines say what will draw: "GPU" and V3D for the Pi's GPU,
     or "software" and llvmpipe.
  3. Double-click Cube: a spinning cube in a window. Its title bar says

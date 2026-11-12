@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2 (12 Nov 2026)
+
+- Release of the client library for riscos-mesa (`RISC3D-client-0.2.tgz`):
+  zero-copy frames (`r3d_overlay`, `r3d_swap_overlay`), RISC3D's own
+  version strings, GL_EXTENSIONS trimmed to the stream (new generated
+  file `gen/r3d_exts.h`). Needs the rol-3d of this tag for zero-copy; an
+  older one answers "no overlay" and frames are read back.
+- Kit 12 on the Pi 4, the rest: a menu over an overlay, dragging the
+  window, and a mode change while running all behaved (the owner: "works
+  fine").
+- Modules unchanged: RISC3D 0.02, Linux3D 0.01.
+
 ## Kit 12 on the Pi 4 (12 Nov 2026)
 
 - **Zero-copy works:** Overlay at 59.0 frames a second (the display's 60

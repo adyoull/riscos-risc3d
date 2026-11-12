@@ -1,0 +1,10 @@
+| RISC3D test: OpenGL 1.x/2.1 (immediate mode, lighting, textures,
+| display lists, vertex arrays, selection) drawn by Linux's driver. Writes
+| GLResults and GLPicture (a PPM picture) in this folder.
+| Run "install" on the Linux side first (see !ReadMe).
+RMEnsure RISC3D 0.01 RMLoad <Obey$Dir>.RISC3D
+RMEnsure Linux3D 0.01 RMLoad <Obey$Dir>.Linux3D
+Run <Obey$Dir>.gl1test <Obey$Dir>.GLPicture { > <Obey$Dir>.GLResults }
+Run <Obey$Dir>.gl1test bench { >> <Obey$Dir>.GLResults }
+SetType <Obey$Dir>.GLResults Text
+Filer_Run <Obey$Dir>.GLResults

@@ -5,7 +5,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
-#include <GLES2/gl2.h>
+#include "r3d_gl.h"
 
 static GLuint scene_prog, scene_tex, scene_vbo;
 static GLint scene_mvp, scene_rot;

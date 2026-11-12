@@ -5,6 +5,9 @@
 #   out/libRISC3D.a     the GLES 2 front end for RISC OS programs
 #   out/r3dtest,ff8     the command-line test
 #   out/r3dcube,ff8     the same cube in a desktop window
+#   out/gl1test,ff8     OpenGL 1.x/2.1 through RISC3D (prints, writes a picture)
+#   out/gl1test-linux   the same drawn by Linux's Mesa directly (64-bit ARM),
+#                       to compare with
 #   out/rol-3d          the Linux helper (64-bit ARM)
 #   out/rol-3d-host, out/r3dtest-host   the same two for the build machine
 # RISCOS_TOOLCHAIN: riscos-crossdev's toolchain/env.
@@ -44,8 +47,30 @@ ${T}strip out/obj/r3dtest.elf
 ${T}gcc $AC $I -Idemo/test -static -o out/obj/cube.elf demo/cube/cube.c out/libRISC3D.a -lm
 ${T}strip out/obj/cube.elf
 "${RISCOS_TOOLCHAIN}/bin/elf2aif" -e out/obj/cube.elf "out/r3dcube,ff8" >/dev/null
+${T}gcc $AC $I -static -o out/obj/gl1test.elf demo/gl1/gl1test.c out/libRISC3D.a -lm
+${T}strip out/obj/gl1test.elf
+"${RISCOS_TOOLCHAIN}/bin/elf2aif" -e out/obj/gl1test.elf "out/gl1test,ff8" >/dev/null
 
 aarch64-linux-gnu-gcc -O2 -Wall -Wextra $I -o out/rol-3d linux/rol-3d.c -ldl
 gcc -O2 -Wall -Wextra $I -o out/rol-3d-host linux/rol-3d.c -ldl
 gcc -O2 -Wall -DR3D_HOST -Itest/host $I -Idemo/test -o out/r3dtest-host demo/test/r3dtest.c lib/r3d_gl.c -lm
-ls -la out/modules out/libRISC3D.a "out/r3dtest,ff8" out/rol-3d
+gcc -O2 -Wall -DR3D_HOST -Itest/host $I -o out/gl1test-host demo/gl1/gl1test.c lib/r3d_gl.c -lm
+# the direct builds: Linux's libGL and libEGL, linked through stand-ins
+# with their names (no -dev packages, nor 64-bit ARM libraries, needed)
+direct () {				# compiler, output
+  local cc=$1 o=$2 d=out/obj/stub-$(basename "$2")
+  mkdir -p "$d"
+  $cc -O2 -Wall -DDIRECT $I -c -o "$d/gl1test.o" demo/gl1/gl1test.c
+  for lib in GL EGL; do
+    $cc -shared -fPIC -Wl,-soname,lib$lib.so.1 -o "$d/lib$lib.so" -x c - <<<"$(nm -u "$d/gl1test.o" | awk -v p="${lib,,}" '$2 ~ "^"p"[A-Z]" {print "void " $2 " (void) {}"}')"
+  done
+  $cc -o "$o" "$d/gl1test.o" -L"$d" -lGL -lEGL
+}
+direct gcc out/gl1test-direct
+direct aarch64-linux-gnu-gcc out/gl1test-linux
+ls -la out/modules out/libRISC3D.a "out/r3dtest,ff8" "out/gl1test,ff8" out/rol-3d
+
+# the Pi test kit: a zip for RISC OS, with file types
+python3 tools/mkkit.py out/RISC3DTest.zip RISC3DTest "kit/!ReadMe,fff" kit/Cube,feb kit/Test,feb \
+  kit/GL,feb kit/install,fff out/modules/RISC3D,ffa out/modules/Linux3D,ffa "out/r3dcube,ff8" \
+  "out/r3dtest,ff8" "out/gl1test,ff8" out/rol-3d out/gl1test-linux

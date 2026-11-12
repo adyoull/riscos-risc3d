@@ -1,0 +1,438 @@
+/* gl1test [out.ppm]: OpenGL 1.x and 2.1 (the compatibility profile)
+   through RISC3D: immediate mode, lighting, a texture under unusual pixel
+   store settings, display lists (one with a transform, a "font" called
+   with glCallLists and glListBase), vertex arrays in the program's memory
+   and in a buffer object, glInterleavedArrays, glArrayElement, glBitmap,
+   glDrawPixels, selection (glRenderMode), glMapBuffer, and the queries
+   programs make (the matrices, the viewport, the list base).
+
+   It prints every answer and a checksum of the picture, and writes the
+   picture. Built with DIRECT, the same program draws with Linux's Mesa
+   directly (EGL, no RISC3D): the two outputs should match.
+
+   Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE). */
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include "r3d_gl.h"
+
+#define W 320
+#define H 240
+static unsigned char frame[W * H * 4];
+
+#ifdef DIRECT
+/* --- Mesa directly: EGL with no surface, a framebuffer object ---------- */
+typedef void *EGLDisplay, *EGLConfig, *EGLContext;
+typedef int EGLint;
+EGLDisplay eglGetPlatformDisplay (unsigned, void *, const intptr_t *);
+unsigned eglInitialize (EGLDisplay, EGLint *, EGLint *);
+unsigned eglBindAPI (unsigned);
+unsigned eglChooseConfig (EGLDisplay, const EGLint *, EGLConfig *, EGLint, EGLint *);
+EGLContext eglCreateContext (EGLDisplay, EGLConfig, EGLContext, const EGLint *);
+unsigned eglMakeCurrent (EGLDisplay, void *, void *, EGLContext);
+
+static const char *
+open_gl (void)
+{
+  static const EGLint want[] = { 0x3040, 8, 0x3033, 0, 0x3038 };
+  EGLConfig cfg;
+  EGLint n = 0;
+  EGLDisplay d = eglGetPlatformDisplay (0x31DD, 0, 0);
+  if (!d || !eglInitialize (d, 0, 0))
+    return "no EGL";
+  eglBindAPI (0x30A2);
+  if (!eglChooseConfig (d, want, &cfg, 1, &n) || n < 1)
+    return "no config";
+  EGLContext c = eglCreateContext (d, cfg, 0, 0);
+  if (!c || !eglMakeCurrent (d, 0, 0, c))
+    return "no context";
+  GLuint fb, tex = 0x7fff0000u, rb;	/* (as RISC3D's helper: test names start at 1) */
+  glGenFramebuffers (1, &fb);
+  glGenRenderbuffers (1, &rb);
+  glBindTexture (GL_TEXTURE_2D, tex);
+  glTexImage2D (GL_TEXTURE_2D, 0, GL_RGBA, W, H, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+  glBindRenderbuffer (GL_RENDERBUFFER, rb);
+  glRenderbufferStorage (GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, W, H);
+  glBindFramebuffer (GL_FRAMEBUFFER, fb);
+  glFramebufferTexture2D (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+  glFramebufferRenderbuffer (GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rb);
+  glDrawBuffer (GL_COLOR_ATTACHMENT0);
+  glReadBuffer (GL_COLOR_ATTACHMENT0);
+  glBindTexture (GL_TEXTURE_2D, 0);
+  glViewport (0, 0, W, H);
+  glScissor (0, 0, W, H);
+  /* (names the test makes start where RISC3D's do) */
+  return 0;
+}
+
+static void
+finish_frame (void)
+{
+  static unsigned char t[W * H * 4];
+  glPixelStorei (GL_PACK_ALIGNMENT, 4);
+  glReadPixels (0, 0, W, H, GL_RGBA, GL_UNSIGNED_BYTE, t);
+  for (int y = 0; y < H; y++)
+    memcpy (frame + (size_t) y * W * 4, t + (size_t) (H - 1 - y) * W * 4, W * 4);
+}
+#define WHO "Mesa directly"
+#else
+/* --- through RISC3D ---------------------------------------------------- */
+#define R3D_DIRECT
+#include "r3d.h"
+
+static const char *
+open_gl (void)
+{
+  const char *e = r3d_open_gl ();
+  if (!e)
+    r3d_surface (W, H);
+  return e;
+}
+
+static void
+finish_frame (void)
+{
+  r3d_swap (frame, sizeof frame);
+}
+#define WHO "RISC3D"
+#endif
+
+static void
+show_f (const char *what, const GLfloat *v, int n)
+{
+  printf ("%s:", what);
+  for (int i = 0; i < n; i++)
+    printf (" %.5g", (double) v[i] + 0.0);
+  printf ("\n");
+}
+
+static void
+show_matrix (const char *what, GLenum pname)
+{
+  GLfloat m[16];
+  memset (m, 0, sizeof m);
+  glGetFloatv (pname, m);
+  show_f (what, m, 16);
+}
+
+static void
+quad (float x, float y, float s)
+{
+  glBegin (GL_QUADS);
+  glNormal3f (0, 0, 1);
+  glTexCoord2f (0, 0); glVertex3f (x, y, 0);
+  glTexCoord2f (1, 0); glVertex3f (x + s, y, 0);
+  glTexCoord2f (1, 1); glVertex3f (x + s, y + s, 0);
+  glTexCoord2f (0, 1); glVertex3f (x, y + s, 0);
+  glEnd ();
+}
+
+/* gl1test bench: immediate mode as YSFlight draws, a call per vertex:
+   frames of 20000 vertices, each with a colour and a normal */
+static double
+now (void)
+{
+#ifdef __riscos__
+  return (double) clock () / CLOCKS_PER_SEC;	/* (RISC OS: real time) */
+#else
+  struct timespec t;
+  clock_gettime (CLOCK_MONOTONIC, &t);
+  return (double) t.tv_sec + t.tv_nsec / 1e9;
+#endif
+}
+
+static void
+bench (void)
+{
+  enum { FRAMES = 60, QUADS = 5000 };
+  glMatrixMode (GL_PROJECTION);
+  glLoadIdentity ();
+  glOrtho (-1, 1, -1, 1, -1, 1);
+  glMatrixMode (GL_MODELVIEW);
+  GLfloat m[16];
+  double t0 = now ();
+  for (int f = 0; f < FRAMES; f++)
+    {
+      glClear (GL_COLOR_BUFFER_BIT);
+      glLoadIdentity ();
+      glRotatef ((float) f, 0, 0, 1);
+      glBegin (GL_QUADS);
+      for (int i = 0; i < QUADS; i++)
+	{
+	  float x = (float) (i % 100) / 50.0f - 1.0f, y = (float) (i / 100) / 25.0f - 1.0f;
+	  glColor3f (x * 0.5f + 0.5f, y * 0.5f + 0.5f, 0.5f);
+	  glNormal3f (0, 0, 1);
+	  glVertex2f (x, y);
+	  glVertex2f (x + 0.015f, y);
+	  glVertex2f (x + 0.015f, y + 0.03f);
+	  glVertex2f (x, y + 0.03f);
+	}
+      glEnd ();
+      /* and the reads a frame makes (Warzone, YSFlight: per object) */
+      for (int i = 0; i < 100; i++)
+	glGetFloatv (GL_MODELVIEW_MATRIX, m);
+      finish_frame ();
+    }
+  double s = now () - t0;
+  printf ("bench: %d frames of %d immediate-mode vertices in %.2f s: "
+	  "%.1f frames a second, %.1f million calls a second\n", FRAMES, QUADS * 4, s, FRAMES / s,
+	  FRAMES * (double) QUADS * 6 / s / 1e6);
+}
+
+int
+main (int argc, char **argv)
+{
+  const char *e = open_gl ();
+  if (e)
+    {
+      printf ("gl1test (%s): %s\n", WHO, e);
+      return 1;
+    }
+  printf ("gl1test (%s)\n", WHO);
+  if (argc > 1 && !strcmp (argv[1], "bench"))
+    {
+      bench ();
+      return 0;
+    }
+
+  /* --- a texture, from a bigger image with skips and odd alignment ----- */
+  enum { TW = 16, TH = 16, ROW = 21 };
+  static unsigned char img[(ROW * (TH + 2)) * 3 + 8];
+  for (int y = 0; y < TH + 2; y++)
+    for (int x = 0; x < ROW; x++)
+      {
+	unsigned char *p = img + (y * ROW + x) * 3;
+	p[0] = (unsigned char) (x * 12);
+	p[1] = (unsigned char) (((x / 4) ^ (y / 4)) & 1 ? 255 : 40);
+	p[2] = (unsigned char) (y * 14);
+      }
+  GLuint tex;
+  glGenTextures (1, &tex);
+  glBindTexture (GL_TEXTURE_2D, tex);
+  glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
+  glPixelStorei (GL_UNPACK_ROW_LENGTH, ROW);
+  glPixelStorei (GL_UNPACK_SKIP_PIXELS, 3);
+  glPixelStorei (GL_UNPACK_SKIP_ROWS, 2);
+  glTexImage2D (GL_TEXTURE_2D, 0, GL_RGB, TW, TH, 0, GL_RGB, GL_UNSIGNED_BYTE, img);
+  glPixelStorei (GL_UNPACK_ROW_LENGTH, 0);
+  glPixelStorei (GL_UNPACK_SKIP_PIXELS, 0);
+  glPixelStorei (GL_UNPACK_SKIP_ROWS, 0);
+  glPixelStorei (GL_UNPACK_ALIGNMENT, 4);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexEnvi (GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+  printf ("texture name: %u\n", tex);
+
+  /* --- display lists: a transform, and a four-letter "font" ------------ */
+  GLuint spin = glGenLists (1), font = glGenLists (4);
+  printf ("list names: %u %u\n", spin, font);
+  glNewList (spin, GL_COMPILE);
+  glTranslatef (0.5f, 0.25f, 0);
+  glRotatef (30, 0, 0, 1);
+  quad (-0.2f, -0.2f, 0.4f);
+  glEndList ();
+  for (int i = 0; i < 4; i++)
+    {
+      glNewList (font + i, GL_COMPILE);
+      glColor3f (i & 1 ? 1.0f : 0.3f, i & 2 ? 1.0f : 0.3f, 0.5f);
+      quad (0, 0, 0.12f + 0.02f * i);
+      glTranslatef (0.2f, 0, 0);
+      glEndList ();
+    }
+
+  /* --- a buffer object, filled through glMapBuffer --------------------- */
+  GLuint vbo;
+  glGenBuffers (1, &vbo);
+  glBindBuffer (GL_ARRAY_BUFFER, vbo);
+  glBufferData (GL_ARRAY_BUFFER, 6 * sizeof (GLfloat) * 3, 0, GL_STATIC_DRAW);
+  GLfloat *m = glMapBuffer (GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+  if (m)
+    {
+      static const GLfloat tri[18] = { -0.9f, -0.9f, 0, -0.6f, -0.9f, 0, -0.75f, -0.6f, 0,
+				       -0.9f, 0.6f, 0, -0.6f, 0.6f, 0, -0.75f, 0.9f, 0 };
+      memcpy (m, tri, sizeof tri);
+    }
+  printf ("glUnmapBuffer: %d (mapped: %s)\n", glUnmapBuffer (GL_ARRAY_BUFFER), m ? "yes" : "no");
+  glBindBuffer (GL_ARRAY_BUFFER, 0);
+  printf ("buffer name: %u\n", vbo);
+
+  /* --- the frame ------------------------------------------------------- */
+  glClearColor (0.1f, 0.12f, 0.3f, 1);
+  glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glMatrixMode (GL_PROJECTION);
+  glLoadIdentity ();
+  glFrustum (-1.333, 1.333, -1, 1, 1.5, 20);
+  glMatrixMode (GL_MODELVIEW);
+  glLoadIdentity ();
+  glTranslated (0, 0, -3);
+  glRotatef (20, 1, 0.5f, 0);
+  show_matrix ("projection", GL_PROJECTION_MATRIX);
+  show_matrix ("modelview", GL_MODELVIEW_MATRIX);
+
+  /* lit, textured quads */
+  glEnable (GL_DEPTH_TEST);
+  glEnable (GL_LIGHTING);
+  glEnable (GL_LIGHT0);
+  static const GLfloat pos[4] = { 1, 2, 3, 0 }, dif[4] = { 1, 0.9f, 0.8f, 1 }, amb[4] = { 0.2f, 0.2f, 0.25f, 1 };
+  glLightfv (GL_LIGHT0, GL_POSITION, pos);
+  glLightfv (GL_LIGHT0, GL_DIFFUSE, dif);
+  glLightModelfv (GL_LIGHT_MODEL_AMBIENT, amb);
+  glEnable (GL_COLOR_MATERIAL);
+  glColorMaterial (GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glEnable (GL_TEXTURE_2D);
+  glColor3ub (255, 200, 120);
+  quad (-1.2f, -0.2f, 0.7f);
+  glPushMatrix ();
+  glCallList (spin);
+  show_matrix ("after glCallList", GL_MODELVIEW_MATRIX);
+  glPopMatrix ();
+  glDisable (GL_TEXTURE_2D);
+  glDisable (GL_LIGHTING);
+
+  /* the "font" */
+  glPushMatrix ();
+  glTranslatef (-0.9f, 0.7f, 0);
+  glListBase (font);
+  static const GLubyte text[6] = { 0, 1, 2, 3, 1, 0 };
+  glCallLists (6, GL_UNSIGNED_BYTE, text);
+  show_matrix ("after glCallLists", GL_MODELVIEW_MATRIX);
+  GLint base = -1, depth = -1;
+  glGetIntegerv (GL_LIST_BASE, &base);
+  glGetIntegerv (GL_MODELVIEW_STACK_DEPTH, &depth);
+  printf ("list base: %d (font %u), stack depth: %d\n", base, font, depth);
+  glPopMatrix ();
+  glListBase (0);
+
+  /* vertex arrays in the program's memory: colours and indices */
+  static const GLfloat va[] = { 0.3f, -0.9f, 0.5f, 0.9f, -0.9f, 0.5f, 0.9f, -0.4f, 0.5f, 0.3f, -0.4f, 0.5f };
+  static const GLubyte vc[] = { 255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255 };
+  static const GLushort vi[] = { 0, 1, 2, 0, 2, 3 };
+  glEnableClientState (GL_VERTEX_ARRAY);
+  glEnableClientState (GL_COLOR_ARRAY);
+  glVertexPointer (3, GL_FLOAT, 0, va);
+  glColorPointer (4, GL_UNSIGNED_BYTE, 0, vc);
+  glDrawElements (GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, vi);
+  glDisableClientState (GL_COLOR_ARRAY);
+
+  /* interleaved */
+  static const struct { GLubyte c[4]; GLfloat v[3]; } il[3] = {
+    { { 255, 255, 255, 255 }, { -0.3f, -0.9f, 0.6f } },
+    { { 0, 255, 128, 255 }, { 0.1f, -0.9f, 0.6f } },
+    { { 255, 0, 255, 255 }, { -0.1f, -0.5f, 0.6f } } };
+  glInterleavedArrays (GL_C4UB_V3F, 0, il);
+  glDrawArrays (GL_TRIANGLES, 0, 3);
+  glDisableClientState (GL_COLOR_ARRAY);
+
+  /* glArrayElement, from the same arrays */
+  glColor3f (1, 0.5f, 0);
+  glVertexPointer (3, GL_FLOAT, 0, va);
+  glPushMatrix ();
+  glTranslatef (0, 1.0f, 0);
+  glBegin (GL_LINE_LOOP);
+  for (int i = 0; i < 4; i++)
+    glArrayElement (i);
+  glEnd ();
+  glPopMatrix ();
+
+  /* the buffer object */
+  glBindBuffer (GL_ARRAY_BUFFER, vbo);
+  glVertexPointer (3, GL_FLOAT, 0, 0);
+  glBindBuffer (GL_ARRAY_BUFFER, 0);
+  glColor3f (0.2f, 1, 0.3f);
+  glDrawArrays (GL_TRIANGLES, 0, 6);
+  glDisableClientState (GL_VERTEX_ARRAY);
+
+  /* bitmaps and pixels, in window coordinates */
+  glDisable (GL_DEPTH_TEST);
+  static const GLubyte bm[16] = { 0xff, 0x00, 0x81, 0x00, 0x81, 0x00, 0xff, 0x00,
+				  0x18, 0x00, 0x3c, 0x00, 0x7e, 0x00, 0xff, 0x00 };
+  glColor3f (1, 1, 0);
+  glWindowPos2i (10, 10);
+  glPixelStorei (GL_UNPACK_ALIGNMENT, 2);
+  glBitmap (8, 8, 0, 0, 10, 0, bm);
+  glBitmap (8, 8, 0, 0, 10, 0, bm);
+  static GLubyte px[12 * 6 * 4];
+  for (int i = 0; i < 12 * 6; i++)
+    {
+      px[i * 4] = (GLubyte) (i * 3);
+      px[i * 4 + 1] = 200;
+      px[i * 4 + 2] = (GLubyte) (255 - i * 3);
+      px[i * 4 + 3] = 255;
+    }
+  glPixelStorei (GL_UNPACK_ALIGNMENT, 4);
+  glWindowPos2i (W - 20, 10);
+  glDrawPixels (12, 6, GL_RGBA, GL_UNSIGNED_BYTE, px);
+
+  /* state that programs read back */
+  glPushAttrib (GL_TRANSFORM_BIT | GL_VIEWPORT_BIT);
+  glMatrixMode (GL_PROJECTION);
+  glViewport (5, 6, 70, 80);
+  GLint mode = 0, vp[4];
+  glGetIntegerv (GL_MATRIX_MODE, &mode);
+  glGetIntegerv (GL_VIEWPORT, vp);
+  printf ("inside glPushAttrib: mode &%X, viewport %d %d %d %d\n", (unsigned) mode, vp[0], vp[1], vp[2], vp[3]);
+  glPopAttrib ();
+  glGetIntegerv (GL_MATRIX_MODE, &mode);
+  glGetIntegerv (GL_VIEWPORT, vp);
+  printf ("after glPopAttrib: mode &%X, viewport %d %d %d %d\n", (unsigned) mode, vp[0], vp[1], vp[2], vp[3]);
+  GLdouble pd[16];
+  glGetDoublev (GL_TRANSPOSE_PROJECTION_MATRIX, pd);
+  printf ("transpose projection (doubles): %.6g %.6g %.6g %.6g\n", pd[0], pd[2], pd[11], pd[14]);
+  GLint im[16];
+  glGetIntegerv (GL_MODELVIEW_MATRIX, im);
+  printf ("modelview as integers: %d %d %d %d %d\n", im[0], im[5], im[10], im[14], im[15]);
+
+  /* selection: which of two quads is under the middle */
+  static GLuint sel[64];
+  glSelectBuffer (64, sel);
+  glRenderMode (GL_SELECT);
+  glInitNames ();
+  glPushName (7);
+  quad (-0.2f, -0.2f, 0.4f);
+  glLoadName (9);
+  quad (2.0f, 2.0f, 0.4f);
+  GLint hits = glRenderMode (GL_RENDER);
+  printf ("selection: %d hit(s), first name %u\n", hits, hits > 0 ? sel[3] : 0);
+
+  /* a read with pack settings */
+  static GLubyte rd[40 * 4 + 64];
+  memset (rd, 0xEE, sizeof rd);
+  glPixelStorei (GL_PACK_ALIGNMENT, 1);
+  glPixelStorei (GL_PACK_ROW_LENGTH, 20);
+  glPixelStorei (GL_PACK_SKIP_PIXELS, 2);
+  glReadPixels (W / 2 - 4, H / 2 - 1, 4, 2, GL_RGB, GL_UNSIGNED_BYTE, rd);
+  glPixelStorei (GL_PACK_ROW_LENGTH, 0);
+  glPixelStorei (GL_PACK_SKIP_PIXELS, 0);
+  glPixelStorei (GL_PACK_ALIGNMENT, 4);
+  unsigned sum = 0;
+  for (size_t i = 0; i < sizeof rd; i++)
+    sum = sum * 31 + rd[i];
+  printf ("glReadPixels (row length 20, skip 2): first %d,%d,%d gap %d, sum %08x\n", rd[6], rd[7], rd[8], rd[0], sum);
+
+  GLenum err = glGetError ();
+  printf ("glGetError: &%X\n", err);
+  finish_frame ();
+
+  unsigned long h = 5381;
+  for (size_t i = 0; i < sizeof frame; i += 4)
+    h = h * 33 + frame[i] + frame[i + 1] * 7u + frame[i + 2] * 13u;
+  printf ("picture: %08lx; middle %d,%d,%d\n", h & 0xffffffffUL, frame[((H / 2) * W + W / 2) * 4],
+	  frame[((H / 2) * W + W / 2) * 4 + 1], frame[((H / 2) * W + W / 2) * 4 + 2]);
+  if (argc > 1)
+    {
+      FILE *f = fopen (argv[1], "wb");
+      if (f)
+	{
+	  fprintf (f, "P6 %d %d 255\n", W, H);
+	  for (int i = 0; i < W * H; i++)
+	    fwrite (frame + i * 4, 1, 3, f);
+	  fclose (f);
+	}
+    }
+#ifndef DIRECT
+  r3d_close ();
+#endif
+  return 0;
+}

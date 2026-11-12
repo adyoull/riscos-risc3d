@@ -6,8 +6,9 @@ driver is registered the drawing is done by the machine's GPU driver, and
 where none is, Mesa draws in software as before.
 
 **Prototype, 12 November 2026.** The SWI chunk (&C3D00) and error numbers
-are provisional, the wire format will change, and nothing here has run on
-real hardware yet.
+are provisional and the wire format will change. GLES 2 has been drawn on
+a Raspberry Pi 4's GPU (V3D 4.2); OpenGL 1.x/2.1 so far on the build
+machine.
 
 ## The parts
 
@@ -15,10 +16,10 @@ real hardware yet.
 |---|---|
 | `modules/RISC3D` | The interface module. Drivers register; a program's GL library opens a context and gets memory shared with the driver. RISC3D never looks at the commands: it keeps the drivers and contexts, closes a task's contexts when the task goes, and passes on "wake" and "wait". |
 | `modules/Linux3D` | The driver for RISC OS on Linux. Each context is a connection to the `rol-3d` helper; it maps the shared memory into RISC OS. |
-| `linux/rol-3d.c` | The Linux helper: one process per context, with an EGL context on Linux's graphics driver (the GPU through its render node; Mesa's software renderer otherwise). GLES 2 where Linux's Mesa has it, desktop OpenGL otherwise. |
-| `proto/` | The command stream. `gen.py` writes both ends from the Khronos header (`include/GLES2/gl2.h`: 142 functions, 28 of them by hand). `r3d_shared.h` is the shared memory's layout. |
-| `lib/` | The GLES 2 functions for RISC OS programs, as commands: `r3d_glXxx`, listed by GL name in `r3d_gl_functions[]` so that Mesa's EGL (riscos-mesa) can build a dispatch table from them. Contexts: `r3d_create`, `r3d_make_current`, `r3d_destroy`; `r3d_swap` finishes a frame into a buffer. `r3d_open`/`r3d_close` and `R3D_DIRECT` are for the test programs. |
-| `demo/test`, `demo/cube` | `r3dtest` (command line, checks the pixels) and `r3dcube` (the same cube in a desktop window). |
+| `linux/rol-3d.c` | The Linux helper: one process per context, with an EGL context on Linux's graphics driver (the GPU through its render node; Mesa's software renderer otherwise): OpenGL's compatibility profile, or GLES 2 (desktop OpenGL standing in where Linux's Mesa has no GLES). |
+| `proto/` | The command stream. `gen.py` writes both ends from Khronos's registry (`khronos/gl.xml`: OpenGL 1.0 to 2.1, GLES 2.0 and ARB_framebuffer_object, 576 functions, 78 of them by hand), and `r3d_gl.h`. `r3d_shared.h` is the shared memory's layout. |
+| `lib/` | The GL functions for RISC OS programs, as commands: `r3d_glXxx`, listed by GL name (and the usual ARB/EXT names) in `r3d_gl_functions[]` so that Mesa's EGL (riscos-mesa) can build a dispatch table from them. Contexts: `r3d_create` (GLES 2), `r3d_create_gl` (OpenGL), `r3d_make_current`, `r3d_destroy`; `r3d_swap` finishes a frame into a buffer. It keeps the matrix stacks and other state queried often, so those queries need no wait. `r3d_open`/`r3d_open_gl`/`r3d_close` and `R3D_DIRECT` are for the test programs. |
+| `demo/test`, `demo/cube`, `demo/gl1` | `r3dtest` (GLES 2, command line, checks the pixels), `r3dcube` (the same cube in a desktop window), `gl1test` (OpenGL 1.x/2.1; built with DIRECT, the same drawn by Linux's Mesa directly, to compare; `gl1test bench`). |
 | `test/host` | Stand-ins so that the library and helper can be tested on the build machine without RISC OS. |
 
 ## How a frame goes
@@ -59,11 +60,13 @@ starts it), `RMLoad RISC3D`, `RMLoad Linux3D`, then `r3dtest` or
 
 - Mesa's EGL as the front end (riscos-mesa): the hardware path behind the
   standard API, software where there is no driver.
-- Desktop OpenGL's fixed-function calls in the command stream (generate
-  from Khronos's `gl.xml`).
 - Zero-copy presentation; window moves and resizes; vsync.
-- Client-side object names and cached queries (fewer waits).
-- Real hardware: a Raspberry Pi 4 or 5 with Mesa's v3d driver.
+- More of GL's state kept here (enables, bound textures), and immediate
+  mode packed tighter in the ring.
+- glDrawElements with indices in a buffer object and arrays in the
+  program's memory reads the indices back (one wait) on OpenGL, and
+  sends no arrays on GLES.
+- OpenGL 1.x/2.1 on real hardware (kit 2).
 - A native RISC OS driver. Allocated SWI and error numbers.
 
 Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE). The Khronos

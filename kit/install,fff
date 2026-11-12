@@ -1,13 +1,13 @@
 #!/bin/sh
 # RISC3D test kit: the Linux side. Run as root, from RiSH's root shell:
 #   sh /riscos/HardDisc4/RISC3DTest/install
-# It installs Debian's Mesa (EGL, GLES and the GPU drivers: about 150 MB
+# It installs Debian's Mesa (EGL, GLES, OpenGL and the GPU drivers: about 150 MB
 # from the network), puts the rol-3d helper in /opt/riscos, starts it and
 # says what will draw. Until an update makes init start rol-3d, run this
 # again after each restart (it is quick the second time).
 d=$(dirname "$0")
-if ! ls /usr/lib/aarch64-linux-gnu/libEGL.so.1 >/dev/null 2>&1; then
-  apt-get update && apt-get install -y --no-install-recommends libegl1 libgles2 libgbm1 libgl1-mesa-dri || {
+if ! ls /usr/lib/aarch64-linux-gnu/libEGL.so.1 /usr/lib/aarch64-linux-gnu/libOpenGL.so.0 >/dev/null 2>&1; then
+  apt-get update && apt-get install -y --no-install-recommends libegl1 libgles2 libgl1 libopengl0 libgbm1 libgl1-mesa-dri || {
     echo "Mesa could not be installed: is the network up?"; exit 1; }
 fi
 f=$(ls "$d"/rol-3d* 2>/dev/null | head -1)
@@ -21,5 +21,14 @@ setsid /opt/riscos/rol-3d </dev/null >"$d/helper-log" 2>&1 &
 sleep 1
 echo "--- what will draw:"
 /opt/riscos/rol-3d --check 2>&1 | tail -3
-chown 1000:1000 "$d/helper-log" 2>/dev/null
-echo "Done. Now double-click Cube or Test in RISC3DTest."
+# the OpenGL test drawn by Linux's Mesa directly, to compare with GL's
+g=$(ls "$d"/gl1test-linux* 2>/dev/null | head -1)
+if [ -n "$g" ]; then
+  chmod 755 "$g"
+  echo "--- the OpenGL test, drawn by Linux directly (LinuxResults):"
+  "$g" "$d/LinuxPicture" >"$d/LinuxResults" 2>&1
+  "$g" bench >>"$d/LinuxResults" 2>&1
+  tail -2 "$d/LinuxResults"
+fi
+chown 1000:1000 "$d/helper-log" "$d/LinuxResults" "$d/LinuxPicture" 2>/dev/null
+echo "Done. Now double-click Cube, Test or GL in RISC3DTest."

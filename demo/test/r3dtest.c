@@ -5,7 +5,7 @@
    Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE). */
 #include <stdlib.h>
 #include <time.h>
-#include <GLES2/gl2.h>
+#include "r3d_gl.h"
 #define R3D_DIRECT
 #include "r3d.h"
 #include "scene.h"

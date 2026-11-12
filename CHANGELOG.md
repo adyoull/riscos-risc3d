@@ -18,6 +18,11 @@
   screen's control codes (the command window being opened), so Results
   began with a few lines of unreadable bytes. It now redirects each
   command's output into Results ({ > } then { >> }) instead.
+- rol-3d: Mesa couldn't make its shader cache ("Failed to create
+  /root/.cache", twice per context in the Pi 4's helper-log): after
+  giving up root the helper still had root's HOME, so every shader was
+  compiled again for every program. HOME is now RISC OS's Linux user's
+  home (or /tmp if it has none it can write to).
 
 ## After riscos-mesa's reply (12 Nov 2026)
 

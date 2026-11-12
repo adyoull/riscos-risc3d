@@ -25,6 +25,7 @@
 #include <fcntl.h>
 #include <grp.h>
 #include <poll.h>
+#include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -649,6 +650,15 @@ main (int argc, char **argv)
 	}
       if (setgroups (2, g) || setgid (RO_GID) || setuid (RO_UID))
 	return 1;
+      /* HOME was root's, so Mesa couldn't make its shader cache and
+	 compiled every shader again for each program */
+      struct passwd *pw = getpwuid (RO_UID);
+      setenv ("HOME", pw && pw->pw_dir && access (pw->pw_dir, W_OK) == 0 ? pw->pw_dir : "/tmp", 1);
+    }
+  if (!getenv ("MESA_SHADER_CACHE_DIR") && access (getenv ("HOME") ? getenv ("HOME") : "/", W_OK) != 0)
+    {
+      mkdir ("/tmp/rol-3d-cache", 0700);
+      setenv ("MESA_SHADER_CACHE_DIR", "/tmp/rol-3d-cache", 1);
     }
   signal (SIGCHLD, SIG_IGN);
   signal (SIGPIPE, SIG_IGN);

@@ -319,6 +319,8 @@ TRACK = {
     'glVertexAttribDivisor', 'glEnable', 'glDisable', 'glPrimitiveRestartIndex',
     # step 3: client state back to its defaults
     'glClientAttribDefaultEXT',
+    # 0.7: the program's buffer (r3d_target) filled at these
+    'glFinish', 'glFlush',
 }
 # answers whose length only the driver knows: it marks the end
 SENTINEL = {'glGetUniformfv', 'glGetUniformiv', 'glGetMapdv', 'glGetMapfv', 'glGetMapiv',

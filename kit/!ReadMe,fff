@@ -1,10 +1,10 @@
-RISC3D test kit 16 (prototype, 13 November 2026)
+RISC3D test kit 17 (prototype, 13 November 2026)
 ================================================
 
-RISC3D 0.6: GL_EXT_direct_state_access, the last of the extensions
-riscos-mesa offers, goes to the GPU too (after OpenGL ES 3.0/3.1 and
-OpenGL 3.0/3.1 in 0.5). This kit comes with the package that installs
-RISC3D (riscos-risc3d 0.6-1).
+RISC3D 0.7: a context can draw into the program's own buffer, as OSMesa's
+do, so that riscos-mesa can send programs that use OSMesa directly to the
+GPU too. The package is kit 16's (riscos-risc3d 0.6-1): only the library
+changed. If kit 16's package is installed, skip step 2.
 
 Needs
 -----
@@ -34,7 +34,11 @@ Steps
            buffers, vertex array objects and framebuffers by name.
     Compare it with GL3LinuxResults: the lines after each part's version
     lines should be the same, pictures included.
- 5. Double-click ES (as kit 13). ESResults has two parts:
+ 5. Double-click Target. Compare TargetResults with TargetExpected (the
+    answers riscos-mesa's own OSMesa gives): every line after the first
+    should be the same, and none should end in "(not copied at
+    glFinish!)" or "(copied again!)".
+ 6. Double-click ES (as kit 13). ESResults has two parts:
       es1: OpenGL ES 1.1 (fixed-point matrices and arrays, lighting, the
            point size array, a vertex array object, a mapped buffer, an
            ETC1 texture). Linux's Mesa has no GLES 1.1, so RISC3D draws it
@@ -46,9 +50,10 @@ Steps
            program binaries).
     Compare its es2 part with ESLinuxResults: the lines after the
     version should be the same, picture included.
- 6. Cube, Test, GL and Overlay as before (check nothing went backwards).
+ 7. Cube, Test, GL and Overlay as before (check nothing went backwards).
 
 Please send
 -----------
-GL3Results and GL3LinuxResults (a photo of each is fine), and anything
-that looks different from kit 15. If anything stops, /riscos/3d/log.txt (the helper's log).
+TargetResults, and ESResults with ESLinuxResults (their es2 pictures
+change in this kit: a mistake in estest, found by riscos-mesa, is put
+right; both should still be the same as each other). If anything stops, /riscos/3d/log.txt (the helper's log).

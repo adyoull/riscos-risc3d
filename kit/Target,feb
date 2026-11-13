@@ -1,0 +1,9 @@
+| RISC3D test: a context drawing into the program's own buffer, as
+| OSMesa's do (RISC3D 0.7, r3d_target): the same scene in each of OSMesa's
+| formats. Writes TargetResults; compare it with TargetExpected (riscos-mesa's
+| OSMesa's own answers).
+RMEnsure RISC3D 0.02 Error Install riscos-risc3d first (see !ReadMe)
+RMEnsure Linux3D 0.01 Error Install riscos-risc3d first (see !ReadMe)
+Run <Obey$Dir>.targettest { > <Obey$Dir>.TargetResults }
+SetType <Obey$Dir>.TargetResults Text
+Filer_Run <Obey$Dir>.TargetResults

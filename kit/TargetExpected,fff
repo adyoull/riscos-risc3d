@@ -1,0 +1,26 @@
+target (riscos-mesa's OSMesa, Mesa 20.3.5, on the build machine: what TargetResults should say after its first line)
+RGBA    down row 64: e3b2c505 e71ec205
+RGBA    down row 72: eff22905 42b36605
+RGBA    up   row 64: 694c7705 b9c44d05
+RGBA    up   row 72: 25735b05 2e6ab105
+BGRA    down row 64: e4ec6445 c0b67745
+BGRA    down row 72: b5ed8845 5eb85b45
+BGRA    up   row 64: 3650bb05 f1e2af05
+BGRA    up   row 72: 8de1ff05 adb37305
+ARGB    down row 64: 85c598c5 2af84c45
+ARGB    down row 72: 81adfcc5 c68cb045
+ARGB    up   row 64: acd02085 ca311605
+ARGB    up   row 72: cacc6485 8abd5a05
+RGB     down row 64: 2c21f4f5 e1e0efb5
+RGB     down row 72: c4e514f5 4b922db5
+RGB     up   row 64: d00c9b95 07867355
+RGB     up   row 72: f9a72c95 d9868f55
+BGR     down row 64: 9cdb1a35 4c8cc175
+BGR     down row 72: 8264a835 7a7a7275
+BGR     up   row 64: 63338595 71e43915
+BGR     up   row 72: c362c795 49e78415
+RGB_565 down row 64: b2c2bb45 b783a845
+RGB_565 down row 72: a06cc145 9b2c9a45
+RGB_565 up   row 64: 83165505 6ac69285
+RGB_565 up   row 72: b5dac505 a1187c85
+error: &0

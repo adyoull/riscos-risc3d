@@ -502,6 +502,10 @@ part_es2 (void)
 		       "attribute vec2 pos; void main () { gl_Position = vec4 (pos * 0.12 + vec2 (0.4 + float (gl_InstanceIDEXT) * 0.25, 0.4), 0.0, 1.0); }",
 		       "precision mediump float; void main () { gl_FragColor = vec4 (0.9, 0.9, 0.9, 1.0); }");
   GL (glUseProgram) (pi);
+  /* (GL_ARRAY_BUFFER isn't the vertex array object's: still the vbo above,
+     which made v + 4 an offset into it, out of range, until RISC3D 0.7:
+     found by riscos-mesa) */
+  GL (glBindBuffer) (GL_ARRAY_BUFFER, 0);
   GL (glVertexAttribPointer) (0, 2, GL_FLOAT, GL_FALSE, 0, v + 4);
   GL (glDrawArraysInstancedEXT) (GL_TRIANGLES, 0, 3, 2);
   GL (glDrawElementsInstancedEXT) (GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, ix, 1);

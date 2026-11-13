@@ -203,6 +203,12 @@ struct r3d_context
   const char **ext_list;		/* glGetStringi's: GL_EXTENSIONS split */
   GLuint ext_count;
 
+  /* the program's own buffer as framebuffer 0 (r3d_target: OSMesa's way) */
+  unsigned char *target;
+  int target_w, target_h, target_format, target_row, target_up;
+  uint32_t target_head;			/* the ring's head when last copied (+ its glFinish) */
+  unsigned char *target_tmp;
+
   /* overlapped frames: the surface's size, the last frame sent */
   int surface_w, surface_h;
   uint32_t frame;
@@ -1789,9 +1795,19 @@ ext_split (void)
     return 0;
   char *t = (char *) (l + words + 1);
   memcpy (t, e, len + 1);
+  /* (split by hand: no new C library functions, for riscos-mesa's
+     shared library) */
   GLuint n = 0;
-  for (char *w = strtok (t, " "); w; w = strtok (0, " "))
-    l[n++] = w;
+  for (char *p = t; *p;)
+    {
+      while (*p == ' ')
+	*p++ = 0;
+      if (!*p)
+	break;
+      l[n++] = p;
+      while (*p && *p != ' ')
+	p++;
+    }
   l[n] = 0;
   cur->ext_list = l;
   cur->ext_count = n;
@@ -3228,6 +3244,7 @@ free_context (struct r3d_context *c)
     free (c->maps[i].ptr);
   free (c->imm_v);
   free (c->ext_list);
+  free (c->target_tmp);
   free (c);
 }
 
@@ -3525,6 +3542,163 @@ r3d_swap (void *pixels, size_t bytes)
     return -1;
   return r3d_sync (pixels, bytes);
 }
+
+/* --- the program's own buffer as framebuffer 0 (OSMesa's way) -----------
+
+   r3d_target: the frame is copied into the program's buffer, in its
+   format, at glFinish and glFlush when anything was sent since the last
+   copy, and at r3d_target_copy. The renderer keeps drawing into its own
+   framebuffer, which isn't cleared by the copy (OSMesa's single buffer). */
+
+#define R3D_FMT_BGRA 0x1
+#define R3D_FMT_ARGB 0x2
+#define R3D_FMT_BGR 0x4
+#define R3D_FMT_RGB_565 0x5
+
+static int
+target_bytes (int format)
+{
+  switch (format)
+    {
+    case GL_RGBA: case R3D_FMT_BGRA: case R3D_FMT_ARGB: return 4;
+    case GL_RGB: case R3D_FMT_BGR: return 3;
+    case R3D_FMT_RGB_565: return 2;
+    }
+  return 0;
+}
+
+const char *
+r3d_target (struct r3d_context *c, void *buffer, int width, int height, int format, int row_length, int y_up)
+{
+  if (!c)
+    return "No RISC3D context";
+  if (!buffer)
+    {
+      c->target = 0;
+      return 0;
+    }
+  if (width < 1 || height < 1 || width > 8192 || height > 8192 || !target_bytes (format)
+      || (row_length && row_length < width))
+    return "RISC3D can't draw into that buffer";
+  struct r3d_context *was = cur;
+  if (was != c)
+    {
+      if (was != &none)
+	publish ();
+      cur = c;
+    }
+  if (width != c->surface_w || height != c->surface_h)
+    {
+      free (c->target_tmp);
+      c->target_tmp = 0;
+      r3d_surface (width, height);
+    }
+  if (was != c)
+    {
+      publish ();
+      cur = was;
+    }
+  c->target = buffer;
+  c->target_w = width;
+  c->target_h = height;
+  c->target_format = format;
+  c->target_row = row_length ? row_length : width;
+  c->target_up = y_up;
+  c->target_head = c->local_head - 1;	/* (the first glFinish copies) */
+  return 0;
+}
+
+/* the frame into the program's buffer now (the current context's) */
+static int
+target_copy (void)
+{
+  struct r3d_context *c = cur;
+  int w = c->target_w, h = c->target_h, bpp = target_bytes (c->target_format);
+  size_t row = (size_t) w * 4, n = row * (size_t) h;
+  unsigned char *dst = c->target;
+  if (c->target_format == GL_RGBA && !c->target_up && c->target_row == w)
+    return r3d_swap (dst, n) == (int) n ? 0 : -1;
+  if (!c->target_tmp && !(c->target_tmp = malloc (n)))
+    return -1;
+  if (r3d_swap (c->target_tmp, n) != (int) n)
+    return -1;
+  for (int y = 0; y < h; y++)
+    {
+      const unsigned char *s = c->target_tmp + row * (size_t) y;
+      unsigned char *d = dst + (size_t) c->target_row * (size_t) bpp * (size_t) (c->target_up ? h - 1 - y : y);
+      switch (c->target_format)
+	{
+	case GL_RGBA:
+	  memcpy (d, s, row);
+	  break;
+	case R3D_FMT_BGRA:
+	  for (int x = 0; x < w; x++, s += 4, d += 4)
+	    {
+	      d[0] = s[2]; d[1] = s[1]; d[2] = s[0]; d[3] = s[3];
+	    }
+	  break;
+	case R3D_FMT_ARGB:
+	  for (int x = 0; x < w; x++, s += 4, d += 4)
+	    {
+	      d[0] = s[3]; d[1] = s[0]; d[2] = s[1]; d[3] = s[2];
+	    }
+	  break;
+	/* (OSMESA_RGB and OSMESA_BGR as riscos-mesa's OSMesa has them, Mesa
+	   20.3.5's: RGB is blue, green, red in memory and BGR red first) */
+	case GL_RGB:
+	  for (int x = 0; x < w; x++, s += 4, d += 3)
+	    {
+	      d[0] = s[2]; d[1] = s[1]; d[2] = s[0];
+	    }
+	  break;
+	case R3D_FMT_BGR:
+	  for (int x = 0; x < w; x++, s += 4, d += 3)
+	    {
+	      d[0] = s[0]; d[1] = s[1]; d[2] = s[2];
+	    }
+	  break;
+	case R3D_FMT_RGB_565:
+	  /* (rounded, as Mesa does) */
+	  for (int x = 0; x < w; x++, s += 4, d += 2)
+	    {
+	      unsigned v = (((unsigned) s[0] * 31 + 127) / 255 << 11) | (((unsigned) s[1] * 63 + 127) / 255 << 5)
+			   | ((unsigned) s[2] * 31 + 127) / 255;
+	      d[0] = (unsigned char) v;
+	      d[1] = (unsigned char) (v >> 8);
+	    }
+	  break;
+	}
+    }
+  return 0;
+}
+
+int
+r3d_target_copy (struct r3d_context *c)
+{
+  if (!c || !c->target)
+    return -1;
+  struct r3d_context *was = cur;
+  cur = c;
+  int r = target_copy ();
+  c->target_head = c->local_head;
+  cur = was;
+  return r;
+}
+
+/* glFinish and glFlush: the copy first, if anything was sent since the
+   last (the command itself, two words, follows: counted as copied) */
+static void
+target_finish (void)
+{
+  if (!cur->target)
+    return;
+  if (cur->local_head != cur->target_head)
+    target_copy ();
+  cur->target_head = cur->local_head + 2;
+}
+
+static void r3d_track_glFinish (void) { target_finish (); }
+static void r3d_track_glFlush (void) { target_finish (); }
 
 
 /* --- GLES 1.1 ------------------------------------------------------------
@@ -4108,8 +4282,13 @@ glGetInteger64v (GLenum pname, GLint64 *data)
   int n, f;
   if (kept (pname, v, &n, &f))
     {
+      /* (as glGetIntegerv's: a double to a 64-bit integer would bring in
+	 libgcc's __fixdfdi) */
       for (int i = 0; i < n; i++)
-	data[i] = f ? (GLint64) (2147483647.0 * v[i]) : (GLint64) v[i];
+	{
+	  double x = f ? 2147483647.0 * v[i] : v[i];
+	  data[i] = x >= 2147483647.0 ? 2147483647 : x <= -2147483648.0 ? (GLint) -2147483647 - 1 : (GLint) x;
+	}
       return;
     }
   size_t c = values_of (pname);

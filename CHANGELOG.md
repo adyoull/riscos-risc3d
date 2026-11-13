@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.7: drawing into the program's own buffer (OSMesa's way); kit 17 (13 Nov 2026, in testing)
+
+The owner: programs should use RISC3D automatically wherever it is
+there, programs calling OSMesa directly too. That routing is riscos-mesa's
+(its libOSMesa); this is what it needs from RISC3D.
+
+- **`r3d_target (ctx, buffer, width, height, format, row_length, y_up)`**
+  makes the program's buffer the context's framebuffer 0, as
+  OSMesaMakeCurrent does. The frame is copied into it at glFinish and
+  glFlush when anything was sent since the last copy, and at
+  `r3d_target_copy`. The renderer keeps its own framebuffer, so nothing is
+  lost between copies, as with OSMesa's single buffer.
+  - It takes OSMesa's formats and its values: RGBA (no conversion when
+    top row first and no row length), BGRA, ARGB, RGB, BGR and RGB_565,
+    with a row length and either row order.
+  - RGB and BGR follow riscos-mesa's OSMesa (Mesa 20.3.5) as it is:
+    OSMESA_RGB is blue, green, red in memory, and OSMESA_BGR is red
+    first. 565 is rounded as Mesa rounds.
+  - glFinish and glFlush are noted (TRACK) for it. A glFinish with nothing
+    new sent copies nothing.
+- **targettest** (`demo/target`): the same scene in all six formats, both
+  row orders, with and without a row length (24 cases), first after
+  glFinish, then redrawn and after glFlush. Built with -DOSMESA it runs
+  riscos-mesa's own OSMesa (20.3.5 and its patches, built on the host).
+  On the build machine every sum is the same as OSMesa's. Kit 17 carries
+  OSMesa's answers as TargetExpected.
+- **No new C library functions in the library** (riscos-mesa's request:
+  a mixed program exports only what it was linked with). The split for
+  glGetStringi no longer uses strtok, and glGetInteger64v no longer needs
+  libgcc's __fixdfdi. `nm -u` of the library is 0.4's list again.
+- **estest:** GL_ARRAY_BUFFER is unbound before the instancing part's
+  arrays in the program's memory. Without that, `v + 4` was an offset
+  into the earlier buffer, out of range (found by riscos-mesa). The es2
+  picture changes on both sides.
+- rol-3d unchanged (0.6), so the package stays riscos-risc3d 0.6-1. Kit 17
+  (`RISC3DTest-17.zip`) carries kit 16's copy.
+
 ## 0.6: GL_EXT_direct_state_access; kit 16 (13 Nov 2026)
 
 - **Kit 16 on the owner's Pi 4 (13 Nov):** gl3test all through RISC3D =

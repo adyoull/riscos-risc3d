@@ -59,7 +59,10 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
-#define ROL3D_VERSION "0.5"
+#define ROL3D_VERSION "0.6"
+/* what the library may send (OP_CONTEXT's reply, word 3): 6 = 0.6's
+   commands (GL_EXT_direct_state_access, OP_TEMP_BIND); none: 0.5 */
+#define ROL3D_LEVEL 6
 #define GLDIR "/opt/riscos/gl"		/* a private Mesa, if the image has one */
 
 /* The helper's own textures and buffers have names the program's never
@@ -1158,6 +1161,99 @@ debug_log (uint32_t count, uint32_t bufsize)
   area->reply_len = (uint32_t) used * 4;
 }
 
+/* GL_EXT_direct_state_access's framebuffer functions (a framebuffer first) */
+static int
+named_fb (uint32_t op)
+{
+  switch (op)
+    {
+    case OP_glCheckNamedFramebufferStatusEXT: case OP_glNamedFramebufferTexture1DEXT:
+    case OP_glNamedFramebufferTexture2DEXT: case OP_glNamedFramebufferTexture3DEXT:
+    case OP_glNamedFramebufferRenderbufferEXT: case OP_glGetNamedFramebufferAttachmentParameterivEXT:
+    case OP_glFramebufferDrawBufferEXT: case OP_glFramebufferDrawBuffersEXT:
+    case OP_glFramebufferReadBufferEXT: case OP_glGetFramebufferParameterivEXT:
+    case OP_glNamedFramebufferTextureEXT: case OP_glNamedFramebufferTextureLayerEXT:
+    case OP_glNamedFramebufferTextureFaceEXT: case OP_glNamedFramebufferParameteriEXT:
+    case OP_glGetNamedFramebufferParameterivEXT:
+      return 1;
+    }
+  return 0;
+}
+
+/* the program's buffer names for framebuffer 0, as ours */
+static GLenum
+fb0_buffer (GLenum b)
+{
+  switch (b)
+    {
+    case GL_BACK: case GL_FRONT: case GL_FRONT_AND_BACK: case GL_LEFT:
+    case GL_BACK_LEFT: case GL_FRONT_LEFT:
+      return GL_COLOR_ATTACHMENT0;
+    }
+  return b;
+}
+
+/* GL_EXT_direct_state_access done as the bound object's functions: an
+   object bound for the commands between OP_TEMP_BIND and OP_TEMP_END */
+static struct { int on; uint32_t kind; GLenum target; GLint was; } temp;
+
+static GLenum
+binding_of (uint32_t kind, GLenum target)
+{
+  if (kind == 1)
+    switch (target)
+      {
+      case GL_COPY_WRITE_BUFFER: return GL_COPY_WRITE_BUFFER_BINDING;
+      case GL_ARRAY_BUFFER: return GL_ARRAY_BUFFER_BINDING;
+      }
+  switch (target)
+    {
+    case GL_TEXTURE_1D: return GL_TEXTURE_BINDING_1D;
+    case GL_TEXTURE_2D: return GL_TEXTURE_BINDING_2D;
+    case GL_TEXTURE_3D: return GL_TEXTURE_BINDING_3D;
+    case GL_TEXTURE_1D_ARRAY: return GL_TEXTURE_BINDING_1D_ARRAY;
+    case GL_TEXTURE_2D_ARRAY: return GL_TEXTURE_BINDING_2D_ARRAY;
+    case GL_TEXTURE_RECTANGLE: return GL_TEXTURE_BINDING_RECTANGLE;
+    case GL_TEXTURE_BUFFER: return GL_TEXTURE_BINDING_BUFFER;
+    case GL_TEXTURE_CUBE_MAP: return GL_TEXTURE_BINDING_CUBE_MAP;
+    case GL_TEXTURE_2D_MULTISAMPLE: return GL_TEXTURE_BINDING_2D_MULTISAMPLE;
+    case 0x9102: return 0x9105;		/* GL_TEXTURE_2D_MULTISAMPLE_ARRAY */
+    }
+  return 0;
+}
+
+static void
+temp_bind (const uint32_t *a)
+{
+  GLenum target = a[1];
+  if (a[0] == 0 && target >= GL_TEXTURE_CUBE_MAP_POSITIVE_X && target <= GL_TEXTURE_CUBE_MAP_NEGATIVE_Z)
+    target = GL_TEXTURE_CUBE_MAP;
+  GLenum b = binding_of (a[0], target);
+  if (temp.on || !b)
+    return;
+  temp.on = 1;
+  temp.kind = a[0];
+  temp.target = target;
+  temp.was = 0;
+  gl.GetIntegerv (b, &temp.was);
+  if (a[0] == 0)
+    gl.BindTexture (target, a[2]);
+  else
+    gl.BindBuffer (target, a[2]);
+}
+
+static void
+temp_end (void)
+{
+  if (!temp.on)
+    return;
+  temp.on = 0;
+  if (temp.kind == 0)
+    gl.BindTexture (temp.target, (GLuint) temp.was);
+  else
+    gl.BindBuffer (temp.target, (GLuint) temp.was);
+}
+
 /* the context's version: major * 10 + minor */
 static uint32_t
 context_version (void)
@@ -1248,8 +1344,8 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
 	  if (ok)
 	    {
 	      /* (0.5 on: and the version, major * 10 + minor) */
-	      uint32_t w[3] = { 1, (uint32_t) desktop_gl, context_version () };
-	      reply (w, 12);
+	      uint32_t w[4] = { 1, (uint32_t) desktop_gl, context_version (), ROL3D_LEVEL };
+	      reply (w, 16);
 	      return;
 	    }
 	  char r[8 + sizeof gl_error];
@@ -1268,8 +1364,36 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
     }
   else if (op == OP_CONTEXT)
     {
-      uint32_t w[3] = { 1, (uint32_t) desktop_gl, context_version () };
-      reply (w, 12);
+      uint32_t w[4] = { 1, (uint32_t) desktop_gl, context_version (), ROL3D_LEVEL };
+      reply (w, 16);
+      return;
+    }
+  /* GL_EXT_direct_state_access on framebuffer 0 (the program's, ours) */
+  if (__builtin_expect (op >= OP_glCheckNamedFramebufferStatusEXT && named_fb (op), 0) && a[0] == 0 && fbo)
+    {
+      uint32_t b[64];
+      if (n > 64)
+	return;
+      memcpy (b, a, n * 4);
+      b[0] = fbo;
+      if (op == OP_glFramebufferDrawBufferEXT || op == OP_glFramebufferReadBufferEXT)
+	b[1] = fb0_buffer (b[1]);
+      if (op == OP_glFramebufferDrawBuffersEXT)
+	for (uint32_t i = 3; i < n && i < 3 + b[1]; i++)
+	  b[i] = fb0_buffer (b[i]);
+      if (op == OP_glGetFramebufferParameterivEXT)
+	{
+	  GLint r[64];
+	  memset (r, 0, sizeof r);
+	  if (gl.GetFramebufferParameterivEXT)
+	    gl.GetFramebufferParameterivEXT (fbo, b[1], r);
+	  if (r[0] == GL_COLOR_ATTACHMENT0 && (b[1] == GL_READ_BUFFER || (b[1] >= GL_DRAW_BUFFER0 && b[1] <= GL_DRAW_BUFFER15)
+					       || b[1] == GL_DRAW_BUFFER))
+	    r[0] = GL_BACK;
+	  reply (r, sizeof r);
+	  return;
+	}
+      dispatch_gen (op, b, n);
       return;
     }
   /* GLES 3's hints on our framebuffer (the program's framebuffer 0): not
@@ -1855,6 +1979,21 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
     case OP_glDebugMessageCallback:
       debug_callback (a[0]);
       break;
+    case OP_TEMP_BIND:
+      temp_bind (a);
+      break;
+    case OP_TEMP_END:
+      temp_end ();
+      break;
+    case OP_glGetNamedProgramStringEXT:
+      {
+	uint32_t bytes = a[3] > area->reply_bytes ? area->reply_bytes : a[3];
+	void *r = scratch (bytes);
+	if (gl.GetNamedProgramStringEXT)
+	  gl.GetNamedProgramStringEXT (a[0], a[1], a[2], r);
+	reply (r, bytes);
+	break;
+      }
     /* OpenGL 3 / GLES 3 */
     case OP_glGenBuffers:
     case OP_glGenTextures:

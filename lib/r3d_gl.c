@@ -141,6 +141,7 @@ struct r3d_context
   int ff;				/* fixed function (OpenGL or GLES 1.1): matrices kept here */
   int version;				/* the version it gives: major * 10 + minor */
   int old_renderer;			/* rol-3d before 0.5: the functions before OpenGL 3 */
+  int level;				/* rol-3d's commands: 4 (0.4), 5 (0.5), 6 (0.6 on) */
   int strict;				/* OpenGL 3.1 without the compatibility profile */
 
   struct attrib attribs[MAX_ATTRIBS];
@@ -229,6 +230,24 @@ static uint32_t r3d_f2u (float f) { union { float f; uint32_t u; } v = { f }; re
 static float r3d_u2f (uint32_t u) { union { uint32_t u; float f; } v = { u }; return v.f; }
 static void r3d_d2w (uint32_t *w, double d) { memcpy (w, &d, 8); }
 static long r3d_nonneg (long n) { return n < 0 ? 0 : n; }
+
+/* the arrays' state as OpenGL starts it (nothing enabled, no pointers) */
+static void
+array_defaults (struct attrib *attribs, struct attrib *fixed)
+{
+  memset (attribs, 0, sizeof (struct attrib) * MAX_ATTRIBS);
+  memset (fixed, 0, sizeof (struct attrib) * FIXED_SLOTS);
+  for (int i = 0; i < MAX_ATTRIBS; i++)
+    {
+      attribs[i].size = 4;
+      attribs[i].type = GL_FLOAT;
+    }
+  for (int s = 0; s < FIXED_SLOTS; s++)
+    {
+      fixed[s].size = s == 6 ? 3 : 4;	/* (the secondary colour's is 3) */
+      fixed[s].type = s == 4 ? GL_BOOL : GL_FLOAT;
+    }
+}
 
 /* the module: 0 wakes the renderer, 1 waits until it has done everything */
 static int
@@ -1643,6 +1662,12 @@ own_string (int slot, const char *linux_s)
       count = cur->desktop ? sizeof r3d_exts_gl_04 / sizeof *r3d_exts_gl_04
 			   : sizeof r3d_exts_gles2_04 / sizeof *r3d_exts_gles2_04;
     }
+  else if (cur->level < 6 && cur->desktop)
+    {
+      /* (rol-3d 0.5: not GL_EXT_direct_state_access) */
+      list = r3d_exts_gl_05;
+      count = sizeof r3d_exts_gl_05 / sizeof *r3d_exts_gl_05;
+    }
   if (cur->es1)
     {
       /* (desktop OpenGL's list names others: riscos-mesa's own, carried) */
@@ -1793,6 +1818,29 @@ kept (GLenum pname, double *v, int *n, int *is_float)
   int transpose = 0;
   *is_float = 0;
   *n = 1;
+  /* the fixed-function arrays' pointers' state: kept here (an array in the
+     program's memory reaches the renderer only with each draw) */
+  static const struct { GLenum pname; signed char slot, what; } arr[] = {
+    { GL_VERTEX_ARRAY_SIZE, 0, 0 }, { GL_VERTEX_ARRAY_TYPE, 0, 1 }, { GL_VERTEX_ARRAY_STRIDE, 0, 2 },
+    { GL_NORMAL_ARRAY_TYPE, 1, 1 }, { GL_NORMAL_ARRAY_STRIDE, 1, 2 },
+    { GL_COLOR_ARRAY_SIZE, 2, 0 }, { GL_COLOR_ARRAY_TYPE, 2, 1 }, { GL_COLOR_ARRAY_STRIDE, 2, 2 },
+    { GL_INDEX_ARRAY_TYPE, 3, 1 }, { GL_INDEX_ARRAY_STRIDE, 3, 2 }, { GL_EDGE_FLAG_ARRAY_STRIDE, 4, 2 },
+    { GL_FOG_COORD_ARRAY_TYPE, 5, 1 }, { GL_FOG_COORD_ARRAY_STRIDE, 5, 2 },
+    { GL_SECONDARY_COLOR_ARRAY_SIZE, 6, 0 }, { GL_SECONDARY_COLOR_ARRAY_TYPE, 6, 1 },
+    { GL_SECONDARY_COLOR_ARRAY_STRIDE, 6, 2 },
+    { GL_TEXTURE_COORD_ARRAY_SIZE, -1, 0 }, { GL_TEXTURE_COORD_ARRAY_TYPE, -1, 1 },
+    { GL_TEXTURE_COORD_ARRAY_STRIDE, -1, 2 },
+  };
+  for (size_t i = 0; cur->ff && i < sizeof arr / sizeof *arr; i++)
+    if (arr[i].pname == pname)
+      {
+	int slot = arr[i].slot >= 0 ? arr[i].slot : 8 + cur->client_unit;
+	if (slot >= FIXED_SLOTS)
+	  return 0;
+	const struct attrib *t = &cur->fixed[slot];
+	v[0] = arr[i].what == 0 ? t->size : arr[i].what == 1 ? (double) t->type : t->stride;
+	return 1;
+      }
   switch (pname)
     {
     case GL_TRANSPOSE_MODELVIEW_MATRIX: transpose = 1; /* fall through */
@@ -3217,6 +3265,7 @@ create_version (int api, int want)
   c->local_head = c->published = c->tail_seen = c->area->head;
   c->unpack.alignment = c->pack.alignment = 4;
   c->next_texture = c->next_buffer = c->next_list = 1;
+  array_defaults (c->attribs, c->fixed);
   c->matrix_mode = GL_MODELVIEW;
 
   struct r3d_context *was = cur;
@@ -3238,6 +3287,7 @@ create_version (int api, int want)
 	  int top = api == R3D_API_GLES1 ? 11 : 31;
 	  int has = n >= 12 && r[2] ? (int) r[2] : api == R3D_API_GL ? 21 : 20;
 	  c->old_renderer = n < 12;
+	  c->level = n >= 16 ? (int) r[3] : n >= 12 ? 5 : 4;
 	  if (api == R3D_API_GLES2 && r[1])
 	    has = 20;			/* (GLES on desktop OpenGL) */
 	  c->version = api == R3D_API_GLES1 ? 11 : has < top ? has : top;
@@ -3619,8 +3669,7 @@ vao_load (const struct vao *v)
   else
     {
       /* a new object: nothing enabled, no element buffer */
-      memset (cur->attribs, 0, sizeof cur->attribs);
-      memset (cur->fixed, 0, sizeof cur->fixed);
+      array_defaults (cur->attribs, cur->fixed);
       cur->element_buffer = 0;
     }
 }
@@ -4312,4 +4361,5 @@ glGetProgramStringARB (GLenum target, GLenum pname, void *string)
   r3d_sync (string, (size_t) n);
 }
 
+#include "r3d_dsa.c"
 #include "client_gen.c"

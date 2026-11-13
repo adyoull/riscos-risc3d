@@ -4,7 +4,7 @@
    (eglGetProcAddress). Both builds print the same lines (bar the version
    lines) and the same pictures' sums, if RISC3D carries them right.
 
-     gl3test [es3|gl3|both] [picture]
+     gl3test [es3|gl3|dsa|both|all] [picture]   (both: es3 and gl3)
 
    Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE). */
 #include <stdint.h>
@@ -56,7 +56,24 @@ static int missing;
   X (glGetProgramResourceiv) X (glGetProgramInterfaceiv) X (glGetProgramResourceLocation) \
   X (glBindFragDataLocation) X (glGetFragDataLocation) X (glPrimitiveRestartIndex) \
   X (glColorMaski) X (glEnablei) X (glDisablei) X (glIsEnabledi) X (glBeginConditionalRender) X (glEndConditionalRender) \
-  X (glMatrixMode) X (glLoadIdentity) X (glColor4f) X (glBegin) X (glEnd) X (glVertex2f)
+  X (glMatrixMode) X (glLoadIdentity) X (glColor4f) X (glBegin) X (glEnd) X (glVertex2f) \
+  X (glGetFloatv) X (glEnableClientState) X (glDisableClientState) X (glVertexPointer) \
+  X (glTextureImage2DEXT) X (glTextureParameteriEXT) X (glGetTextureImageEXT) \
+  X (glGetTextureLevelParameterivEXT) X (glGetTextureParameterivEXT) X (glMultiTexImage2DEXT) \
+  X (glBindMultiTextureEXT) X (glMultiTexEnviEXT) X (glMultiTexParameteriEXT) X (glGetMultiTexEnvivEXT) \
+  X (glMatrixLoadIdentityEXT) X (glMatrixOrthoEXT) X (glMatrixTranslatefEXT) \
+  X (glMatrixPushEXT) X (glMatrixPopEXT) X (glMatrixMultTransposefEXT) \
+  X (glNamedBufferDataEXT) X (glNamedBufferSubDataEXT) X (glGetNamedBufferSubDataEXT) \
+  X (glMapNamedBufferRangeEXT) X (glUnmapNamedBufferEXT) X (glFlushMappedNamedBufferRangeEXT) \
+  X (glGetNamedBufferParameterivEXT) X (glGetNamedBufferPointervEXT) X (glNamedCopyBufferSubDataEXT) \
+  X (glVertexArrayVertexOffsetEXT) X (glVertexArrayColorOffsetEXT) X (glEnableVertexArrayEXT) \
+  X (glGetVertexArrayIntegervEXT) X (glGetVertexArrayPointervEXT) \
+  X (glMultiTexCoordPointerEXT) X (glEnableClientStateIndexedEXT) \
+  X (glDisableClientStateIndexedEXT) X (glGetPointerIndexedvEXT) \
+  X (glPushClientAttribDefaultEXT) X (glPopClientAttrib) \
+  X (glNamedRenderbufferStorageEXT) X (glNamedFramebufferRenderbufferEXT) X (glCheckNamedFramebufferStatusEXT) \
+  X (glFramebufferDrawBufferEXT) X (glGetFramebufferParameterivEXT) X (glNamedFramebufferTexture2DEXT) \
+  X (glGetNamedFramebufferAttachmentParameterivEXT) X (glGenerateTextureMipmapEXT)
 
 #define DECL(n) static __typeof__ (n) *p_##n;
 FUNCS (DECL)
@@ -709,15 +726,207 @@ part_gl3 (void)
   close_api ();
 }
 
+/* --- GL_EXT_direct_state_access (RISC3D 0.6) ---------------------------- */
+static void
+part_dsa (void)
+{
+  const char *e = open_api (1);
+  if (e)
+    {
+      printf ("dsa: no context (%s)\n", e);
+      return;
+    }
+  printf ("dsa (%s)\n", WHO);
+  versions ();
+  int has = 0;
+  GLint ne = 0;
+  GL (glGetIntegerv) (GL_NUM_EXTENSIONS, &ne);
+  for (GLint i = 0; i < ne; i++)
+    {
+      const char *x = (const char *) GL (glGetStringi) (GL_EXTENSIONS, (GLuint) i);
+      if (x && !strcmp (x, "GL_EXT_direct_state_access"))
+	has = 1;
+    }
+  printf ("direct state access: %s\n", has ? "yes" : "no");
+  if (!has || !compat)
+    {
+      close_api ();
+      return;
+    }
+  GL (glViewport) (0, 0, W, H);
+  GL (glClearColor) (0.2f, 0.25f, 0.2f, 1);
+  GL (glClear) (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  /* matrices by name, the current stack being another */
+  GL (glMatrixMode) (GL_TEXTURE);
+  GL (glMatrixLoadIdentityEXT) (GL_PROJECTION);
+  GL (glMatrixOrthoEXT) (GL_PROJECTION, 0, 4, 0, 3, -1, 1);
+  GL (glMatrixLoadIdentityEXT) (GL_MODELVIEW);
+  GL (glMatrixPushEXT) (GL_MODELVIEW);
+  GL (glMatrixTranslatefEXT) (GL_MODELVIEW, 7, 7, 0);
+  GL (glMatrixPopEXT) (GL_MODELVIEW);
+  GL (glMatrixTranslatefEXT) (GL_MODELVIEW, 0.25f, 0.25f, 0);
+  const GLfloat tm[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+  GL (glMatrixMultTransposefEXT) (GL_MODELVIEW, tm);
+  GLfloat mv[16], pr[16];
+  GLint mode = 0;
+  GL (glGetFloatv) (GL_MODELVIEW_MATRIX, mv);
+  GL (glGetFloatv) (GL_PROJECTION_MATRIX, pr);
+  GL (glGetIntegerv) (GL_MATRIX_MODE, &mode);
+  printf ("matrices: modelview moves %g %g, projection %g %g; mode still &%X\n", (double) mv[12], (double) mv[13],
+	  (double) pr[0], (double) pr[5], mode);
+  GL (glMatrixMode) (GL_MODELVIEW);
+
+  /* a texture by name, from the program's memory with a row length */
+  GLuint t[2];
+  GL (glGenTextures) (2, t);
+  static GLubyte img[4][6][4];
+  for (int y = 0; y < 4; y++)
+    for (int x = 0; x < 6; x++)
+      {
+	img[y][x][0] = (GLubyte) (x * 60);
+	img[y][x][1] = (GLubyte) (y * 80);
+	img[y][x][2] = (GLubyte) ((x + y) & 1 ? 255 : 0);
+	img[y][x][3] = 255;
+      }
+  GL (glPixelStorei) (GL_UNPACK_ROW_LENGTH, 6);
+  GL (glTextureImage2DEXT) (t[0], GL_TEXTURE_2D, 0, GL_RGBA, 4, 4, 0, GL_RGBA, GL_UNSIGNED_BYTE, img);
+  GL (glPixelStorei) (GL_UNPACK_ROW_LENGTH, 0);
+  GL (glTextureParameteriEXT) (t[0], GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  GL (glTextureParameteriEXT) (t[0], GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  GLint tw = 0, mf = 0, bound = -1;
+  GL (glGetTextureLevelParameterivEXT) (t[0], GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &tw);
+  GL (glGetTextureParameterivEXT) (t[0], GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, &mf);
+  GL (glGetIntegerv) (GL_TEXTURE_BINDING_2D, &bound);
+  GLubyte back[4][4][4];
+  memset (back, 0, sizeof back);
+  GL (glGetTextureImageEXT) (t[0], GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, back);
+  printf ("texture by name: width %d, filter &%X, bound still %d, read back %d %d %d\n", tw, mf, bound, back[3][3][0],
+	  back[3][3][1], back[1][2][2]);
+  /* a unit's own, unit 1 not made active */
+  static const GLubyte two[2][2][4] = { { { 255, 0, 0, 255 }, { 0, 255, 0, 255 } }, { { 0, 0, 255, 255 }, { 255, 255, 0, 255 } } };
+  GL (glMultiTexImage2DEXT) (GL_TEXTURE1, GL_TEXTURE_2D, 0, GL_RGBA, 2, 2, 0, GL_RGBA, GL_UNSIGNED_BYTE, two);
+  GL (glMultiTexParameteriEXT) (GL_TEXTURE1, GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  GL (glMultiTexEnviEXT) (GL_TEXTURE1, GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+  GLint env = 0, act = 0;
+  GL (glGetMultiTexEnvivEXT) (GL_TEXTURE1, GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, &env);
+  GL (glGetIntegerv) (GL_ACTIVE_TEXTURE, &act);
+  printf ("unit 1: env &%X, active unit still &%X\n", env, act);
+
+  /* drawn with the first texture: coordinates from the program's memory
+     on unit 0 through the unit-named calls */
+  GL (glBindMultiTextureEXT) (GL_TEXTURE0, GL_TEXTURE_2D, t[0]);
+  GL (glEnable) (GL_TEXTURE_2D);
+  static const GLfloat quad[8] = { 0, 0, 1, 0, 0, 1, 1, 1 };
+  static const GLfloat uv[8] = { 0, 0, 1, 0, 0, 1, 1, 1 };
+  GL (glVertexPointer) (2, GL_FLOAT, 0, quad);
+  GL (glEnableClientState) (GL_VERTEX_ARRAY);
+  GL (glMultiTexCoordPointerEXT) (GL_TEXTURE0, 2, GL_FLOAT, 0, uv);
+  GL (glEnableClientStateIndexedEXT) (GL_TEXTURE_COORD_ARRAY, 0);
+  void *got = 0;
+  GL (glGetPointerIndexedvEXT) (GL_TEXTURE_COORD_ARRAY_POINTER, 0, &got);
+  GL (glDrawArrays) (GL_TRIANGLE_STRIP, 0, 4);
+  GL (glDisableClientStateIndexedEXT) (GL_TEXTURE_COORD_ARRAY, 0);
+  GL (glDisable) (GL_TEXTURE_2D);
+  printf ("texture coordinates' pointer: %s\n", got == (const void *) uv ? "the program's" : "other");
+
+  /* buffers by name, none bound */
+  GLuint b[2];
+  GL (glGenBuffers) (2, b);
+  static const GLfloat tri[12] = { 2, 0, 3, 0, 2.5f, 1, 0, 0, 0, 0, 0, 0 };
+  GL (glNamedBufferDataEXT) (b[0], sizeof tri, tri, GL_STATIC_DRAW);
+  const GLfloat moved[2] = { 3.5f, 0.2f };
+  GL (glNamedBufferSubDataEXT) (b[0], 8, sizeof moved, moved);
+  GLfloat check[6] = { 0 };
+  GL (glGetNamedBufferSubDataEXT) (b[0], 0, sizeof check, check);
+  GLint bsize = 0;
+  GL (glGetNamedBufferParameterivEXT) (b[0], GL_BUFFER_SIZE, &bsize);
+  GL (glNamedBufferDataEXT) (b[1], 48, 0, GL_DYNAMIC_DRAW);
+  GLubyte *col = GL (glMapNamedBufferRangeEXT) (b[1], 0, 48, GL_MAP_WRITE_BIT | GL_MAP_FLUSH_EXPLICIT_BIT);
+  void *mp = 0;
+  GL (glGetNamedBufferPointervEXT) (b[1], GL_BUFFER_MAP_POINTER, &mp);
+  for (int i = 0; col && i < 12; i++)
+    col[i] = (GLubyte) (i % 4 == 3 ? 255 : 40 + i * 20);
+  GL (glFlushMappedNamedBufferRangeEXT) (b[1], 0, 12);
+  GLboolean un = GL (glUnmapNamedBufferEXT) (b[1]);
+  GL (glNamedCopyBufferSubDataEXT) (b[0], b[0], 0, 24, 24);
+  GLint arr = -1;
+  GL (glGetIntegerv) (GL_ARRAY_BUFFER_BINDING, &arr);
+  printf ("named buffers: %g %g %g, %d bytes, mapped %s, unmapped %d, array buffer still %d\n", (double) check[2],
+	  (double) check[3], (double) check[5], bsize, mp == (void *) col && col ? "here" : "no", un, arr);
+
+  /* a vertex array object's arrays by name */
+  GLuint vao;
+  GL (glGenVertexArrays) (1, &vao);
+  GL (glVertexArrayVertexOffsetEXT) (vao, b[0], 2, GL_FLOAT, 0, 0);
+  GL (glVertexArrayColorOffsetEXT) (vao, b[1], 4, GL_UNSIGNED_BYTE, 0, 0);
+  GL (glEnableVertexArrayEXT) (vao, GL_VERTEX_ARRAY);
+  GL (glEnableVertexArrayEXT) (vao, GL_COLOR_ARRAY);
+  GLint vs = 0;
+  void *vp = (void *) 1;
+  GL (glGetVertexArrayIntegervEXT) (vao, GL_VERTEX_ARRAY_SIZE, &vs);
+  GL (glGetVertexArrayPointervEXT) (vao, GL_VERTEX_ARRAY_POINTER, &vp);
+  GL (glDisableClientState) (GL_VERTEX_ARRAY);
+  GL (glBindVertexArray) (vao);
+  GL (glDrawArrays) (GL_TRIANGLES, 0, 3);
+  GL (glBindVertexArray) (0);
+  printf ("vertex array object: size %d, offset %s\n", vs, vp == 0 ? "0" : "other");
+
+  /* client defaults, pushed and popped */
+  GL (glVertexPointer) (3, GL_FLOAT, 8, quad);
+  GL (glPushClientAttribDefaultEXT) (GL_CLIENT_VERTEX_ARRAY_BIT);
+  GLint vsz = 0;
+  GL (glGetIntegerv) (GL_VERTEX_ARRAY_SIZE, &vsz);
+  GL (glPopClientAttrib) ();
+  GLint vsz2 = 0;
+  GL (glGetIntegerv) (GL_VERTEX_ARRAY_SIZE, &vsz2);
+  printf ("client defaults: size %d, popped %d\n", vsz, vsz2);
+  GL (glVertexPointer) (2, GL_FLOAT, 0, quad);
+  GL (glEnableClientState) (GL_VERTEX_ARRAY);
+  GL (glColor4f) (0.9f, 0.9f, 0.2f, 1);
+  GL (glMatrixTranslatefEXT) (GL_MODELVIEW, 1.5f, 1.5f, 0);
+  GL (glDrawArrays) (GL_TRIANGLE_STRIP, 0, 4);
+  GL (glDisableClientState) (GL_VERTEX_ARRAY);
+
+  /* framebuffers by name, and framebuffer 0's */
+  GLuint fb, rb, ft;
+  GL (glGenFramebuffers) (1, &fb);
+  GL (glGenRenderbuffers) (1, &rb);
+  GL (glNamedRenderbufferStorageEXT) (rb, GL_DEPTH_COMPONENT24, 8, 8);
+  GL (glGenTextures) (1, &ft);
+  GL (glTextureImage2DEXT) (ft, GL_TEXTURE_2D, 0, GL_RGBA, 8, 8, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+  GL (glNamedFramebufferTexture2DEXT) (fb, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ft, 0);
+  GL (glNamedFramebufferRenderbufferEXT) (fb, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rb);
+  GLenum st = GL (glCheckNamedFramebufferStatusEXT) (fb, GL_FRAMEBUFFER);
+  GLint kind = 0;
+  GL (glGetNamedFramebufferAttachmentParameterivEXT) (fb, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE, &kind);
+  GL (glFramebufferDrawBufferEXT) (0, GL_BACK);
+  GLint db = 0;
+  GL (glGetFramebufferParameterivEXT) (0, GL_DRAW_BUFFER, &db);
+  GLint fbb = -1;
+  GL (glGetIntegerv) (GL_FRAMEBUFFER_BINDING, &fbb);
+  printf ("framebuffer by name: status &%X, attachment &%X; framebuffer 0's draw buffer &%X; bound %d\n", st, kind, db, fbb);
+  GL (glGenerateTextureMipmapEXT) (t[0], GL_TEXTURE_2D);
+  printf ("error: &%X\n", GL (glGetError) ());
+  grab ();
+  save_frame ("dsa");
+  printf ("picture: %08x\n", sum_frame ());
+  close_api ();
+}
+
 int
 main (int argc, char **argv)
 {
-  int which = argc > 1 && strcmp (argv[1], "both") ? (!strcmp (argv[1], "es3") ? 1 : 2) : 3;
+  /* both: es3 and gl3; all (or none given): and dsa */
+  const char *w = argc > 1 ? argv[1] : "all";
+  int which = !strcmp (w, "es3") ? 1 : !strcmp (w, "gl3") ? 2 : !strcmp (w, "dsa") ? 4 : !strcmp (w, "both") ? 3 : 7;
   picture_file = argc > 2 ? argv[2] : 0;
   if (which & 1)
     part_es3 ();
   if (which & 2)
     part_gl3 ();
+  if (which & 4)
+    part_dsa ();
   if (missing)
     printf ("functions not found: %d\n", missing);
   return 0;

@@ -1,5 +1,5 @@
 Package: riscos-risc3d
-Version: 0.5-1
+Version: 0.6-1
 Architecture: arm64
 Maintainer: Andrew Youll <adyoull@users.noreply.github.com>
 Section: misc

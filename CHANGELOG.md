@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.6: GL_EXT_direct_state_access; kit 16 (13 Nov 2026, in testing)
+
+Step 3 of 3 of full coverage: with it RISC3D carries every function
+riscos-mesa's Mesa 20.3.5 offers (`docs/surface/missing-now.txt`: none
+missing in GL 2.1, GLES 1.1 or GLES 2.0).
+
+- **gen.py:** GL_EXT_direct_state_access's 255 functions. Those gl.xml or
+  the suffix makes another name for a function carried already travel as
+  it (glProgramUniform4fEXT as glProgramUniform4f, glEnableIndexedEXT as
+  glEnablei...); the rest travel as themselves, not as OpenGL 4.5's
+  (glNamedBufferData and the like differ, and a 3.1 renderer may not have
+  them). 1189 functions (218 by hand), 484 other names.
+- **Sent as they are** (rol-3d calls Mesa's own, compatibility profile):
+  texture and unit parameters, environments and generation, storage,
+  copies, buffers' parameters and copies, programs (ARB and GLSL),
+  renderbuffers, framebuffers, the vertex attribute formats and bindings.
+- **Done here as the bound object's function, the object bound for the
+  call**, where state is kept here or the program's memory is read:
+  - images by texture name (glTextureImage2DEXT...) and their gets:
+    OP_TEMP_BIND (texture or buffer, target, name) .. OP_TEMP_END, new
+    commands: rol-3d binds it and puts the old binding back after. So
+    the unpack and pack settings and pixel buffers work as for
+    glTexImage2D.
+  - a unit's images and the like (glMultiTexImage2DEXT...): that unit
+    made active and back.
+  - matrices by stack (glMatrixLoadfEXT...): the kept stacks, through
+    glMatrixMode and back (GL_TEXTUREi: that unit's).
+  - buffers by name (data, sub data, gets, mapping, flushing, clearing):
+    bound as GL_COPY_WRITE_BUFFER for the call; a mapping is kept under
+    the buffer's own key.
+  - vertex array objects' arrays by name (glVertexArrayVertexOffsetEXT,
+    enabling, divisors, pointer gets): the object bound, and the buffer.
+  - the client's arrays by unit (glMultiTexCoordPointerEXT,
+    glEnableClientStateIndexedEXT...), glClientAttribDefaultEXT (the kept
+    state reset too) and glPushClientAttribDefaultEXT.
+- **Framebuffer 0 by name** (glFramebufferDrawBufferEXT (0, GL_BACK),
+  glGetFramebufferParameterivEXT (0, ...), the attachments): rol-3d's own
+  framebuffer, with its buffer names.
+- **Arrays' state kept here answered here:** GL_VERTEX_ARRAY_SIZE and the
+  other fixed-function arrays' sizes, types and strides (an array in the
+  program's memory reaches the renderer only with each draw, so the
+  renderer's answer was the last one drawn). The arrays start with
+  OpenGL's defaults.
+- **Levels:** OP_CONTEXT's reply says what rol-3d takes (word 3: 6 from
+  0.6). With rol-3d 0.5 the library offers 0.5's extensions
+  (`r3d_exts_gl_05`), with 0.4 0.4's.
+- **gl3test dsa** (and `all`, which the kit runs): matrices by name with
+  another stack current, a texture by name from the program's memory with
+  a row length and read back, a unit's texture and environment, texture
+  coordinates in the program's memory by unit, buffers by name with a
+  mapped range flushed, a vertex array object's arrays by name and drawn,
+  client defaults pushed and popped, framebuffers by name and
+  framebuffer 0's draw buffer. On the build machine: every line and the
+  picture as Mesa directly. 0.6's library with rol-3d 0.5 says "direct
+  state access: no" and the rest unchanged; 0.5's library with rol-3d
+  0.6, and 0.6's with 0.4, as before.
+- rol-3d 0.6. Kit 16 (`RISC3DTest-16.zip`) with riscos-risc3d 0.6-1.
+
 ## 0.5: OpenGL 3.0/3.1 and GLES 3.0/3.1; kit 15 (13 Nov 2026)
 
 - **Kit 15 on the owner's Pi 4 (13 Nov):** gl3test through RISC3D = Linux's
@@ -7,7 +65,8 @@
   picture 320569a2 both ways. The Pi gives OpenGL ES 3.1 and OpenGL 3.1
   with the compatibility profile (Mesa 25.0.7, V3D 4.2.14.0); compute,
   transform feedback, sync objects, indirect draws on the GPU. estest's
-  GLES 2 part on Linux unchanged (f6971244). Released: tag v0.5,
+  GLES 2 part on Linux unchanged (f6971244); ES, Cube, Test, GL and
+  Overlay on RISC OS as with kit 13 (the owner). Released: tag v0.5,
   `RISC3D-client-0.5.tgz`, riscos-risc3d 0.5-1 (the kit's).
 
 

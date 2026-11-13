@@ -1,8 +1,9 @@
-| RISC3D test: OpenGL ES 3.0/3.1 and OpenGL 3.0/3.1 (RISC3D 0.5), every
-| function found by name as riscos-mesa's EGL finds them. Writes
-| GL3Results, GL3es3 and GL3gl3 (PPM pictures) in this folder.
+| RISC3D test: OpenGL ES 3.0/3.1, OpenGL 3.0/3.1 (RISC3D 0.5) and
+| GL_EXT_direct_state_access (0.6), every function found by name as
+| riscos-mesa's EGL finds them. Writes GL3Results, GL3es3, GL3gl3 and
+| GL3dsa (PPM pictures) in this folder.
 RMEnsure RISC3D 0.02 Error Install riscos-risc3d first (see !ReadMe)
 RMEnsure Linux3D 0.01 Error Install riscos-risc3d first (see !ReadMe)
-Run <Obey$Dir>.gl3test both <Obey$Dir>.GL3 { > <Obey$Dir>.GL3Results }
+Run <Obey$Dir>.gl3test all <Obey$Dir>.GL3 { > <Obey$Dir>.GL3Results }
 SetType <Obey$Dir>.GL3Results Text
 Filer_Run <Obey$Dir>.GL3Results

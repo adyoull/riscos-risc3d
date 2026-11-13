@@ -169,7 +169,7 @@ for listname, api in (('riscos-mesa-20.3.5-es11-extensions.txt', 'gles1'),
 # --- step 2: OpenGL 3.0 and 3.1, OpenGL ES 3.0 and 3.1, and the GL 2.1
 # extensions riscos-mesa has (not GL_EXT_direct_state_access: step 3).
 # Added after the others, so the numbers above stay as they were.
-def take_cmds(req, api=None):
+def take_cmds(req, api=None, own=False):
     for en in req.findall('enum'):
         if en.get('name') not in seen_e:
             seen_e.add(en.get('name'))
@@ -179,6 +179,12 @@ def take_cmds(req, api=None):
         if n in seen or n in have_alias:
             continue
         t = canonical(n)
+        if own and t != n and t not in seen:
+            # (step 3: an EXT function travels as itself unless the core
+            # one it became is carried already: OpenGL 4.5's
+            # glNamedBufferData and the like differ, and a renderer at 3.1
+            # may not have them)
+            t = n
         if t not in seen:
             seen.add(t)
             want.append(t)
@@ -201,6 +207,13 @@ for x in surface_list('riscos-mesa-20.3.5-gl21-extensions.txt'):
         if req.get('api') and req.get('api') != 'gl':
             continue
         take_cmds(req)
+
+# --- step 3: GL_EXT_direct_state_access ------------------------------------
+STEP3_AT = len(want)
+for req in ext['GL_EXT_direct_state_access'].findall('require'):
+    if req.get('api') and req.get('api') != 'gl':
+        continue
+    take_cmds(req, own=True)
 
 # --- how each function travels -------------------------------------------
 
@@ -254,6 +267,38 @@ HAND = {
     'glColorPointerEXT', 'glEdgeFlagPointerEXT', 'glIndexPointerEXT', 'glNormalPointerEXT',
     'glTexCoordPointerEXT', 'glVertexPointerEXT',
     'glMultiModeDrawArraysIBM', 'glMultiModeDrawElementsIBM', 'glGetProgramStringARB',
+    # step 3, GL_EXT_direct_state_access: those on state kept here, or with
+    # the program's memory, done here as the bound object's own function
+    # with the object bound for it (OP_TEMP_BIND .. OP_TEMP_END in rol-3d)
+    'glMatrixLoadfEXT', 'glMatrixLoaddEXT', 'glMatrixMultfEXT', 'glMatrixMultdEXT',
+    'glMatrixLoadIdentityEXT', 'glMatrixRotatefEXT', 'glMatrixRotatedEXT', 'glMatrixScalefEXT',
+    'glMatrixScaledEXT', 'glMatrixTranslatefEXT', 'glMatrixTranslatedEXT', 'glMatrixFrustumEXT',
+    'glMatrixOrthoEXT', 'glMatrixPopEXT', 'glMatrixPushEXT', 'glMatrixLoadTransposefEXT',
+    'glMatrixLoadTransposedEXT', 'glMatrixMultTransposefEXT', 'glMatrixMultTransposedEXT',
+    'glPushClientAttribDefaultEXT',
+    'glTextureImage1DEXT', 'glTextureImage2DEXT', 'glTextureImage3DEXT', 'glTextureSubImage1DEXT',
+    'glTextureSubImage2DEXT', 'glTextureSubImage3DEXT', 'glGetTextureImageEXT',
+    'glCompressedTextureImage1DEXT', 'glCompressedTextureImage2DEXT', 'glCompressedTextureImage3DEXT',
+    'glCompressedTextureSubImage1DEXT', 'glCompressedTextureSubImage2DEXT',
+    'glCompressedTextureSubImage3DEXT', 'glGetCompressedTextureImageEXT',
+    'glMultiTexImage1DEXT', 'glMultiTexImage2DEXT', 'glMultiTexImage3DEXT', 'glMultiTexSubImage1DEXT',
+    'glMultiTexSubImage2DEXT', 'glMultiTexSubImage3DEXT', 'glGetMultiTexImageEXT',
+    'glCompressedMultiTexImage1DEXT', 'glCompressedMultiTexImage2DEXT', 'glCompressedMultiTexImage3DEXT',
+    'glCompressedMultiTexSubImage1DEXT', 'glCompressedMultiTexSubImage2DEXT',
+    'glCompressedMultiTexSubImage3DEXT', 'glGetCompressedMultiTexImageEXT',
+    'glMultiTexCoordPointerEXT', 'glEnableClientStateIndexedEXT', 'glDisableClientStateIndexedEXT',
+    'glEnableClientStateiEXT', 'glDisableClientStateiEXT', 'glGetPointerIndexedvEXT', 'glGetPointeri_vEXT',
+    'glNamedBufferDataEXT', 'glNamedBufferSubDataEXT', 'glGetNamedBufferSubDataEXT', 'glMapNamedBufferEXT',
+    'glMapNamedBufferRangeEXT', 'glFlushMappedNamedBufferRangeEXT', 'glUnmapNamedBufferEXT',
+    'glGetNamedBufferPointervEXT', 'glClearNamedBufferDataEXT',
+    'glClearNamedBufferSubDataEXT', 'glGetNamedProgramStringEXT',
+    'glVertexArrayVertexOffsetEXT', 'glVertexArrayColorOffsetEXT', 'glVertexArrayEdgeFlagOffsetEXT',
+    'glVertexArrayIndexOffsetEXT', 'glVertexArrayNormalOffsetEXT', 'glVertexArrayTexCoordOffsetEXT',
+    'glVertexArrayMultiTexCoordOffsetEXT', 'glVertexArrayFogCoordOffsetEXT',
+    'glVertexArraySecondaryColorOffsetEXT', 'glVertexArrayVertexAttribOffsetEXT',
+    'glVertexArrayVertexAttribIOffsetEXT', 'glEnableVertexArrayEXT', 'glDisableVertexArrayEXT',
+    'glEnableVertexArrayAttribEXT', 'glDisableVertexArrayAttribEXT', 'glGetVertexArrayPointervEXT',
+    'glGetVertexArrayPointeri_vEXT', 'glVertexArrayVertexAttribDivisorEXT',
 }
 # the library notes these before sending them (lib/r3d_gl.c: r3d_track_*)
 TRACK = {
@@ -272,6 +317,8 @@ TRACK = {
     # step 2: instanced arrays' divisors, primitive restart (the indices
     # of arrays in the program's memory)
     'glVertexAttribDivisor', 'glEnable', 'glDisable', 'glPrimitiveRestartIndex',
+    # step 3: client state back to its defaults
+    'glClientAttribDefaultEXT',
 }
 # answers whose length only the driver knows: it marks the end
 SENTINEL = {'glGetUniformfv', 'glGetUniformiv', 'glGetMapdv', 'glGetMapfv', 'glGetMapiv',
@@ -311,6 +358,10 @@ LEN = {
     ('glClearBufferData', 'data'): 'r3d_texel_bytes (format, type)',
     ('glClearBufferSubData', 'data'): 'r3d_texel_bytes (format, type)',
     ('glGetnSeparableFilter', 'span'): '0',
+    ('glGetFloatIndexedvEXT', 'data'): 'r3d_count (target)',
+    ('glGetDoubleIndexedvEXT', 'data'): 'r3d_count (target)',
+    ('glGetVertexArrayIntegervEXT', 'param'): 'r3d_count (pname)',
+    ('glGetVertexArrayIntegeri_vEXT', 'param'): 'r3d_count (pname)',
 }
 cur_fn = [None]
 
@@ -487,7 +538,7 @@ with open(os.path.join(out, 'r3d_ops.h'), 'w') as f:
     f.write('  OP_END,\n')
     # commands of the library's own added later: numbered apart, so that
     # the functions' numbers above stay as they were
-    f.write('  OP_READ_BUFFER_RANGE = 0x7F00, OP_DRAW_ELEMENTS_EX\n};\n#endif\n')
+    f.write('  OP_READ_BUFFER_RANGE = 0x7F00, OP_DRAW_ELEMENTS_EX, OP_TEMP_BIND, OP_TEMP_END\n};\n#endif\n')
 
 # --- both ends ------------------------------------------------------------
 
@@ -802,6 +853,9 @@ carried_all = set(want) | {n for n, _ in aliases}
 # (rol-3d before 0.5 has only the functions before step 2: its lists)
 old = set(want[:STEP2])
 carried_old = old | {n for n, t in aliases if t in old}
+# (and rol-3d 0.5's: all but GL_EXT_direct_state_access)
+old5 = set(want[:STEP3_AT])
+carried_05 = old5 | {n for n, t in aliases if t in old5}
 carried = carried_all
 KEEP = {'GL_OES_EGL_image', 'GL_OES_EGL_image_external'}
 def ext_ok(e, api):
@@ -823,7 +877,8 @@ with open(os.path.join(out, 'r3d_exts.h'), 'w') as f:
     ES1_EXTRA = {'GL_EXT_compressed_ETC1_RGB8_sub_texture'}
     for api, var, carried in (('gl', 'r3d_exts_gl', carried_all), ('gles1', 'r3d_exts_gles1', carried_all),
                               ('gles2', 'r3d_exts_gles2', carried_all),
-                              ('gl', 'r3d_exts_gl_04', carried_old), ('gles2', 'r3d_exts_gles2_04', carried_old)):
+                              ('gl', 'r3d_exts_gl_04', carried_old), ('gles2', 'r3d_exts_gles2_04', carried_old),
+                              ('gl', 'r3d_exts_gl_05', carried_05)):
         # GLES 1.1 runs on desktop OpenGL, whose list names other
         # extensions: its list is riscos-mesa's own, those carried
         names = sorted(n for n, e in ext.items()

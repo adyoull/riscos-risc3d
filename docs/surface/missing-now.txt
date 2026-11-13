@@ -1,5 +1,4 @@
-== gl core 551 missing core 0 | exts 165 ext cmds 821 missing ext cmds 217 in 1 extensions
-   GL_EXT_direct_state_access 217
+== gl core 551 missing core 0 | exts 165 ext cmds 821 missing ext cmds 0 in 0 extensions
 == gles1 core 144 missing core 0 | exts 44 ext cmds 86 missing ext cmds 0 in 0 extensions
   missing core: 
 == gles2 core 142 missing core 0 | exts 56 ext cmds 113 missing ext cmds 0 in 0 extensions

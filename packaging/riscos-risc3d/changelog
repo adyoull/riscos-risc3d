@@ -1,3 +1,11 @@
+riscos-risc3d (0.6-1) rol; urgency=medium
+
+  * RISC3D 0.6: GL_EXT_direct_state_access (objects, matrices and arrays
+    by name), the last of the extensions riscos-mesa offers. rol-3d says
+    which commands it takes, so a newer library offers only what it has.
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Fri, 13 Nov 2026 12:00:00 +0000
+
 riscos-risc3d (0.5-1) rol; urgency=medium
 
   * RISC3D 0.5: OpenGL 3.0/3.1 and OpenGL ES 3.0/3.1 (uniform blocks,

@@ -1,9 +1,10 @@
-RISC3D test kit 15 (prototype, 13 November 2026)
+RISC3D test kit 16 (prototype, 13 November 2026)
 ================================================
 
-RISC3D 0.5: OpenGL ES 3.0/3.1 and OpenGL 3.0/3.1 now go to the GPU too,
-with the rest of the extensions riscos-mesa offers in OpenGL 2.1. This kit
-comes with the package that installs RISC3D (riscos-risc3d 0.5-1).
+RISC3D 0.6: GL_EXT_direct_state_access, the last of the extensions
+riscos-mesa offers, goes to the GPU too (after OpenGL ES 3.0/3.1 and
+OpenGL 3.0/3.1 in 0.5). This kit comes with the package that installs
+RISC3D (riscos-risc3d 0.6-1).
 
 Needs
 -----
@@ -15,7 +16,7 @@ Steps
 -----
  1. Copy RISC3DTest to HardDisc4 (unzip it there).
  2. In RiSH's Root shell:
-      apt-get install --install-recommends /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.5-1_arm64.deb
+      apt-get install --install-recommends /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.6-1_arm64.deb
     (Debian's Mesa comes with it if it isn't there already.) Then restart:
     the modules load at start-up from now on. With riscos-support
     1.0.0049-1 or later the helper starts at start-up too; with an older
@@ -23,12 +24,14 @@ Steps
  3. In RiSH's Root shell:
       sh /riscos/HardDisc4/RISC3DTest/linux-tests
     It runs the same tests with Linux's Mesa directly, to compare with.
- 4. Double-click GL3. GL3Results has two parts:
+ 4. Double-click GL3. GL3Results has three parts:
       es3: OpenGL ES 3.0/3.1 (uniform blocks, transform feedback, instanced
            and integer arrays, primitive restart, sync objects, a sampler,
            indirect draws, a compute shader, a blit).
       gl3: OpenGL 3.0/3.1. "compatibility profile" says whether Linux's
            Mesa gave 3.1 with it (fixed function too) or without.
+      dsa: GL_EXT_direct_state_access (new in 0.6): textures, matrices,
+           buffers, vertex array objects and framebuffers by name.
     Compare it with GL3LinuxResults: the lines after each part's version
     lines should be the same, pictures included.
  5. Double-click ES (as kit 13). ESResults has two parts:
@@ -47,5 +50,5 @@ Steps
 
 Please send
 -----------
-GL3Results and GL3LinuxResults, ESResults and ESLinuxResults, and the
-output of step 3 (a photo is fine). If anything stops, /riscos/3d/log.txt (the helper's log).
+GL3Results and GL3LinuxResults (a photo of each is fine), and anything
+that looks different from kit 15. If anything stops, /riscos/3d/log.txt (the helper's log).

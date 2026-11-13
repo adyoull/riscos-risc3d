@@ -8,8 +8,8 @@ where none is, Mesa draws in software as before.
 **Prototype, 13 November 2026.** The SWI chunk (&C3D00) and error numbers
 are provisional and the wire format will change. OpenGL 1.x/2.1, GLES 1.1
 and GLES 2 (with riscos-mesa's extensions) have been drawn on a Raspberry
-Pi 4's GPU (V3D 4.2); OpenGL 3.0/3.1 and GLES 3.0/3.1 (0.5) so far on the
-build machine.
+Pi 4's GPU (V3D 4.2); OpenGL 3.0/3.1 and GLES 3.0/3.1 (0.5) too;
+GL_EXT_direct_state_access (0.6) so far on the build machine.
 
 ## The parts
 
@@ -18,9 +18,9 @@ build machine.
 | `modules/RISC3D` | The interface module. Drivers register; a program's GL library opens a context and gets memory shared with the driver. RISC3D never looks at the commands: it keeps the drivers and contexts, closes a task's contexts when the task goes, and passes on "wake" and "wait". |
 | `modules/Linux3D` | The driver for RISC OS on Linux. Each context is a connection to the `rol-3d` helper; it maps the shared memory into RISC OS. |
 | `linux/rol-3d.c` | The Linux helper: one process per context, with an EGL context on Linux's graphics driver (the GPU through its render node; Mesa's software renderer otherwise): OpenGL's compatibility profile (or, where that is older than the program asks for, the version asked for without it), GLES 2/3, or GLES 1.1 on desktop OpenGL (Debian's Mesa has none; `linux/es1*.c`). |
-| `proto/` | The command stream. `gen.py` writes both ends from Khronos's registry (`khronos/gl.xml`: OpenGL 1.0 to 3.1, GLES 1.1 to 3.1, and the extensions riscos-mesa has; 989 functions, 134 of them by hand, 467 other names), and `r3d_gl.h`. `r3d_shared.h` is the shared memory's layout. |
+| `proto/` | The command stream. `gen.py` writes both ends from Khronos's registry (`khronos/gl.xml`: OpenGL 1.0 to 3.1, GLES 1.1 to 3.1, and every extension riscos-mesa has; 1189 functions, 218 of them by hand, 484 other names), and `r3d_gl.h`. `r3d_shared.h` is the shared memory's layout. |
 | `lib/` | The GL functions for RISC OS programs, as commands: `r3d_glXxx`, listed by GL name (and the usual ARB/EXT names) in `r3d_gl_functions[]` so that Mesa's EGL (riscos-mesa) can build a dispatch table from them. Contexts: `r3d_create` (GLES 2 and on), `r3d_create_gl` (OpenGL), `r3d_create_es1` (GLES 1.1), `r3d_create_version` (a version at least), `r3d_make_current`, `r3d_destroy`; `r3d_swap` finishes a frame into a buffer. It keeps the matrix stacks and other state queried often, so those queries need no wait. `r3d_open`/`r3d_open_gl`/`r3d_close` and `R3D_DIRECT` are for the test programs. |
-| `demo/test`, `demo/cube`, `demo/gl1`, `demo/es`, `demo/gl3` | `r3dtest` (GLES 2, command line, checks the pixels), `r3dcube` (the same cube in a desktop window), `gl1test` (OpenGL 1.x/2.1; built with DIRECT, the same drawn by Linux's Mesa directly, to compare; `gl1test bench`), `estest` (GLES 1.1 and GLES 2's extensions), `gl3test` (GLES 3.0/3.1 and OpenGL 3.0/3.1). |
+| `demo/test`, `demo/cube`, `demo/gl1`, `demo/es`, `demo/gl3` | `r3dtest` (GLES 2, command line, checks the pixels), `r3dcube` (the same cube in a desktop window), `gl1test` (OpenGL 1.x/2.1; built with DIRECT, the same drawn by Linux's Mesa directly, to compare; `gl1test bench`), `estest` (GLES 1.1 and GLES 2's extensions), `gl3test` (GLES 3.0/3.1, OpenGL 3.0/3.1 and EXT_direct_state_access). |
 | `test/host` | Stand-ins so that the library and helper can be tested on the build machine without RISC OS. |
 
 ## How a frame goes
@@ -75,7 +75,6 @@ starts it), `RMLoad RISC3D`, `RMLoad Linux3D`, then `r3dtest` or
   mode packed tighter in the ring.
 - glDrawElements with indices in a buffer object and arrays in the
   program's memory reads the indices back (one wait).
-- EXT_direct_state_access (step 3 of full coverage).
 - Arrays in the program's memory with indirect draws are drawn as the
   direct call (the command read back); a pixel pack buffer isn't
   followed by glGetTextureSubImage, glGetCompressedTextureSubImage and

@@ -198,6 +198,7 @@ struct r3d_context
   /* OpenGL 3 and GLES 3 */
   GLuint indirect_buffer;		/* GL_DRAW_INDIRECT_BUFFER */
   int restart, restart_fixed;		/* primitive restart, and its index */
+  GLuint program, pipeline;		/* glUseProgram's, glBindProgramPipeline's */
   GLuint restart_index;
   uint32_t next_sync;			/* sync objects: numbers, the renderer's table */
   const char **ext_list;		/* glGetStringi's: GL_EXTENSIONS split */
@@ -456,6 +457,16 @@ r3d_available (void)
   /* a DRM device (V3DRender) takes no command stream: Mesa's own driver
      for it is used instead (RISC3D_Info r5, r6) */
   return drv != 0 && !(flags & 1);
+}
+
+void
+r3d_uploads (int as_memory)
+{
+  if (cur->handle < 0 || cur->level < 7)
+    return;
+  uint32_t *a = r3d_put (OP_UPLOADS, 1);
+  if (a)
+    a[0] = (uint32_t) (as_memory != 0);
 }
 
 int
@@ -857,6 +868,9 @@ r3d_track_glDeleteBuffers (GLsizei n, const GLuint *buffers)
 }
 
 /* OpenGL 3 / GLES 3: what sizes the arrays in the program's memory */
+static void r3d_track_glUseProgram (GLuint program) { cur->program = program; }
+static void r3d_track_glBindProgramPipeline (GLuint pipeline) { cur->pipeline = pipeline; }
+
 static void
 r3d_track_glVertexAttribDivisor (GLuint index, GLuint divisor)
 {
@@ -2583,9 +2597,11 @@ array_elem (const struct attrib *t)
   return (size_t) size * type_bytes (t->type);
 }
 
-/* instances: an array with a divisor has one value for each that many */
+/* first: the first vertex the draw uses (sent as vertex 0: the draw is
+   moved down to match); vertices: how many from there; instances: an
+   array with a divisor has one value for each that many (from the start) */
 static void
-send_client_arrays_n (size_t vertices, size_t instances)
+send_client_arrays_f (size_t first, size_t vertices, size_t instances)
 {
   if (!vertices)
     return;
@@ -2600,10 +2616,11 @@ send_client_arrays_n (size_t vertices, size_t instances)
       if (!n)
 	n = 1;
       size_t bytes = stride * (n - 1) + elem;
+      const char *from = (const char *) t->pointer + (t->divisor ? 0 : first * stride);
       /* (word 3: normalised, and 2 for integers: glVertexAttribIPointer) */
       uint32_t f[6] = { i, (uint32_t) t->size, t->type, (uint32_t) t->normalized | (t->integer ? 2u : 0u),
 			(uint32_t) stride, (uint32_t) bytes };
-      r3d_put_data (OP_CLIENT_ARRAY, f, 6, t->pointer, bytes);
+      r3d_put_data (OP_CLIENT_ARRAY, f, 6, from, bytes);
     }
   for (int s = 0; s < FIXED_SLOTS; s++)
     {
@@ -2613,6 +2630,7 @@ send_client_arrays_n (size_t vertices, size_t instances)
       size_t elem = array_elem (t);
       size_t stride = t->stride ? (size_t) t->stride : elem;
       size_t bytes = stride * (vertices - 1) + elem;
+      const char *from = (const char *) t->pointer + first * stride;
       uint32_t f[6] = { s < 8 ? (uint32_t) s : 8, s < 8 ? 0 : (uint32_t) (s - 8), (uint32_t) t->size, t->type,
 			(uint32_t) stride, (uint32_t) bytes };
       if (t->type == GL_FIXED)
@@ -2627,7 +2645,7 @@ send_client_arrays_n (size_t vertices, size_t instances)
 	    for (int k = 0; k < n; k++)
 	      {
 		GLfixed x;
-		memcpy (&x, (const char *) t->pointer + v * stride + (size_t) k * 4, 4);
+		memcpy (&x, from + v * stride + (size_t) k * 4, 4);
 		fl[v * (size_t) n + (size_t) k] = (GLfloat) x / 65536.0F;
 	      }
 	  f[3] = GL_FLOAT;
@@ -2637,14 +2655,46 @@ send_client_arrays_n (size_t vertices, size_t instances)
 	  free (fl);
 	  continue;
 	}
-      r3d_put_data (OP_FIXED_ARRAY, f, 6, t->pointer, bytes);
+      r3d_put_data (OP_FIXED_ARRAY, f, 6, from, bytes);
     }
+}
+
+static void
+send_client_arrays_n (size_t vertices, size_t instances)
+{
+  send_client_arrays_f (0, vertices, instances);
 }
 
 static void
 send_client_arrays (size_t vertices)
 {
-  send_client_arrays_n (vertices, 1);
+  send_client_arrays_f (0, vertices, 1);
+}
+
+/* every array the draw reads is in the program's memory (none in a
+   buffer object), and no shader (gl_VertexID): the draw can be moved to
+   start at vertex 0 */
+static int
+only_client_arrays (void)
+{
+  int any = 0;
+  if (cur->program || cur->pipeline)
+    return 0;
+  for (int i = 0; i < MAX_ATTRIBS; i++)
+    if (cur->attribs[i].enabled)
+      {
+	if (!cur->attribs[i].client || !cur->attribs[i].pointer)
+	  return 0;
+	any = 1;
+      }
+  for (int s = 0; s < FIXED_SLOTS; s++)
+    if (cur->fixed[s].enabled)
+      {
+	if (!cur->fixed[s].client || !cur->fixed[s].pointer)
+	  return 0;
+	any = 1;
+      }
+  return any;
 }
 
 static int
@@ -2736,12 +2786,18 @@ glDrawArrays (GLenum mode, GLint first, GLsizei count)
 {
   if (count <= 0 || first < 0)
     return;
-  send_client_arrays ((size_t) first + (size_t) count);
+  /* (arrays in the program's memory: only the vertices drawn are sent,
+     as vertex 0 on) */
+  int moved = first > 0 && only_client_arrays ();
+  if (moved)
+    send_client_arrays_f ((size_t) first, (size_t) count, 1);
+  else
+    send_client_arrays ((size_t) first + (size_t) count);
   uint32_t *a = r3d_put (OP_glDrawArrays, 3);
   if (!a)
     return;
   a[0] = mode;
-  a[1] = (uint32_t) first;
+  a[1] = moved ? 0 : (uint32_t) first;
   a[2] = (uint32_t) count;
 }
 
@@ -2763,6 +2819,29 @@ max_index (GLenum type, const void *indices, GLsizei count)
 	max = v;
     }
   return max;
+}
+
+/* the lowest and highest index (primitive restart's isn't a vertex) */
+static void
+min_max_index (GLenum type, const void *indices, GLsizei count, size_t *lo, size_t *hi)
+{
+  size_t min = (size_t) -1, max = 0;
+  size_t skip = cur->restart_fixed ? (type == GL_UNSIGNED_BYTE ? 0xFF : type == GL_UNSIGNED_SHORT ? 0xFFFF : 0xFFFFFFFF)
+		: cur->restart ? cur->restart_index : (size_t) -1;
+  for (GLsizei i = 0; i < count; i++)
+    {
+      size_t v = type == GL_UNSIGNED_BYTE ? ((const uint8_t *) indices)[i]
+		 : type == GL_UNSIGNED_SHORT ? ((const uint16_t *) indices)[i]
+		 : ((const uint32_t *) indices)[i];
+      if (v == skip)
+	continue;
+      if (v > max)
+	max = v;
+      if (v < min)
+	min = v;
+    }
+  *lo = min == (size_t) -1 ? 0 : min;
+  *hi = max;
 }
 
 /* bytes of a buffer object, from the renderer: 1 if all came */
@@ -2815,9 +2894,54 @@ draw_elements (GLenum mode, GLsizei count, GLenum type, const void *indices, siz
     }
   if (!indices)
     return;
-  send_client_arrays ((last != (size_t) -1 ? last : max_index (type, indices, count)) + 1);
-  uint32_t f[4] = { mode, (uint32_t) count, type, (uint32_t) ((size_t) count * eb) };
-  r3d_put_data (OP_DRAW_ELEMENTS_INLINE, f, 4, indices, (size_t) count * eb);
+  /* indices in the program's memory too: only the vertices from the
+     lowest to the highest index are sent, and the indices moved down to
+     match (TORCS draws an object as many strips from one set of arrays:
+     sending each strip all the arrays up to its last vertex cost it most
+     of a frame); not with primitive restart at a chosen index */
+  size_t lo = 0, hi = 0;
+  min_max_index (type, indices, count, &lo, &hi);
+  if (lo == 0 || cur->restart || !only_client_arrays ())
+    {
+      send_client_arrays ((last != (size_t) -1 ? last : hi) + 1);
+      uint32_t f[4] = { mode, (uint32_t) count, type, (uint32_t) ((size_t) count * eb) };
+      r3d_put_data (OP_DRAW_ELEMENTS_INLINE, f, 4, indices, (size_t) count * eb);
+      return;
+    }
+  send_client_arrays_f (lo, hi - lo + 1, 1);
+  size_t bytes = (size_t) count * eb;
+  uint32_t stack[1024];
+  void *moved = bytes <= sizeof stack ? stack : malloc (bytes);
+  if (!moved)
+    return;
+  size_t skip = cur->restart_fixed ? (type == GL_UNSIGNED_BYTE ? 0xFF : type == GL_UNSIGNED_SHORT ? 0xFFFF : 0xFFFFFFFF)
+		: (size_t) -1;
+  for (GLsizei i = 0; i < count; i++)
+    switch (type)
+      {
+      case GL_UNSIGNED_BYTE:
+	{
+	  uint8_t v = ((const uint8_t *) indices)[i];
+	  ((uint8_t *) moved)[i] = v == skip ? v : (uint8_t) (v - lo);
+	  break;
+	}
+      case GL_UNSIGNED_SHORT:
+	{
+	  uint16_t v = ((const uint16_t *) indices)[i];
+	  ((uint16_t *) moved)[i] = v == skip ? v : (uint16_t) (v - lo);
+	  break;
+	}
+      default:
+	{
+	  uint32_t v = ((const uint32_t *) indices)[i];
+	  ((uint32_t *) moved)[i] = v == skip ? v : (uint32_t) (v - lo);
+	  break;
+	}
+      }
+  uint32_t f[4] = { mode, (uint32_t) count, type, (uint32_t) bytes };
+  r3d_put_data (OP_DRAW_ELEMENTS_INLINE, f, 4, moved, bytes);
+  if (moved != stack)
+    free (moved);
 }
 
 void
@@ -3985,12 +4109,16 @@ glDrawArraysInstanced (GLenum mode, GLint first, GLsizei count, GLsizei instance
 {
   if (count <= 0 || first < 0 || instancecount <= 0)
     return;
-  send_client_arrays_n ((size_t) first + (size_t) count, (size_t) instancecount);
+  int moved = first > 0 && only_client_arrays ();
+  if (moved)
+    send_client_arrays_f ((size_t) first, (size_t) count, (size_t) instancecount);
+  else
+    send_client_arrays_n ((size_t) first + (size_t) count, (size_t) instancecount);
   uint32_t *a = r3d_put (OP_glDrawArraysInstanced, 4);
   if (!a)
     return;
   a[0] = mode;
-  a[1] = (uint32_t) first;
+  a[1] = moved ? 0 : (uint32_t) first;
   a[2] = (uint32_t) count;
   a[3] = (uint32_t) instancecount;
 }

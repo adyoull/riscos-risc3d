@@ -1,62 +1,57 @@
-RISC3D test kit 18 (prototype, 13 November 2026)
+RISC3D test kit 19 (prototype, 13 November 2026)
 ================================================
 
-RISC3D 0.8: RISC3D_Info says whether Linux's Mesa draws on a GPU or in
-software, so that riscos-mesa can keep its own (faster) software renderer
-on machines without a GPU driver. New package riscos-risc3d 0.7-1: rol-3d
-0.7 and the modules RISC3D 0.03 and Linux3D 0.02, so install it and
-restart (step 2).
+RISC3D 0.9: for TORCS, which ran slower through RISC3D than in software.
+TORCS draws each object of the track as many triangle strips from one set
+of arrays in its own memory. RISC3D 0.8's library sent every strip all of
+the arrays up to its last vertex, so most of each object was sent once
+for every strip: tens of megabytes a frame. 0.9 sends only the vertices
+each strip uses. The new package riscos-risc3d 0.8-1 (rol-3d 0.8) also
+hands those arrays to Linux's Mesa the way a Linux program does, instead
+of making a new buffer object for each one; the Track test measures both
+ways.
+
+TORCS itself only gets 0.9's library when riscos-mesa rebuilds its
+!MesaLibs with it (they have been asked). This kit measures the pattern
+on its own, and watches Linux while TORCS loads, to find out what makes
+TORCS's loading slower and slower.
 
 Needs
 -----
  * RISC OS on Linux on the Pi 4 with riscos-kernel-pi 6.6.78-9 (the GPU's
    driver), as for the kits before.
- * A 16 million colour mode for the pictures and Overlay.
+ * A 16 million colour mode.
 
 Steps
 -----
- 1. Copy RISC3DTest to HardDisc4 (unzip it there).
+ 1. Copy RISC3DTest to HardDisc4 (unzip it there, replacing kit 18).
  2. In RiSH's Root shell:
-      apt-get install --install-recommends /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.7-1_arm64.deb
-    (Debian's Mesa comes with it if it isn't there already.) Then restart:
-    the modules load at start-up from now on. With riscos-support
-    1.0.0049-1 or later the helper starts at start-up too; with an older
-    one, start it after each restart (the install says how).
+      apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.8-1_arm64.deb
+    It starts the new rol-3d itself; the modules are the same as kit 18's,
+    so no restart is needed.
  3. In RiSH's Root shell:
       sh /riscos/HardDisc4/RISC3DTest/linux-tests
-    It runs the same tests with Linux's Mesa directly, to compare with.
- 4. Double-click Info. InfoResults should say "draws on a GPU" (the Pi
-    has one), r3d_available 1, and *RISC3D's "Driver: Linux3D (...),
-    drawing on a GPU".
- 5. Double-click GL3. GL3Results has three parts:
-      es3: OpenGL ES 3.0/3.1 (uniform blocks, transform feedback, instanced
-           and integer arrays, primitive restart, sync objects, a sampler,
-           indirect draws, a compute shader, a blit).
-      gl3: OpenGL 3.0/3.1. "compatibility profile" says whether Linux's
-           Mesa gave 3.1 with it (fixed function too) or without.
-      dsa: GL_EXT_direct_state_access (new in 0.6): textures, matrices,
-           buffers, vertex array objects and framebuffers by name.
-    Compare it with GL3LinuxResults: the lines after each part's version
-    lines should be the same, pictures included.
- 6. Double-click Target. Compare TargetResults with TargetExpected (the
-    answers riscos-mesa's own OSMesa gives): every line after the first
-    should be the same, and none should end in "(not copied at
-    glFinish!)" or "(copied again!)".
- 7. Double-click ES (as kit 13). ESResults has two parts:
-      es1: OpenGL ES 1.1 (fixed-point matrices and arrays, lighting, the
-           point size array, a vertex array object, a mapped buffer, an
-           ETC1 texture). Linux's Mesa has no GLES 1.1, so RISC3D draws it
-           on desktop OpenGL, with Mesa 20.3.5's own conversions: the
-           numbers should be riscos-mesa's.
-      es2: OpenGL ES 2's extensions (base vertex and instanced draws,
-           vertex array objects, mapped ranges, separate programs, debug
-           messages with a callback, 3D textures, border colours, queries,
-           program binaries).
-    Compare its es2 part with ESLinuxResults: the lines after the
-    version should be the same, picture included.
- 8. Cube, Test, GL and Overlay as before (check nothing went backwards).
+    It runs the tests with Linux's Mesa directly, to compare with; the
+    last lines are the track drawn directly.
+ 4. Double-click Track. TrackResults has three "track:" lines:
+      1. with 0.8's library (as TORCS has now),
+      2. 0.9's library, arrays each in a buffer object of their own (0.8's
+         renderer),
+      3. 0.9's library, arrays given to Mesa as memory (the default now).
+    Compare the frames a second with TrackLinuxResults. All the "track
+    picture" lines should be the same number. The "textures" lines show
+    TORCS's way of loading textures, timed in groups of 50: they should
+    not get slower.
+ 5. Double-click Info, GL3, Target, ES, Cube, Test and GL as before, to
+    check that nothing went backwards.
+ 6. TORCS's loading: in RiSH's Root shell
+      sh /riscos/HardDisc4/RISC3DTest/watch 900 &
+    then start TORCS (the RISC3D build you have) and load the race as
+    before. Every 5 seconds for 15 minutes, WatchResults gets Linux's
+    memory, swap and busiest processes. It stops by itself.
 
 Please send
 -----------
-InfoResults, and a word on whether GL3, Target, ES and the rest are as in
-kit 17. If anything stops, /riscos/3d/log.txt (the helper's log).
+TrackResults, TrackLinuxResults and WatchResults, and a word on whether
+the rest are as in kit 18. If anything stops, /riscos/3d/log.txt (the
+helper's log).

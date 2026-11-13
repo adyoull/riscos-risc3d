@@ -321,6 +321,9 @@ TRACK = {
     'glClientAttribDefaultEXT',
     # 0.7: the program's buffer (r3d_target) filled at these
     'glFinish', 'glFlush',
+    # 0.9: whether a shader is in use (draws from the program's memory are
+    # moved to vertex 0 only without one: gl_VertexID would change)
+    'glUseProgram', 'glBindProgramPipeline',
 }
 # answers whose length only the driver knows: it marks the end
 SENTINEL = {'glGetUniformfv', 'glGetUniformiv', 'glGetMapdv', 'glGetMapfv', 'glGetMapiv',
@@ -540,7 +543,7 @@ with open(os.path.join(out, 'r3d_ops.h'), 'w') as f:
     f.write('  OP_END,\n')
     # commands of the library's own added later: numbered apart, so that
     # the functions' numbers above stay as they were
-    f.write('  OP_READ_BUFFER_RANGE = 0x7F00, OP_DRAW_ELEMENTS_EX, OP_TEMP_BIND, OP_TEMP_END\n};\n#endif\n')
+    f.write('  OP_READ_BUFFER_RANGE = 0x7F00, OP_DRAW_ELEMENTS_EX, OP_TEMP_BIND, OP_TEMP_END,\n  OP_UPLOADS\n};\n#endif\n')
 
 # --- both ends ------------------------------------------------------------
 

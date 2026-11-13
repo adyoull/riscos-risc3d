@@ -59,10 +59,11 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
-#define ROL3D_VERSION "0.7"
+#define ROL3D_VERSION "0.8"
 /* what the library may send (OP_CONTEXT's reply, word 3): 6 = 0.6's
-   commands (GL_EXT_direct_state_access, OP_TEMP_BIND); none: 0.5 */
-#define ROL3D_LEVEL 6
+   commands (GL_EXT_direct_state_access, OP_TEMP_BIND); 7 = OP_UPLOADS
+   (0.8); none: 0.5 */
+#define ROL3D_LEVEL 7
 #define GLDIR "/opt/riscos/gl"		/* a private Mesa, if the image has one */
 
 /* The helper's own textures and buffers have names the program's never
@@ -887,6 +888,22 @@ pixels_at (const uint32_t *f)
 static GLfloat *feedback_buf, *select_buf;	/* (select's are GLuint) */
 static GLsizei feedback_size, select_size;
 
+/* 0.9: arrays and indices from the program's memory given to Mesa as
+   memory (as a program on Linux gives them), where it takes them: it
+   streams them into one buffer of its own. 0.8 put each into a buffer of
+   ours with glBufferData, a fresh buffer for every array of every draw.
+   OP_UPLOADS 0 goes back to that (for comparison) */
+static int as_memory = 1;
+static GLuint vao_bound;			/* (glBindVertexArray's) */
+static char *slot_mem[16];
+static size_t slot_cap[16];
+
+static int
+memory_ok (void)
+{
+  return as_memory && !strict_ctx && !vao_bound;
+}
+
 /* a fixed-function array from the program's memory: into a buffer of
    ours. Slots: vertex 0, normal 1, colour 2, index 3, edge flag 4, fog
    coordinate 5, secondary colour 6, texture coordinates 8 + unit */
@@ -898,25 +915,49 @@ fixed_array (const uint32_t *a)
   GLenum type = a[3];
   GLint was = 0;
   gl.GetIntegerv (GL_ARRAY_BUFFER_BINDING, &was);
-  gl.BindBuffer (GL_ARRAY_BUFFER, PRIV_FIXED (slot));
-  gl.BufferData (GL_ARRAY_BUFFER, (GLsizeiptr) a[5], a + 6, GL_STREAM_DRAW);
+  const void *at = 0;
+  /* (not the point size array: GLES 1.1's emulation, es1.c, reads it
+     from a buffer) */
+  if (memory_ok () && slot < 16 && which != 7)
+    {
+      /* (kept until this slot's next array: Mesa reads it at the draw) */
+      if (a[5] > slot_cap[slot])
+	{
+	  free (slot_mem[slot]);
+	  slot_cap[slot] = (size_t) a[5] * 2 + 4096;
+	  slot_mem[slot] = malloc (slot_cap[slot]);
+	  if (!slot_mem[slot])
+	    {
+	      slot_cap[slot] = 0;
+	      return;
+	    }
+	}
+      memcpy (slot_mem[slot], a + 6, a[5]);
+      at = slot_mem[slot];
+      gl.BindBuffer (GL_ARRAY_BUFFER, 0);
+    }
+  else
+    {
+      gl.BindBuffer (GL_ARRAY_BUFFER, PRIV_FIXED (slot));
+      gl.BufferData (GL_ARRAY_BUFFER, (GLsizeiptr) a[5], a + 6, GL_STREAM_DRAW);
+    }
   switch (which)
     {
-    case 0: if (gl.VertexPointer) gl.VertexPointer (size, type, stride, 0); break;
-    case 1: if (gl.NormalPointer) gl.NormalPointer (type, stride, 0); break;
-    case 2: if (gl.ColorPointer) gl.ColorPointer (size, type, stride, 0); break;
-    case 3: if (gl.IndexPointer) gl.IndexPointer (type, stride, 0); break;
-    case 4: if (gl.EdgeFlagPointer) gl.EdgeFlagPointer (stride, 0); break;
-    case 5: if (gl.FogCoordPointer) gl.FogCoordPointer (type, stride, 0); break;
-    case 6: if (gl.SecondaryColorPointer) gl.SecondaryColorPointer (size, type, stride, 0); break;
-    case 7: if (gl.PointSizePointerOES) gl.PointSizePointerOES (type, stride, 0); break;
+    case 0: if (gl.VertexPointer) gl.VertexPointer (size, type, stride, at); break;
+    case 1: if (gl.NormalPointer) gl.NormalPointer (type, stride, at); break;
+    case 2: if (gl.ColorPointer) gl.ColorPointer (size, type, stride, at); break;
+    case 3: if (gl.IndexPointer) gl.IndexPointer (type, stride, at); break;
+    case 4: if (gl.EdgeFlagPointer) gl.EdgeFlagPointer (stride, at); break;
+    case 5: if (gl.FogCoordPointer) gl.FogCoordPointer (type, stride, at); break;
+    case 6: if (gl.SecondaryColorPointer) gl.SecondaryColorPointer (size, type, stride, at); break;
+    case 7: if (gl.PointSizePointerOES) gl.PointSizePointerOES (type, stride, at); break;
     default:
       if (gl.TexCoordPointer && gl.ClientActiveTexture)
 	{
 	  GLint cat = GL_TEXTURE0;
 	  gl.GetIntegerv (GL_CLIENT_ACTIVE_TEXTURE, &cat);
 	  gl.ClientActiveTexture (GL_TEXTURE0 + unit);
-	  gl.TexCoordPointer (size, type, stride, 0);
+	  gl.TexCoordPointer (size, type, stride, at);
 	  gl.ClientActiveTexture ((GLenum) cat);
 	}
       break;
@@ -1367,6 +1408,15 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
       uint32_t w[4] = { 1, (uint32_t) desktop_gl, context_version (), ROL3D_LEVEL };
       reply (w, 16);
       return;
+    }
+  if (__builtin_expect (op == OP_glBindVertexArray, 0))
+    vao_bound = a[0];
+  else if (__builtin_expect (op == OP_glDeleteVertexArrays, 0) && vao_bound)
+    {
+      /* (n, the names' bytes, then the names) */
+      for (uint32_t i = 0; a[1] && i < a[0] && i + 2 < n; i++)
+	if (a[2 + i] == vao_bound)
+	  vao_bound = 0;
     }
   /* GL_EXT_direct_state_access on framebuffer 0 (the program's, ours) */
   if (__builtin_expect (op >= OP_glCheckNamedFramebufferStatusEXT && named_fb (op), 0) && a[0] == 0 && fbo)
@@ -1985,6 +2035,9 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
     case OP_TEMP_END:
       temp_end ();
       break;
+    case OP_UPLOADS:
+      as_memory = (int) a[0];
+      break;
     case OP_glGetNamedProgramStringEXT:
       {
 	uint32_t bytes = a[3] > area->reply_bytes ? area->reply_bytes : a[3];
@@ -2043,6 +2096,12 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
 	break;
       }
     case OP_DRAW_ELEMENTS_INLINE:
+      if (memory_ok ())
+	{
+	  /* (the indices are read during the call: from the ring itself) */
+	  gl.DrawElements (a[0], (GLsizei) a[1], a[2], a + 4);
+	  break;
+	}
       gl.BindBuffer (GL_ELEMENT_ARRAY_BUFFER, PRIV_ELEMENTS);
       gl.BufferData (GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr) a[3], a + 4, GL_STREAM_DRAW);
       gl.DrawElements (a[0], (GLsizei) a[1], a[2], 0);

@@ -236,6 +236,154 @@ bench (void)
 #endif
 }
 
+/* gl1test track: drawn as TORCS (plib's ssg) draws a track: objects of
+   a few thousand vertices in the program's memory, each drawn as many
+   triangle strips with glDrawElements (indices in memory), arrays set up
+   again for each object under glPushClientAttrib; then the loader's
+   texture pattern (a proxy query, every mipmap level, the wrap
+   modes read back) timed in groups of 50 */
+enum { T_OBJS = 60, T_ROWS = 40, T_COLS = 60, T_FRAMES = 20, T_TEX = 200 };
+static GLfloat t_v[T_OBJS][T_ROWS * T_COLS][3], t_n[T_OBJS][T_ROWS * T_COLS][3], t_t[T_OBJS][T_ROWS * T_COLS][2];
+static GLushort t_i[T_ROWS - 1][T_COLS * 2];
+
+static void
+track_frame (int f)
+{
+  glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glMatrixMode (GL_MODELVIEW);
+  glLoadIdentity ();
+  glRotatef ((float) f * 3, 0, 0, 1);
+  for (int o = 0; o < T_OBJS; o++)
+    {
+      glColor4f (1, 1, 1, 1);
+      glPushClientAttrib (GL_CLIENT_VERTEX_ARRAY_BIT);
+      glEnableClientState (GL_NORMAL_ARRAY);
+      glNormalPointer (GL_FLOAT, 0, t_n[o]);
+      glEnableClientState (GL_TEXTURE_COORD_ARRAY);
+      glTexCoordPointer (2, GL_FLOAT, 0, t_t[o]);
+      glEnableClientState (GL_VERTEX_ARRAY);
+      glVertexPointer (3, GL_FLOAT, 0, t_v[o]);
+      for (int r = 0; r < T_ROWS - 1; r++)
+	glDrawElements (GL_TRIANGLE_STRIP, T_COLS * 2, GL_UNSIGNED_SHORT, t_i[r]);
+      /* (and a row as a line, drawn from a first vertex) */
+      glDisable (GL_TEXTURE_2D);
+      glColor4f (1, 1, 0, 1);
+      glDrawArrays (GL_LINE_STRIP, (o % 7 + 3) * T_COLS, T_COLS);
+      glEnable (GL_TEXTURE_2D);
+      glPopClientAttrib ();
+    }
+  finish_frame ();
+}
+
+static void
+track (void)
+{
+  for (int o = 0; o < T_OBJS; o++)
+    for (int r = 0; r < T_ROWS; r++)
+      for (int c = 0; c < T_COLS; c++)
+	{
+	  int k = r * T_COLS + c;
+	  float x = (float) (o % 10) * 0.2f - 1 + (float) c * 0.18f / T_COLS;
+	  float y = (float) (o / 10) * 0.33f - 1 + (float) r * 0.3f / T_ROWS;
+	  t_v[o][k][0] = x; t_v[o][k][1] = y; t_v[o][k][2] = 0;
+	  t_n[o][k][0] = 0; t_n[o][k][1] = 0; t_n[o][k][2] = 1;
+	  t_t[o][k][0] = (float) c / 8; t_t[o][k][1] = (float) r / 8;
+	}
+  for (int r = 0; r < T_ROWS - 1; r++)
+    for (int c = 0; c < T_COLS; c++)
+      {
+	t_i[r][c * 2] = (GLushort) ((r + 1) * T_COLS + c);
+	t_i[r][c * 2 + 1] = (GLushort) (r * T_COLS + c);
+      }
+  static unsigned char img[64 * 64 * 3];
+  for (int i = 0; i < 64 * 64; i++)
+    {
+      img[i * 3] = (unsigned char) (i * 7);
+      img[i * 3 + 1] = (unsigned char) (((i % 64) / 8 ^ (i / 512)) & 1 ? 230 : 60);
+      img[i * 3 + 2] = (unsigned char) (i / 16);
+    }
+  GLuint tex;
+  glGenTextures (1, &tex);
+  glBindTexture (GL_TEXTURE_2D, tex);
+  glTexImage2D (GL_TEXTURE_2D, 0, GL_RGB, 64, 64, 0, GL_RGB, GL_UNSIGNED_BYTE, img);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glEnable (GL_TEXTURE_2D);
+  glMatrixMode (GL_PROJECTION);
+  glLoadIdentity ();
+  glOrtho (-1.2, 1.2, -1.2, 1.2, -1, 1);
+  double t0;
+#if !defined DIRECT && !defined R3D_08
+  /* (RISC3D: the renderer's two ways with arrays from memory: 0.8's
+     first, then the default) */
+  for (int way = 0; way < 2; way++)
+#else
+  int way = 1;
+  (void) way;
+#endif
+    {
+#ifndef DIRECT
+#ifndef R3D_08
+      r3d_uploads (way);
+#endif
+      unsigned long long st0[4], st[4];
+      r3d_stats (st0);
+#endif
+      t0 = now ();
+      for (int f = 0; f < T_FRAMES; f++)
+	track_frame (f);
+      double s = now () - t0;
+      printf ("track: %d frames of %d objects, %d strips (%d vertices) each, in %.2f s: %.1f frames a second\n",
+	      T_FRAMES, T_OBJS, T_ROWS - 1, T_ROWS * T_COLS, s, T_FRAMES / s);
+#ifndef DIRECT
+#ifdef R3D_08
+      printf ("  (RISC3D 0.8's library: every strip sent all the arrays up to its last vertex)\n");
+#else
+      printf ("  (arrays %s)\n", way ? "given to Mesa as memory: the default" : "each in a buffer of its own, as 0.8");
+#endif
+      if (r3d_stats (st) == 0)
+	printf ("  of which the renderer worked %.2f s, slept %llu times, %llu commands\n",
+		(st[0] - st0[0]) / 1e9, st[2] - st0[2], st[3] - st0[3]);
+#endif
+      unsigned long h = 5381;
+      for (size_t i = 0; i < sizeof frame; i += 4)
+	h = h * 33 + frame[i] + frame[i + 1] * 7u + frame[i + 2] * 13u;
+      printf ("track picture: %08lx\n", h & 0xffffffffUL);
+    }
+
+  /* the loader's textures (TORCS's grtexture.cpp, with the RISC OS port's
+     wrap check) */
+  static unsigned char lv[256 * 256 * 4];
+  for (size_t i = 0; i < sizeof lv; i++)
+    lv[i] = (unsigned char) (i * 13);
+  glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
+  t0 = now ();
+  double g0 = t0;
+  for (int k = 0; k < T_TEX; k++)
+    {
+      int size = 16 << (k % 5);		/* 16 .. 256 */
+      GLuint t;
+      glGenTextures (1, &t);
+      glBindTexture (GL_TEXTURE_2D, t);
+      GLint ww = 0, wrap = 0;
+      glTexImage2D (GL_PROXY_TEXTURE_2D, 0, 4, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+      glGetTexLevelParameteriv (GL_PROXY_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &ww);
+      if (ww != size)
+	printf ("  proxy %d: width %d\n", size, ww);
+      for (int l = 0, w = size; w >= 1; l++, w >>= 1)
+	glTexImage2D (GL_TEXTURE_2D, l, 4, w, w, 0, GL_RGBA, GL_UNSIGNED_BYTE, lv);
+      glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+      glGetTexParameteriv (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, &wrap);
+      glGetTexParameteriv (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, &wrap);
+      if ((k + 1) % 50 == 0)
+	{
+	  double n = now ();
+	  printf ("textures %d-%d: %.3f s\n", k - 48, k + 1, n - g0);
+	  g0 = n;
+	}
+    }
+  printf ("textures: %d in %.2f s\n", T_TEX, now () - t0);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -257,6 +405,14 @@ main (int argc, char **argv)
     printf ("version: %s; GLSL %s; %d extensions\n", (const char *) glGetString (GL_VERSION),
 	    (const char *) glGetString (GL_SHADING_LANGUAGE_VERSION), nx);
   }
+  if (argc > 1 && !strcmp (argv[1], "track"))
+    {
+      track ();
+#ifndef DIRECT
+      r3d_close ();
+#endif
+      return 0;
+    }
   if (argc > 1 && !strcmp (argv[1], "bench"))
     {
       /* the processor alone, as a measure of this side: the same loop

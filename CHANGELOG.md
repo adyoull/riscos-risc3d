@@ -1,5 +1,59 @@
 # Changelog
 
+## 0.9: arrays from a program's memory sent once, not once a strip; kit 19 (13 Nov 2026, in testing)
+
+The ROL conversation reported (`RISC3D/handoffs/2026-11-13-rol-torcs-slow-through-risc3d-pi4.md`)
+that TORCS on the owner's Pi 4 ran at 7.9 fps through RISC3D, at 100% of
+the processor and slower than in software, and took 460 s to load the
+track, slower and slower as it went.
+
+- **The race: every strip sent its object's arrays again.** TORCS (plib's
+  ssg, `grVtxTable::draw_geometry_array`) draws each object as many
+  triangle strips with glDrawElements, indices in its memory, all from
+  one set of arrays in its memory. The library sent each draw all the
+  arrays from vertex 0 up to its highest index, so an object of S strips
+  sent about S/2 times its arrays. With gl1test's track (60 objects of 39
+  strips of 2400 vertices), that's 94 MB a frame.
+  - **The library (0.9)** now sends only the vertices from the lowest to
+    the highest index. The indices are moved down to match (in the copy
+    it sends). glDrawArrays and glDrawArraysInstanced from a first vertex
+    are moved to vertex 0 the same way.
+  - It does this only when every enabled array is in the program's
+    memory (none in a buffer object), no shader is in use (gl_VertexID
+    would change: glUseProgram and glBindProgramPipeline are now
+    tracked), and no primitive restart at a chosen index. Arrays with a
+    divisor are sent as before.
+  - The build machine (llvmpipe): track 16.0 fps before, 30.7 after
+    (Mesa directly 21.9). Pictures identical.
+- **rol-3d 0.8 (riscos-risc3d 0.8-1):** arrays and indices from the
+  program's memory are given to Linux's Mesa as memory, as a Linux
+  program gives them. Mesa streams them into one buffer of its own. 0.7
+  made a fresh buffer object (glBufferData) for every array of every
+  draw.
+  - It doesn't do this with a vertex array object bound, in a context
+    without the compatibility profile, or for GLES 1.1's point size array
+    (es1.c reads that from a buffer).
+  - New own op OP_UPLOADS (0x7F04) and `r3d_uploads(0|1)` choose the way,
+    for comparing. ROL3D_LEVEL 7.
+  - On llvmpipe the two ways are about equal; the Pi's driver is what
+    matters (kit 19 measures both).
+- **The proxy query** in the report ("proxy width 0" for 2048x512) is
+  TORCS's own: grtexture.cpp sets the width to 0 without asking when a
+  size is over its own limit (512). Not RISC3D's.
+- **Loading:** TORCS's loader makes few GL calls (a proxy query, a
+  glTexImage2D a mipmap level, the RISC OS port's two
+  glGetTexParameteriv). gl1test track's texture part does the same 200
+  times: no slowing on the build machine. Kit 19's `watch` script logs
+  Linux's memory, swap and busiest processes every 5 s while TORCS loads.
+- **gl1test track:** the TORCS pattern, plus a row of each object drawn
+  with glDrawArrays from a first vertex. It runs the frames with 0.8's
+  library (`gl1test08`, built from tag v0.8), then 0.9's both ways. On
+  the build machine every combination of library 0.8/0.9 and helper
+  0.7/0.8 gives the same answers and pictures in estest, gl3test,
+  targettest and gl1test.
+- **Kit 19:** `RISC3DTest-19.zip` with riscos-risc3d 0.8-1. Adds Track,
+  `watch`, and the track in linux-tests (TrackLinuxResults).
+
 ## 0.8: RISC3D_Info says when Linux draws in software; kit 18 (13 Nov 2026)
 
 - **Kit 18 on the owner's Pi 4 (13 Nov):** InfoResults says "driver flags:

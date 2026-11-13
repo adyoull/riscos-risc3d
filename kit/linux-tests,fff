@@ -1,11 +1,11 @@
 #!/bin/sh
-# RISC3D test kit 18: the same tests drawn by Linux's Mesa directly, to
+# RISC3D test kit 19: the same tests drawn by Linux's Mesa directly, to
 # compare with. Run from RiSH's root shell, after installing riscos-risc3d:
 #   sh /riscos/HardDisc4/RISC3DTest/linux-tests
 # Writes LinuxResults, LinuxPicture (OpenGL), ESLinuxResults (GLES 2;
 # Debian's Mesa has no GLES 1.1, so that part says "no context": RISC3D's
-# GLES 1.1 is drawn on desktop OpenGL) and GL3LinuxResults (GLES 3.1 and
-# OpenGL 3.1).
+# GLES 1.1 is drawn on desktop OpenGL), GL3LinuxResults (GLES 3.1 and
+# OpenGL 3.1) and TrackLinuxResults (the track drawn as TORCS draws it).
 d=$(dirname "$0")
 echo "--- what will draw:"
 /opt/riscos/rol-3d --check 2>&1 | tail -4
@@ -17,10 +17,12 @@ g=$(ls "$d"/gl1test-linux* 2>/dev/null | head -1)
 e=$(ls "$d"/estest-linux* 2>/dev/null | head -1)
 t3=$(ls "$d"/gl3test-linux* 2>/dev/null | head -1)
 [ -n "$g" ] && { "$g" "$d/LinuxPicture" >"$d/LinuxResults" 2>&1; "$g" bench >>"$d/LinuxResults" 2>&1; }
+[ -n "$g" ] && "$g" track >"$d/TrackLinuxResults" 2>&1
 [ -n "$e" ] && "$e" both "$d/ESLinux" >"$d/ESLinuxResults" 2>&1
 [ -n "$t3" ] && "$t3" all "$d/GL3Linux" >"$d/GL3LinuxResults" 2>&1
 chown 1000:1000 "$d"/LinuxResults "$d"/LinuxPicture "$d"/ESLinuxResults "$d"/ESLinux-* \
-  "$d"/GL3LinuxResults "$d"/GL3Linux-* 2>/dev/null
+  "$d"/GL3LinuxResults "$d"/GL3Linux-* "$d"/TrackLinuxResults 2>/dev/null
 tail -3 "$d/ESLinuxResults"
 tail -3 "$d/GL3LinuxResults"
+grep "^track" "$d/TrackLinuxResults"
 echo "Done."

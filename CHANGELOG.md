@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5: OpenGL 3.0/3.1 and GLES 3.0/3.1; kit 14 (13 Nov 2026, in testing)
+## 0.5: OpenGL 3.0/3.1 and GLES 3.0/3.1; kit 15 (13 Nov 2026, in testing)
 
 Step 2 of 3 of full coverage (`claude/risc3d-full-coverage-plan.md`).
 
@@ -27,8 +27,8 @@ Step 2 of 3 of full coverage (`claude/risc3d-full-coverage-plan.md`).
   version (1.40, "OpenGL ES GLSL ES 3.10"...), GL_MAJOR_VERSION and
   GL_MINOR_VERSION follow it. `r3d_create_version (api, major, minor)`
   fails, with the renderer's version in r3d_error, if that is lower.
-- **OpenGL 3.1 without the compatibility profile.** Mesa's v3d gives 2.1
-  with it and 3.1 without. rol-3d makes the compatibility context first,
+- **OpenGL 3.1 without the compatibility profile,** for drivers whose
+  compatibility profile is older than what is asked for. rol-3d makes the compatibility context first,
   and a 3.1 one (EGL_CONTEXT_MAJOR/MINOR_VERSION) if that is too old for
   what was asked. In such a context:
   - glGenBuffers and glGenTextures ask the renderer for its names (one
@@ -80,8 +80,10 @@ Step 2 of 3 of full coverage (`claude/risc3d-full-coverage-plan.md`).
   0.5, and 0.5's library with rol-3d 0.4: r3dtest, gl1test and estest as
   0.4's, pictures included (0.5's library with 0.4's helper offers 0.4's
   extensions and versions).
-- rol-3d 0.5. Kit 14 (`RISC3DTest-14.zip`) with riscos-risc3d 0.5-1:
-  GL3 (gl3test both) and linux-tests running gl3test-linux.
+- rol-3d 0.5. Kit 15 (`RISC3DTest-15.zip`) with riscos-risc3d 0.5-1:
+  GL3 (gl3test both) and linux-tests running gl3test-linux. (Kit 14 was
+  the same with a wrong line in its !ReadMe: that the Pi's Mesa gives
+  3.1 only without the compatibility profile. Kit 2 showed 3.1 with it.)
 
 ## 0.4: OpenGL ES 1.1, and GLES 2's extensions; kit 13 (12-13 Nov 2026)
 

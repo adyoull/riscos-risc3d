@@ -106,7 +106,7 @@ open_api (int desk)
     return "no context";
   load_all ();
   /* (as rol-3d: OpenGL 3.1 without the compatibility profile if that is
-     older, as Mesa's v3d's) */
+     older than asked for) */
   const char *v = (const char *) GL (glGetString) (GL_VERSION);
   if (desk && v && strncmp (v, "3.1", 3) < 0)
     {
@@ -573,8 +573,8 @@ part_gl3 (void)
   GL (glClearColor) (0.3f, 0.3f, 0.3f, 1);
   GL (glClear) (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  /* fixed function still there, with the compatibility profile (Mesa's
-     v3d gives OpenGL 3.1 without it) */
+  /* fixed function still there, with the compatibility profile (a driver
+     may give 3.1 only without it) */
   printf ("compatibility profile: %s\n", compat ? "yes" : "no");
   if (compat)
     {

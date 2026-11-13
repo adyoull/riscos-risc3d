@@ -1,4 +1,4 @@
-RISC3D test kit 14 (prototype, 13 November 2026)
+RISC3D test kit 15 (prototype, 13 November 2026)
 ================================================
 
 RISC3D 0.5: OpenGL ES 3.0/3.1 and OpenGL 3.0/3.1 now go to the GPU too,
@@ -27,9 +27,8 @@ Steps
       es3: OpenGL ES 3.0/3.1 (uniform blocks, transform feedback, instanced
            and integer arrays, primitive restart, sync objects, a sampler,
            indirect draws, a compute shader, a blit).
-      gl3: OpenGL 3.0/3.1. Linux's Mesa on the Pi gives OpenGL 3.1
-           without the compatibility profile (2.1 with it), so this part
-           should say "compatibility profile: no".
+      gl3: OpenGL 3.0/3.1. "compatibility profile" says whether Linux's
+           Mesa gave 3.1 with it (fixed function too) or without.
     Compare it with GL3LinuxResults: the lines after each part's version
     lines should be the same, pictures included.
  5. Double-click ES (as kit 13). ESResults has two parts:

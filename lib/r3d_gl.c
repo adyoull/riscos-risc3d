@@ -1724,7 +1724,7 @@ get_string (GLenum name)
   return (const GLubyte *) s;
 }
 
-/* OpenGL 3.1 without GL_ARB_compatibility (Mesa's v3d's) has no
+/* OpenGL 3.1 without GL_ARB_compatibility has no
    GL_EXTENSIONS string, only glGetStringi's */
 static int
 core_31 (void)

@@ -332,8 +332,7 @@ software_display (void)
 }
 
 /* OpenGL above its compatibility profile's version: (0.5 on) a context
-   of that version, for a program that asks for it (Mesa's v3d: 2.1
-   compatibility, 3.1 without) */
+   of that version, for a program that asks for it */
 static int want_version;
 
 static EGLContext

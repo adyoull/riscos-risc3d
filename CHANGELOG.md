@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.6: GL_EXT_direct_state_access; kit 16 (13 Nov 2026, in testing)
+## 0.6: GL_EXT_direct_state_access; kit 16 (13 Nov 2026)
+
+- **Kit 16 on the owner's Pi 4 (13 Nov):** gl3test all through RISC3D =
+  Linux's Mesa directly, every line after the versions, all three parts:
+  es3 79116525, gl3 320569a2, dsa 310251cb. The Pi's Mesa has
+  GL_EXT_direct_state_access with OpenGL 3.1 compatibility. Released:
+  tag v0.6, `RISC3D-client-0.6.tgz`, riscos-risc3d 0.6-1 (the kit's).
+
 
 Step 3 of 3 of full coverage: with it RISC3D carries every function
 riscos-mesa's Mesa 20.3.5 offers (`docs/surface/missing-now.txt`: none

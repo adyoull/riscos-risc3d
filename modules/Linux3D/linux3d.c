@@ -7,6 +7,11 @@
    that this module is only called to wake the renderer (one byte down the
    socket) or to wait for it (a byte down, a byte back).
 
+   0.02: registered as a driver that may draw in software (flags bit 1),
+   RISC3D asks it which (entry reason 3): rol-3d 0.7 on answers on the
+   abstract socket "rol-3d-info" with "GPU ..." or "software ...". An
+   older rol-3d has no such socket: then it says GPU, as before.
+
    Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE). */
 
 #include "cmodule.h"
@@ -142,12 +147,37 @@ ctx_close (int i)
   ctx[i].used = 0;
 }
 
+/* reason 3: does Linux draw in software? r0 = 1 if so, 0 on a GPU, 2 not
+   known (no helper, or one older than 0.7) */
+static oserror *
+describe (regs *r)
+{
+  r->r[0] = 2;
+  int s = lsys (NR_socket, 1 /* AF_UNIX */, 1 /* SOCK_STREAM */ | O_CLOEXEC, 0, 0, 0, 0);
+  static const char addr[] = "\1\0\0rol-3d-info";	/* abstract name */
+  if (s < 0)
+    return 0;
+  if (lsys (NR_connect, (unsigned) s, (unsigned) addr, 2 + 12, 0, 0, 0) == 0)
+    {
+      char c = 0;
+      int n;
+      do
+	n = lsys (NR_read, (unsigned) s, (unsigned) &c, 1, 0, 0, 0);
+      while (n == -4 || n == -11);
+      r->r[0] = n != 1 ? 2 : c == 's' ? 1 : c == 'G' ? 0 : 2;
+    }
+  lsys (NR_close, (unsigned) s, 0, 0, 0, 0, 0);
+  return 0;
+}
+
 oserror *driver_call (regs *r);
 oserror *
 driver_call (regs *r)
 {
   if (r->r[0] == 0)
     return ctx_open (r);
+  if (r->r[0] == 3)
+    return describe (r);
   unsigned i = r->r[1] - 1;
   if (i >= MAXCTX || !ctx[i].used)
     return ERR (err_gone);
@@ -175,7 +205,8 @@ oserror *
 mod_init (const char *tail, int instance, void *pw)
 {
   (void) tail; (void) instance; (void) pw;
-  regs r = {{ 0, (unsigned) driver_entry, 0, (unsigned) "Linux3D (Linux's graphics driver)" }};
+  /* (flags bit 1: may draw in software, ask: reason 3) */
+  regs r = {{ 0, (unsigned) driver_entry, 0, (unsigned) "Linux3D (Linux's graphics driver)", 2 }};
   oserror *e = swix_regs (RISC3D_Register, &r);
   if (e)
     return e;				/* RISC3D isn't loaded */

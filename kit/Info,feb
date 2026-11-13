@@ -1,0 +1,8 @@
+| RISC3D test: what draws (RISC3D 0.8 with modules RISC3D 0.03 and Linux3D
+| 0.02, rol-3d 0.7). Writes InfoResults.
+RMEnsure RISC3D 0.03 Error Install riscos-risc3d 0.7-1 and restart first (see !ReadMe)
+RMEnsure Linux3D 0.02 Error Install riscos-risc3d 0.7-1 and restart first (see !ReadMe)
+Run <Obey$Dir>.r3dinfo { > <Obey$Dir>.InfoResults }
+*RISC3D { >> <Obey$Dir>.InfoResults }
+SetType <Obey$Dir>.InfoResults Text
+Filer_Run <Obey$Dir>.InfoResults

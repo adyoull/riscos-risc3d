@@ -59,7 +59,7 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
-#define ROL3D_VERSION "0.6"
+#define ROL3D_VERSION "0.7"
 /* what the library may send (OP_CONTEXT's reply, word 3): 6 = 0.6's
    commands (GL_EXT_direct_state_access, OP_TEMP_BIND); none: 0.5 */
 #define ROL3D_LEVEL 6
@@ -2260,6 +2260,61 @@ home (void)
     }
 }
 
+/* What draws: "GPU <renderer>" or "software <renderer>" (0.7 on: for
+   RISC3D_Info, through Linux3D, so that riscos-mesa can keep its own
+   software renderer where Linux's would be one too and the copy back only
+   costs). Found once, by a child that makes a context as a renderer
+   would; answered on the abstract socket "rol-3d-info". */
+static char kind[200];
+
+static void
+probe_kind (const gid_t *g)
+{
+  int p[2];
+  if (pipe (p))
+    return;
+  pid_t pid = fork ();
+  if (pid == 0)
+    {
+      close (p[0]);
+      char out[200] = "none";
+      if (getuid () == 0 && (setgroups (2, g) || setgid (RO_GID) || setuid (RO_UID)))
+	_exit (1);
+      home ();
+      if ((gl_start () || software_display ()) && make_context (0))
+	{
+	  const char *r = (const char *) gl.GetString (GL_RENDERER);
+	  int soft = !hardware || (r && (strstr (r, "llvmpipe") || strstr (r, "softpipe") || strstr (r, "swrast")));
+	  snprintf (out, sizeof out, "%s %s", soft ? "software" : "GPU", r ? r : "?");
+	}
+      else
+	snprintf (out, sizeof out, "none %.190s", gl_error);
+      if (write (p[1], out, strlen (out) + 1) < 0) { }
+      _exit (0);
+    }
+  close (p[1]);
+  if (pid > 0)
+    {
+      char b[sizeof kind];
+      size_t got = 0;
+      struct pollfd pf = { p[0], POLLIN, 0 };
+      while (got < sizeof b - 1 && poll (&pf, 1, 20000) > 0)
+	{
+	  ssize_t n = read (p[0], b + got, sizeof b - 1 - got);
+	  if (n <= 0)
+	    break;
+	  got += (size_t) n;
+	}
+      b[got] = 0;
+      if (got && strncmp (b, "none", 4))
+	{
+	  memcpy (kind, b, sizeof kind);
+	  logmsg ("rol-3d: draws with: %s\n", kind);
+	}
+    }
+  close (p[0]);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -2310,6 +2365,17 @@ main (int argc, char **argv)
   if (l < 0 || bind (l, (struct sockaddr *) &a, offsetof (struct sockaddr_un, sun_path) + sizeof nm)
       || listen (l, 8))
     return 1;
+  /* (and "rol-3d-info": what draws, for RISC3D_Info) */
+  int li = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+  struct sockaddr_un ai = { .sun_family = AF_UNIX };
+  static const char nmi[] = "rol-3d-info";
+  memcpy (ai.sun_path + 1, nmi, sizeof nmi - 1);
+  if (li >= 0 && (bind (li, (struct sockaddr *) &ai, offsetof (struct sockaddr_un, sun_path) + sizeof nmi)
+		  || listen (li, 8)))
+    {
+      close (li);
+      li = -1;
+    }
   /* The display's card (for zero-copy frames: dumb buffers the display
      can show): the one that makes dumb buffers. Opened again as root for
      each connection, so that each context's buffers are its own and go
@@ -2342,6 +2408,23 @@ main (int argc, char **argv)
   signal (SIGPIPE, SIG_IGN);
   for (;;)
     {
+      struct pollfd pf[2] = { { l, POLLIN, 0 }, { li, POLLIN, 0 } };
+      if (poll (pf, li >= 0 ? 2 : 1, -1) < 0)
+	continue;
+      if (li >= 0 && (pf[1].revents & POLLIN))
+	{
+	  int q = accept4 (li, 0, 0, SOCK_CLOEXEC);
+	  if (q >= 0)
+	    {
+	      if (!kind[0])
+		probe_kind (g);
+	      const char *k = kind[0] ? kind : "none";
+	      if (send (q, k, strlen (k) + 1, MSG_NOSIGNAL) < 0) { }
+	      close (q);
+	    }
+	}
+      if (!(pf[0].revents & POLLIN))
+	continue;
       int c = accept4 (l, 0, 0, SOCK_CLOEXEC);
       if (c < 0)
 	continue;

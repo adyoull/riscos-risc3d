@@ -25,7 +25,13 @@
 			 r2 = its size; or, for a DRM device, r1 = the
 			 driver's file and r2 = 0
 
-   Driver flags: bit 0 = a DRM device. Such a driver (V3DRender, for the
+   Driver flags (0.03 on: bit 1 too):
+     bit 1 = the driver may draw in software (Linux3D: as Linux's Mesa
+     does where there is no GPU driver): RISC3D asks it (reason 3) at each
+     RISC3D_Info, and Info's r4 bit 1 is set if it does now. Mesa can then
+     keep its own software renderer, which is faster than a software
+     renderer's frames copied back.
+   Bit 0 = a DRM device. Such a driver (V3DRender, for the
    Pi 4's GPU) takes no command stream: the program's own Mesa drives the
    GPU through the driver's ioctl SWI (r5), with the file from
    RISC3D_Open, as Mesa's DRM drivers do on Linux. RISC3D_Sync isn't used
@@ -40,6 +46,9 @@
 			      (a DRM device: r0 = its file, r1 = r2 = 0)
      r0 = 1 close          r1 = its handle
      r0 = 2 sync           r1 = its handle, r2 = 0 wake / 1 wait
+     r0 = 3 describe       -> r0 = 1 if it draws in software now, 0 on a
+			      GPU, 2 not known (drivers registered with
+			      flags bit 1 only)
 
    Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE). */
 
@@ -96,11 +105,17 @@ mod_swi (unsigned number, regs *r)
 	  n += drv[i].entry != 0;
 	for (int i = 0; i < MAXCTX; i++)
 	  c += ctx[i].used;
-	r->r[0] = 2;
+	r->r[0] = 3;
 	r->r[1] = (unsigned) n;
 	r->r[2] = (unsigned) c;
 	r->r[3] = b < 0 ? 0 : (unsigned) drv[b].name;
-	r->r[4] = b < 0 ? 0 : drv[b].flags;
+	r->r[4] = b < 0 ? 0 : drv[b].flags & 1;
+	if (b >= 0 && (drv[b].flags & 2))
+	  {
+	    regs q = {{ 3 }};
+	    if (!call_driver (drv[b].entry, drv[b].r12, &q) && q.r[0] == 1)
+	      r->r[4] |= 2;
+	  }
 	r->r[5] = b < 0 ? 0 : drv[b].ioctl;
 	r->r[6] = b < 0 ? 0 : drv[b].drm_name;
 	return 0;
@@ -118,9 +133,9 @@ mod_swi (unsigned number, regs *r)
 		memset (drv[i].name, 0, sizeof drv[i].name);
 		memcpy (drv[i].name, s, l);
 		drv[i].r12 = r->r[2];
-		drv[i].flags = r->r[4] & 1;
-		drv[i].ioctl = drv[i].flags ? r->r[5] : 0;
-		drv[i].drm_name = drv[i].flags ? r->r[6] : 0;
+		drv[i].flags = r->r[4] & 3;
+		drv[i].ioctl = drv[i].flags & 1 ? r->r[5] : 0;
+		drv[i].drm_name = drv[i].flags & 1 ? r->r[6] : 0;
 		drv[i].entry = r->r[1];
 		return 0;
 	      }
@@ -216,6 +231,13 @@ mod_command (int index, const char *tail, int argc)
       {
 	write0 ("Driver: ");
 	write0 (drv[i].name);
+	if (drv[i].flags & 2)
+	  {
+	    /* (0.03: one that may draw in software says which now) */
+	    regs q = {{ 3 }};
+	    oserror *e = call_driver (drv[i].entry, drv[i].r12, &q);
+	    write0 (e || q.r[0] > 1 ? ", not known yet whether on a GPU" : q.r[0] ? ", drawing in software" : ", drawing on a GPU");
+	  }
 	newline ();
 	n++;
       }

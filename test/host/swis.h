@@ -60,6 +60,24 @@ _swix (int swi, int flags, ...)
       const char *v = getenv (name);
       *len = v ? ~(int) strlen (v) : 0;
     }
+  else if (swi == 0xC3D00)
+    {
+      /* RISC3D_Info, as RISC3D 0.03 with Linux3D 0.02: r3, r4 (software
+	 from the helper's "rol-3d-info") */
+      const char **drv = va_arg (ap, const char **);
+      unsigned *fl = va_arg (ap, unsigned *);
+      *drv = "Linux3D (host)";
+      *fl = 0;
+      struct sockaddr_un a = { .sun_family = AF_UNIX };
+      memcpy (a.sun_path + 1, "rol-3d-info", 11);
+      int q = socket (AF_UNIX, SOCK_STREAM, 0);
+      char c = 0;
+      if (q >= 0 && !connect (q, (struct sockaddr *) &a, offsetof (struct sockaddr_un, sun_path) + 12) && read (q, &c, 1) == 1
+	  && c == 's')
+	*fl = 2;
+      if (q >= 0)
+	close (q);
+    }
   else if (swi == 0xC3D04)
     {
       (void) va_arg (ap, int);

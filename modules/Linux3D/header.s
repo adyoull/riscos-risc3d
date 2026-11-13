@@ -24,7 +24,7 @@ module_start:
 	.word	flags - module_start
 
 title:	.asciz	"Linux3D"
-help:	.asciz	"Linux3D\t0.01 (12 Nov 2026) RISC3D driver: Linux's graphics driver (prototype)"
+help:	.asciz	"Linux3D\t0.02 (13 Nov 2026) RISC3D driver: Linux's graphics driver (prototype)"
 	.align	2
 commands:
 	.asciz	"Linux3D"

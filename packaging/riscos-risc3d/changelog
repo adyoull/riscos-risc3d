@@ -1,3 +1,11 @@
+riscos-risc3d (0.7-1) rol; urgency=medium
+
+  * rol-3d 0.7, RISC3D module 0.03, Linux3D 0.02: RISC3D_Info says when
+    Linux's Mesa draws in software (no GPU driver), so that riscos-mesa
+    can keep its own faster software renderer there. *RISC3D says it too.
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Fri, 13 Nov 2026 11:00:00 +0000
+
 riscos-risc3d (0.6-1) rol; urgency=medium
 
   * RISC3D 0.6: GL_EXT_direct_state_access (objects, matrices and arrays

@@ -53,6 +53,9 @@ ${T}strip out/obj/gl1test.elf
 ${T}gcc $AC $I -static -o out/obj/estest.elf demo/es/estest.c out/libRISC3D.a -lm
 ${T}strip out/obj/estest.elf
 "${RISCOS_TOOLCHAIN}/bin/elf2aif" -e out/obj/estest.elf "out/estest,ff8" >/dev/null
+${T}gcc $AC $I -static -o out/obj/r3dinfo.elf demo/info/r3dinfo.c out/libRISC3D.a -lm
+${T}strip out/obj/r3dinfo.elf
+"${RISCOS_TOOLCHAIN}/bin/elf2aif" -e out/obj/r3dinfo.elf "out/r3dinfo,ff8" >/dev/null
 ${T}gcc $AC $I -static -o out/obj/targettest.elf demo/target/targettest.c out/libRISC3D.a -lm
 ${T}strip out/obj/targettest.elf
 "${RISCOS_TOOLCHAIN}/bin/elf2aif" -e out/obj/targettest.elf "out/targettest,ff8" >/dev/null
@@ -99,9 +102,9 @@ tools/mkdeb.sh >/dev/null
 
 # the Pi test kit: a zip for RISC OS, with file types
 # (the package as delivered, if there is a copy: KIT_DEB)
-python3 tools/mkkit.py out/RISC3DTest-17.zip RISC3DTest "kit/!ReadMe,fff" kit/Cube,feb kit/Test,feb \
-  kit/GL,feb kit/ES,feb kit/GL3,feb kit/Target,feb kit/TargetExpected,fff kit/Overlay,feb \
+python3 tools/mkkit.py out/RISC3DTest-18.zip RISC3DTest "kit/!ReadMe,fff" kit/Cube,feb kit/Test,feb \
+  kit/GL,feb kit/ES,feb kit/GL3,feb kit/Target,feb kit/TargetExpected,fff kit/Info,feb kit/Overlay,feb \
   kit/linux-tests,fff "out/r3dcube,ff8" "out/r3dtest,ff8" "out/gl1test,ff8" "out/estest,ff8" \
-  "out/gl3test,ff8" "out/targettest,ff8" out/gl1test-linux out/estest-linux out/gl3test-linux \
-  "${KIT_DEB:-out/riscos-risc3d_0.6-1_arm64.deb}"
+  "out/gl3test,ff8" "out/targettest,ff8" "out/r3dinfo,ff8" out/gl1test-linux out/estest-linux \
+  out/gl3test-linux "${KIT_DEB:-out/riscos-risc3d_0.7-1_arm64.deb}"
 

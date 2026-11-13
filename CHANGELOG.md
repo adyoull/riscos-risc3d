@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.8: RISC3D_Info says when Linux draws in software; kit 18 (13 Nov 2026, in testing)
+
+riscos-mesa asked (`MESA/handoffs/2026-11-13-mesa-risc3d-0.7-osmesa-routed.md`).
+In QEMU, and on any Linux machine without a GPU driver, RISC3D's
+renderer is Linux's Mesa in software. Through RISC3D that is far slower
+than riscos-mesa's own renderer, because every frame is copied back:
+osmesatest's lit cube ran at 23.8 fps against 500.
+
+- **rol-3d 0.7:** a second abstract socket, "rol-3d-info", answers with
+  "GPU <renderer>" or "software <renderer>".
+  - It's found once per helper by a child that makes a context as a
+    renderer would (as RISC OS's user).
+  - It counts as software with no render node, or with llvmpipe,
+    softpipe or swrast as the renderer.
+  - It's logged as "draws with: ...". The first answer takes about
+    0.3 s on the build machine; later ones are immediate.
+- **Linux3D 0.02** registers with flags bit 1, "may draw in software:
+  ask". Entry reason 3, "describe", reads rol-3d-info and returns 1 for
+  software, 0 for GPU, or 2 if it's not known (no helper, or rol-3d older
+  than 0.7).
+- **RISC3D module 0.03:**
+  - RISC3D_Info's r4 bit 1 is set when the driver a new context would
+    get says software now. It asks at each Info; r0 is 3.
+  - *RISC3D says "drawing in software", "drawing on a GPU" or "not
+    known yet".
+  - A driver without bit 1 is never asked, so V3DRender needs no change.
+- **The library:** `r3d_driver_flags ()` returns RISC3D_Info's flags for
+  the driver a new context would get, or -1 if there is none.
+  `R3D_DRIVER_SOFTWARE` is 2 and `R3D_DRIVER_DRM` is 1. `r3d_available`
+  is unchanged: whether to keep software is riscos-mesa's decision. No
+  new C library functions.
+- **r3dinfo** (`demo/info`): prints the flags. On the build machine,
+  against llvmpipe, it says "draws in software".
+- Package riscos-risc3d 0.7-1 (rol-3d 0.7, the two modules); kit 18
+  (`RISC3DTest-18.zip`, Info obey).
+
 ## 0.7: drawing into the program's own buffer (OSMesa's way); kit 17 (13 Nov 2026)
 
 - **Kit 17 on the owner's Pi 4 (13 Nov):** TargetResults = TargetExpected

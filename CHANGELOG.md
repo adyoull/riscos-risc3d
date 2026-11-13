@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.7: drawing into the program's own buffer (OSMesa's way); kit 17 (13 Nov 2026, in testing)
+## 0.7: drawing into the program's own buffer (OSMesa's way); kit 17 (13 Nov 2026)
+
+- **Kit 17 on the owner's Pi 4 (13 Nov):** TargetResults = TargetExpected
+  (riscos-mesa's OSMesa) in all 24 lines, with no copy warnings. estest's
+  es2 picture is 379eda74 through RISC3D and from Linux's Mesa directly.
+  GL3 unchanged from kit 16. Released: tag v0.7, `RISC3D-client-0.7.tgz`
+  (riscos-risc3d stays 0.6-1).
+
 
 The owner: programs should use RISC3D automatically wherever it is
 there, programs calling OSMesa directly too. That routing is riscos-mesa's

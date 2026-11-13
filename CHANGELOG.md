@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.8: RISC3D_Info says when Linux draws in software; kit 18 (13 Nov 2026, in testing)
+## 0.8: RISC3D_Info says when Linux draws in software; kit 18 (13 Nov 2026)
+
+- **Kit 18 on the owner's Pi 4 (13 Nov):** InfoResults says "driver flags:
+  0", r3d_available 1, and *RISC3D "Driver: Linux3D (Linux's graphics
+  driver), drawing on a GPU". A first run without the ", drawing ..." was
+  before the new modules were loaded. Released: tag v0.8,
+  `RISC3D-client-0.8.tgz`, riscos-risc3d 0.7-1 (the kit's).
+
 
 riscos-mesa asked (`MESA/handoffs/2026-11-13-mesa-risc3d-0.7-osmesa-routed.md`).
 In QEMU, and on any Linux machine without a GPU driver, RISC3D's

@@ -1,6 +1,15 @@
 # Changelog
 
-## 0.5: OpenGL 3.0/3.1 and GLES 3.0/3.1; kit 15 (13 Nov 2026, in testing)
+## 0.5: OpenGL 3.0/3.1 and GLES 3.0/3.1; kit 15 (13 Nov 2026)
+
+- **Kit 15 on the owner's Pi 4 (13 Nov):** gl3test through RISC3D = Linux's
+  Mesa directly, every line after the versions: es3 picture 79116525, gl3
+  picture 320569a2 both ways. The Pi gives OpenGL ES 3.1 and OpenGL 3.1
+  with the compatibility profile (Mesa 25.0.7, V3D 4.2.14.0); compute,
+  transform feedback, sync objects, indirect draws on the GPU. estest's
+  GLES 2 part on Linux unchanged (f6971244). Released: tag v0.5,
+  `RISC3D-client-0.5.tgz`, riscos-risc3d 0.5-1 (the kit's).
+
 
 Step 2 of 3 of full coverage (`claude/risc3d-full-coverage-plan.md`).
 

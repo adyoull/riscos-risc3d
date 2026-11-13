@@ -1,6 +1,16 @@
 # Changelog
 
-## 0.4 (in testing): OpenGL ES 1.1, and GLES 2's extensions; kit 13 (12 Nov 2026)
+## 0.4: OpenGL ES 1.1, and GLES 2's extensions; kit 13 (12-13 Nov 2026)
+
+- **Kit 13 on the owner's Pi 4 (13 Nov):** GLES 2 part through RISC3D =
+  Linux's Mesa directly, every line, picture f6971244 both. GLES 1.1: every
+  number as riscos-mesa's renderer gives on the host (matrices in fixed
+  point, glQueryMatrixxOES, light, texture environment, clip plane), the
+  ETC1 texture, the point size array and vertex array objects without
+  error; 40 extensions. The debug callback brings the program's message
+  on the Pi. Released: tag v0.4, `RISC3D-client-0.4.tgz`, riscos-risc3d
+  0.4-1 (the kit's).
+
 
 The owner: everything riscos-mesa supports, and all the hardware can do.
 Step 1 of 3 (`claude/risc3d-full-coverage-plan.md` in the project).

@@ -1,10 +1,9 @@
-RISC3D test kit 13 (prototype, 12 November 2026)
+RISC3D test kit 14 (prototype, 13 November 2026)
 ================================================
 
-RISC3D 0.4: OpenGL ES 1.1, and the extensions riscos-mesa offers in
-OpenGL ES 2, now go to the GPU too. This kit comes with the package that
-installs RISC3D (riscos-risc3d 0.4-1); the test kits before it installed
-their own copies.
+RISC3D 0.5: OpenGL ES 3.0/3.1 and OpenGL 3.0/3.1 now go to the GPU too,
+with the rest of the extensions riscos-mesa offers in OpenGL 2.1. This kit
+comes with the package that installs RISC3D (riscos-risc3d 0.5-1).
 
 Needs
 -----
@@ -16,7 +15,7 @@ Steps
 -----
  1. Copy RISC3DTest to HardDisc4 (unzip it there).
  2. In RiSH's Root shell:
-      apt-get install --install-recommends /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.4-1_arm64.deb
+      apt-get install --install-recommends /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.5-1_arm64.deb
     (Debian's Mesa comes with it if it isn't there already.) Then restart:
     the modules load at start-up from now on. With riscos-support
     1.0.0049-1 or later the helper starts at start-up too; with an older
@@ -24,7 +23,16 @@ Steps
  3. In RiSH's Root shell:
       sh /riscos/HardDisc4/RISC3DTest/linux-tests
     It runs the same tests with Linux's Mesa directly, to compare with.
- 4. Double-click ES. ESResults has two parts:
+ 4. Double-click GL3. GL3Results has two parts:
+      es3: OpenGL ES 3.0/3.1 (uniform blocks, transform feedback, instanced
+           and integer arrays, primitive restart, sync objects, a sampler,
+           indirect draws, a compute shader, a blit).
+      gl3: OpenGL 3.0/3.1. Linux's Mesa on the Pi gives OpenGL 3.1
+           without the compatibility profile (2.1 with it), so this part
+           should say "compatibility profile: no".
+    Compare it with GL3LinuxResults: the lines after each part's version
+    lines should be the same, pictures included.
+ 5. Double-click ES (as kit 13). ESResults has two parts:
       es1: OpenGL ES 1.1 (fixed-point matrices and arrays, lighting, the
            point size array, a vertex array object, a mapped buffer, an
            ETC1 texture). Linux's Mesa has no GLES 1.1, so RISC3D draws it
@@ -36,9 +44,9 @@ Steps
            program binaries).
     Compare its es2 part with ESLinuxResults: the lines after the
     version should be the same, picture included.
- 5. Cube, Test, GL and Overlay as before (check nothing went backwards).
+ 6. Cube, Test, GL and Overlay as before (check nothing went backwards).
 
 Please send
 -----------
-ESResults, ESLinuxResults, ESes1 and ESes2 (pictures), and the output of
-step 3. If anything stops, /riscos/3d/log.txt (the helper's log).
+GL3Results and GL3LinuxResults, ESResults and ESLinuxResults, and the
+output of step 3 (a photo is fine). If anything stops, /riscos/3d/log.txt (the helper's log).

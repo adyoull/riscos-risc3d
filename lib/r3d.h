@@ -35,6 +35,12 @@ struct r3d_context *r3d_create (void);	/* GLES 2. 0: see r3d_error */
 
 struct r3d_context *r3d_create_gl (void); /* OpenGL (compatibility profile). 0: see r3d_error */
 struct r3d_context *r3d_create_es1 (void); /* OpenGL ES 1.1 (from RISC3D 0.4). 0: see r3d_error */
+/* (from RISC3D 0.5) a context of at least this version: R3D_API_GL up to
+   3.1 (compatibility), R3D_API_GLES2 for GLES 2.0 to 3.1. The context
+   gives the highest version both the stream and the renderer have
+   (glGetString (GL_VERSION) says which); 0 if that is lower than asked:
+   see r3d_error. */
+struct r3d_context *r3d_create_version (int api, int major, int minor);
 void r3d_make_current (struct r3d_context *);
 void r3d_destroy (struct r3d_context *);
 

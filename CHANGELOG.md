@@ -1,5 +1,88 @@
 # Changelog
 
+## 0.5: OpenGL 3.0/3.1 and GLES 3.0/3.1; kit 14 (13 Nov 2026, in testing)
+
+Step 2 of 3 of full coverage (`claude/risc3d-full-coverage-plan.md`).
+
+- **gen.py:** OpenGL 3.0 and 3.1's functions, GLES 3.0 and 3.1's, and
+  those of every extension in riscos-mesa's GL 2.1 list but
+  EXT_direct_state_access (step 3), after the earlier ones (opcodes
+  unchanged). 989 functions (134 by hand), 467 other names.
+  - A new way to travel, "mixed": arrays in and out together, answers
+    of any length (names, logs, resource queries). Strings arrays go as
+    a count then each string (`r3d_strs`, `unpack_strs`); GLintptr and
+    GLsizeiptr arrays as words, widened at the other end; 64-bit
+    arguments as two words. Lengths gl.xml gives as COMPSIZE of
+    something other than pname are in its `LEN` table; a GLchar name's
+    is its length.
+  - Parameters named like the generated code's own variables (`a`,
+    `r`...) get a `_`.
+  - r3d_exts.h also has 0.4's lists (`r3d_exts_gl_04`,
+    `r3d_exts_gles2_04`): the library offers those when rol-3d is older
+    than 0.5, whose functions stop there.
+- **Versions.** OP_CONTEXT carries the version asked for (word 1);
+  rol-3d answers with its context's (word 2). The library gives the lower
+  of that and what the stream carries: OpenGL up to 3.1, GLES up to 3.1
+  (2.0 where GLES runs on desktop OpenGL), GLES 1.1. GL_VERSION, the GLSL
+  version (1.40, "OpenGL ES GLSL ES 3.10"...), GL_MAJOR_VERSION and
+  GL_MINOR_VERSION follow it. `r3d_create_version (api, major, minor)`
+  fails, with the renderer's version in r3d_error, if that is lower.
+- **OpenGL 3.1 without the compatibility profile.** Mesa's v3d gives 2.1
+  with it and 3.1 without. rol-3d makes the compatibility context first,
+  and a 3.1 one (EGL_CONTEXT_MAJOR/MINOR_VERSION) if that is too old for
+  what was asked. In such a context:
+  - glGenBuffers and glGenTextures ask the renderer for its names (one
+    wait), as it takes no others; rol-3d's own buffers and its frame's
+    texture are names it was given too (`priv_name`).
+  - glGetString (GL_EXTENSIONS) gives none (as Mesa); rol-3d joins
+    glGetStringi's for the library's own use.
+- **glGetStringi, GL_NUM_EXTENSIONS:** the library's own list (the
+  carried ones), split.
+- **Sync objects:** a number in the program, rol-3d's GLsync in a table
+  (a RISC OS address can't hold Linux's pointer). glFenceSync needs no
+  wait. glObjectPtrLabel/glGetObjectPtrLabel label them (glObjectLabel's
+  command, identifier R3D_SYNC_LABEL).
+- **Arrays in the program's memory:** glVertexAttribIPointer (integer
+  attributes: OP_CLIENT_ARRAY's word 3 bit 1), glVertexAttribDivisor
+  (an instanced array has one value per that many instances: instanced
+  draws send that many), primitive restart (its index isn't counted when
+  finding the last vertex: glEnable/glDisable and glPrimitiveRestartIndex
+  are noted). Indices in a buffer object are read back on GLES too
+  (OP_READ_BUFFER_RANGE), so arrays in the program's memory are sent
+  there as well.
+- **Indirect draws (GLES 3.1):** from a buffer object, by rol-3d; with
+  arrays in the program's memory, the command is read (back) and drawn
+  as the direct call. GL_DRAW_INDIRECT_BUFFER_BINDING kept.
+- **glGetInteger64v:** the kept state as glGetIntegerv's, the rest asked.
+  Indexed gets (glGetIntegeri_v...) generated.
+- **Pixel formats:** GL_RG, the _INTEGER formats, 10F_11F_11F, 5_9_9_9,
+  FLOAT_32_UNSIGNED_INT_24_8_REV.
+- **glInvalidateFramebuffer/glInvalidateSubFramebuffer** on the
+  program's framebuffer 0 (ours, with other attachment names): not
+  passed on (a hint).
+- **In the library only:** the robustness extension's sized gets
+  (glReadnPixels... as the unsized ones), EXT_vertex_array's pointer
+  functions, IBM_multimode_draw_arrays, glGetProgramStringARB (its
+  length asked first).
+- **gl3test** (`demo/gl3`): GLES 3.0/3.1 (uniform block queries and
+  drawing, transform feedback captured and read back, instanced arrays and
+  integer attributes from the program's memory, primitive restart, sync
+  objects with a label, a sampler object and an RG texture, indirect
+  draws, a compute shader with a storage buffer and its resource queries,
+  a blit) and OpenGL 3.0/3.1 (fixed function where there is the
+  compatibility profile, GLSL 1.40 with a texture buffer, an output's
+  location, an unsigned uniform, primitive restart with the program's
+  index, per-buffer masks, conditional rendering, a fence). On the build
+  machine: every line as Mesa directly, both pictures; also with rol-3d
+  forced to 3.1 without the compatibility profile (as the Pi), against Mesa
+  directly with a 3.1 context.
+- **Old and new together (build machine):** 0.4's library with rol-3d
+  0.5, and 0.5's library with rol-3d 0.4: r3dtest, gl1test and estest as
+  0.4's, pictures included (0.5's library with 0.4's helper offers 0.4's
+  extensions and versions).
+- rol-3d 0.5. Kit 14 (`RISC3DTest-14.zip`) with riscos-risc3d 0.5-1:
+  GL3 (gl3test both) and linux-tests running gl3test-linux.
+
 ## 0.4: OpenGL ES 1.1, and GLES 2's extensions; kit 13 (12-13 Nov 2026)
 
 - **Kit 13 on the owner's Pi 4 (13 Nov):** GLES 2 part through RISC3D =

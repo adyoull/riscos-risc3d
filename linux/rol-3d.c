@@ -59,17 +59,18 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
-#define ROL3D_VERSION "0.4"
+#define ROL3D_VERSION "0.5"
 #define GLDIR "/opt/riscos/gl"		/* a private Mesa, if the image has one */
 
 /* The helper's own textures and buffers have names the program's never
    reach: the library gives the program names from 1 up (lib/r3d_gl.c). */
 #define PRIV 0x7fff0000u
-#define PRIV_FB_TEX (PRIV + 0)
-#define PRIV_ARRAY(i) (PRIV + 16 + (i))		/* generic attributes 0..15 */
-#define PRIV_ELEMENTS (PRIV + 40)
-#define PRIV_FIXED(i) (PRIV + 48 + (i))		/* fixed-function arrays 0..15 */
-#define PRIV_IMMEDIATE (PRIV + 64)
+#define PRIV_FB_TEX priv_name (0)		/* (a texture; the rest are buffers) */
+#define PRIV_ARRAY(i) priv_name (16 + (i))	/* generic attributes 0..15 */
+#define PRIV_ELEMENTS priv_name (40)
+#define PRIV_FIXED(i) priv_name (48 + (i))	/* fixed-function arrays 0..15 */
+#define PRIV_IMMEDIATE priv_name (64)
+static GLuint priv_name (unsigned k);
 
 static struct r3d_area *area;
 static uint32_t *ring;
@@ -130,6 +131,41 @@ scratch (size_t n)
 
 static float r3d_u2f (uint32_t u) { union { uint32_t u; float f; } v = { u }; return v.f; }
 static double r3d_w2d (const uint32_t *w) { double d; memcpy (&d, w, 8); return d; }
+static uint64_t r3d_w2_64 (const uint32_t *w) { uint64_t v; memcpy (&v, w, 8); return v; }
+
+/* strings from the stream (lib/r3d_gl.c: r3d_strs): [count], then each
+   one's length and bytes; an array of copies ending in a null */
+static char **
+unpack_strs (const char *d)
+{
+  uint32_t n;
+  memcpy (&n, d, 4);
+  if (n > 65536)
+    return 0;
+  char **v = calloc (n + 1, sizeof *v);
+  const char *p = d + 4;
+  for (uint32_t i = 0; v && i < n; i++)
+    {
+      uint32_t l;
+      memcpy (&l, p, 4);
+      v[i] = malloc (l + 1);
+      if (v[i])
+	{
+	  memcpy (v[i], p + 4, l);
+	  v[i][l] = 0;
+	}
+      p += 4 + (l + 3) / 4 * 4;
+    }
+  return v;
+}
+
+static void
+free_strs (char **v)
+{
+  for (size_t i = 0; v && v[i]; i++)
+    free (v[i]);
+  free (v);
+}
 
 /* answers whose length only the driver knows: fill with a mark first,
    and count what it wrote over */
@@ -159,6 +195,25 @@ sentinel_count (const uint32_t *r, size_t n, int size)
 }
 
 #include "server_gen.c"
+
+/* OpenGL 3.1 without the compatibility profile: names it gave only (ours
+   from it too, and the program's: lib/r3d_gl.c, gen_core) */
+static int strict_ctx;
+static GLuint
+priv_name (unsigned k)
+{
+  static GLuint have[128];
+  if (!strict_ctx || k >= 128)
+    return PRIV + k;
+  if (!have[k])
+    {
+      if (k == 0)
+	gl.GenTextures (1, &have[k]);
+      else
+	gl.GenBuffers (1, &have[k]);
+    }
+  return have[k];
+}
 #include "es1_conversion.c"
 #include "es1.c"
 
@@ -276,6 +331,11 @@ software_display (void)
   return 1;
 }
 
+/* OpenGL above its compatibility profile's version: (0.5 on) a context
+   of that version, for a program that asks for it (Mesa's v3d: 2.1
+   compatibility, 3.1 without) */
+static int want_version;
+
 static EGLContext
 make_on (EGLDisplay d, int desktop)
 {
@@ -287,7 +347,29 @@ make_on (EGLDisplay d, int desktop)
   EGLContext c = 0;
   egl.BindAPI (desktop ? EGL_OPENGL_API : EGL_OPENGL_ES_API);
   if (egl.ChooseConfig (d, desktop ? want_gl : want_es, &cfg, 1, &n) && n >= 1)
-    c = egl.CreateContext (d, cfg, 0, desktop ? 0 : ver);
+    {
+      if (desktop && want_version > 21)
+	{
+	  /* EGL_CONTEXT_MAJOR_VERSION, EGL_CONTEXT_MINOR_VERSION: tried
+	     after the compatibility profile, if that is too old */
+	  c = egl.CreateContext (d, cfg, 0, 0);
+	  if (c && egl.MakeCurrent (d, 0, 0, c))
+	    {
+	      const char *(*gs) (GLenum) = (const char *(*) (GLenum)) egl.GetProcAddress ("glGetString");
+	      const char *v = gs ? gs (GL_VERSION) : 0;
+	      int ma = 0, mi = 0;
+	      if (v && sscanf (v, "%d.%d", &ma, &mi) == 2 && ma * 10 + mi >= want_version)
+		return c;
+	      egl.MakeCurrent (d, 0, 0, 0);
+	    }
+	  if (c)
+	    egl.DestroyContext (d, c);
+	  const EGLint vv[] = { 0x3098, want_version / 10, 0x30FB, want_version % 10, EGL_NONE };
+	  c = egl.CreateContext (d, cfg, 0, vv);
+	}
+      else
+	c = egl.CreateContext (d, cfg, 0, desktop ? 0 : ver);
+    }
   if (c && !egl.MakeCurrent (d, 0, 0, c))
     {
       egl.DestroyContext (d, c);
@@ -355,6 +437,9 @@ make_context (int desktop)
     return 0;
   if (es1)
     es1_install ();
+  strict_ctx = desktop_gl && !gl.GetString (GL_EXTENSIONS);
+  if (strict_ctx)
+    gl.GetError ();
   /* the pack and unpack settings past alignment: OpenGL, and GLES 3 */
   const char *v = (const char *) gl.GetString (GL_VERSION);
   pack_ext = desktop_gl || (v && strstr (v, "OpenGL ES ") && v[10] >= '3');
@@ -1074,23 +1159,106 @@ debug_log (uint32_t count, uint32_t bufsize)
   area->reply_len = (uint32_t) used * 4;
 }
 
+/* the context's version: major * 10 + minor */
+static uint32_t
+context_version (void)
+{
+  const char *v = (const char *) gl.GetString (GL_VERSION);
+  int major = 0, minor = 0;
+  if (!v)
+    return 0;
+  if (!strncmp (v, "OpenGL ES ", 10))
+    v += 10;
+  if (sscanf (v, "%d.%d", &major, &minor) != 2)
+    return 0;
+  return (uint32_t) (major * 10 + minor);
+}
+
+/* sync objects: the program's numbers for Linux's pointers */
+static GLsync *syncs;
+static uint32_t nsyncs;
+
+static GLsync
+sync_of (uint32_t id)
+{
+  return id < nsyncs ? syncs[id] : 0;
+}
+
+static void
+sync_ops (uint32_t op, const uint32_t *a)
+{
+  uint32_t r = 0;
+  switch (op)
+    {
+    case OP_glFenceSync:
+      if (a[0] >= nsyncs)
+	{
+	  uint32_t n = a[0] + 64;
+	  GLsync *s = realloc (syncs, n * sizeof *s);
+	  if (!s)
+	    return;
+	  memset (s + nsyncs, 0, (n - nsyncs) * sizeof *s);
+	  syncs = s;
+	  nsyncs = n;
+	}
+      if (gl.FenceSync)
+	syncs[a[0]] = gl.FenceSync (a[1], a[2]);
+      return;
+    case OP_glDeleteSync:
+      if (sync_of (a[0]) && gl.DeleteSync)
+	gl.DeleteSync (syncs[a[0]]);
+      if (a[0] < nsyncs)
+	syncs[a[0]] = 0;
+      return;
+    case OP_glWaitSync:
+      if (sync_of (a[0]) && gl.WaitSync)
+	gl.WaitSync (syncs[a[0]], a[1], r3d_w2_64 (a + 2));
+      return;
+    case OP_glIsSync:
+      r = sync_of (a[0]) && gl.IsSync ? gl.IsSync (syncs[a[0]]) : 0;
+      break;
+    case OP_glClientWaitSync:
+      r = sync_of (a[0]) && gl.ClientWaitSync ? gl.ClientWaitSync (syncs[a[0]], a[1], r3d_w2_64 (a + 2)) : GL_WAIT_FAILED;
+      break;
+    case OP_glGetSynciv:
+      {
+	uint32_t w[65];
+	GLsizei l = 0;
+	memset (w, 0, sizeof w);
+	if (sync_of (a[0]) && gl.GetSynciv)
+	  gl.GetSynciv (syncs[a[0]], a[1], (GLsizei) (a[2] > 64 ? 64 : a[2]), &l, (GLint *) (w + 1));
+	w[0] = (uint32_t) l;
+	reply (w, sizeof w);
+	return;
+      }
+    }
+  reply (&r, 4);
+}
+
 static void
 dispatch (uint32_t op, const uint32_t *a, uint32_t n)
 {
   if (__builtin_expect (!have_context, 0))
     {
       int desktop = op == OP_CONTEXT ? (int) a[0] : 0;
+      /* (0.5 on: the version asked for, major * 10 + minor) */
+      want_version = op == OP_CONTEXT && n >= 2 ? (int) a[1] : 0;
       int ok = make_context (desktop);
       if (op == OP_CONTEXT)
 	{
+	  if (ok)
+	    {
+	      /* (0.5 on: and the version, major * 10 + minor) */
+	      uint32_t w[3] = { 1, (uint32_t) desktop_gl, context_version () };
+	      reply (w, 12);
+	      return;
+	    }
 	  char r[8 + sizeof gl_error];
-	  uint32_t w[2] = { (uint32_t) ok, (uint32_t) desktop_gl };
+	  uint32_t w[2] = { 0, (uint32_t) desktop_gl };
 	  memcpy (r, w, 8);
-	  strcpy (r + 8, ok ? "" : gl_error);
+	  strcpy (r + 8, gl_error);
 	  reply (r, 8 + strlen (r + 8) + 1);
-	  if (!ok)
-	    _exit (1);
-	  return;
+	  _exit (1);
 	}
       if (!ok)
 	{
@@ -1101,10 +1269,14 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
     }
   else if (op == OP_CONTEXT)
     {
-      uint32_t w[2] = { 1, (uint32_t) desktop_gl };
-      reply (w, 8);
+      uint32_t w[3] = { 1, (uint32_t) desktop_gl, context_version () };
+      reply (w, 12);
       return;
     }
+  /* GLES 3's hints on our framebuffer (the program's framebuffer 0): not
+     passed on, as its attachments have other names */
+  if (__builtin_expect (op == OP_glInvalidateFramebuffer || op == OP_glInvalidateSubFramebuffer, 0) && !app_fb)
+    return;
   /* the generated ones that need a word from us first */
   if (__builtin_expect (op == OP_glDrawBuffer || op == OP_glReadBuffer, 0))
     {
@@ -1237,6 +1409,30 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
       {
 	const char *s = (const char *) gl.GetString (a[0]);
 	char b[2048];
+	if (!s && a[0] == GL_EXTENSIONS && gl.GetStringi)
+	  {
+	    /* (OpenGL 3.1 and on without the compatibility profile: one at
+	       a time, joined) */
+	    GLint ne = 0;
+	    gl.GetIntegerv (GL_NUM_EXTENSIONS, &ne);
+	    size_t at = 0;
+	    char *j = scratch (65536);
+	    for (GLint i = 0; i < ne; i++)
+	      {
+		const char *x = (const char *) gl.GetStringi (GL_EXTENSIONS, (GLuint) i);
+		size_t l = x ? strlen (x) : 0;
+		if (!l || at + l + 2 > 65536)
+		  continue;
+		if (at)
+		  j[at++] = ' ';
+		memcpy (j + at, x, l);
+		at += l;
+	      }
+	    j[at] = 0;
+	    gl.GetError ();
+	    reply (j, at + 1);
+	    break;
+	  }
 	if (a[0] == GL_RENDERER && s)
 	  {
 	    /* (a render node can be a software renderer's too: virtio's) */
@@ -1477,7 +1673,10 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
 	gl.GetIntegerv (GL_ARRAY_BUFFER_BINDING, &was);
 	gl.BindBuffer (GL_ARRAY_BUFFER, PRIV_ARRAY (a[0]));
 	gl.BufferData (GL_ARRAY_BUFFER, (GLsizeiptr) a[5], a + 6, GL_STREAM_DRAW);
-	gl.VertexAttribPointer (a[0], (GLint) a[1], a[2], (GLboolean) a[3], (GLsizei) a[4], 0);
+	if ((a[3] & 2) && gl.VertexAttribIPointer)
+	  gl.VertexAttribIPointer (a[0], (GLint) a[1], a[2], (GLsizei) a[4], 0);
+	else
+	  gl.VertexAttribPointer (a[0], (GLint) a[1], a[2], (GLboolean) (a[3] & 1), (GLsizei) a[4], 0);
 	gl.BindBuffer (GL_ARRAY_BUFFER, (GLuint) was);
 	break;
       }
@@ -1626,6 +1825,12 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
 	gl.PushDebugGroup (a[0], a[1], (GLsizei) a[2], (const GLchar *) (a + 3));
       break;
     case OP_glObjectLabel:
+      if (a[0] == R3D_SYNC_LABEL)
+	{
+	  if (sync_of (a[1]) && gl.ObjectPtrLabel)
+	    gl.ObjectPtrLabel (syncs[a[1]], a[2] == 0xFFFFFFFF ? 0 : (GLsizei) a[2], a[2] == 0xFFFFFFFF ? 0 : (const GLchar *) (a + 3));
+	  break;
+	}
       if (gl.ObjectLabel)
 	gl.ObjectLabel (a[0], a[1], a[2] == 0xFFFFFFFF ? 0 : (GLsizei) a[2], a[2] == 0xFFFFFFFF ? 0 : (const GLchar *) (a + 3));
       break;
@@ -1634,7 +1839,12 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
 	uint32_t max = a[2] > 65536 ? 65536 : a[2];
 	uint32_t *r = scratch (max + 8);
 	GLsizei l = 0;
-	if (gl.GetObjectLabel)
+	if (a[0] == R3D_SYNC_LABEL)
+	  {
+	    if (sync_of (a[1]) && gl.GetObjectPtrLabel)
+	      gl.GetObjectPtrLabel (syncs[a[1]], (GLsizei) max, &l, (GLchar *) (r + 1));
+	  }
+	else if (gl.GetObjectLabel)
 	  gl.GetObjectLabel (a[0], a[1], (GLsizei) max, &l, (GLchar *) (r + 1));
 	r[0] = (uint32_t) l;
 	reply (r, (size_t) l + 4);
@@ -1646,6 +1856,54 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
     case OP_glDebugMessageCallback:
       debug_callback (a[0]);
       break;
+    /* OpenGL 3 / GLES 3 */
+    case OP_glGenBuffers:
+    case OP_glGenTextures:
+      {
+	/* (OpenGL 3.1 without the compatibility profile: names of its own) */
+	uint32_t cnt = a[0] > 65536 ? 65536 : a[0];
+	GLuint *r = scratch (cnt * 4);
+	if (op == OP_glGenBuffers && gl.GenBuffers)
+	  gl.GenBuffers ((GLsizei) cnt, r);
+	else if (op == OP_glGenTextures && gl.GenTextures)
+	  gl.GenTextures ((GLsizei) cnt, r);
+	reply (r, cnt * 4);
+	break;
+      }
+    case OP_glFenceSync: case OP_glDeleteSync: case OP_glWaitSync:
+    case OP_glIsSync: case OP_glClientWaitSync: case OP_glGetSynciv:
+      sync_ops (op, a);
+      break;
+    case OP_glGetInteger64v:
+      {
+	GLint64 r[64];
+	memset (r, 0, sizeof r);
+	if (gl.GetInteger64v)
+	  gl.GetInteger64v (a[0], r);
+	reply (r, sizeof r);
+	break;
+      }
+    case OP_glVertexAttribIPointer:
+      if (gl.VertexAttribIPointer)
+	gl.VertexAttribIPointer (a[0], (GLint) a[1], a[2], (GLsizei) a[3], (const void *) (uintptr_t) a[4]);
+      break;
+    case OP_glDrawArraysIndirect:
+      if (gl.DrawArraysIndirect)
+	gl.DrawArraysIndirect (a[0], (const void *) (uintptr_t) a[1]);
+      break;
+    case OP_glDrawElementsIndirect:
+      if (gl.DrawElementsIndirect)
+	gl.DrawElementsIndirect (a[0], a[1], (const void *) (uintptr_t) a[2]);
+      break;
+    case OP_glGetProgramStringARB:
+      {
+	uint32_t bytes = a[2] > area->reply_bytes ? area->reply_bytes : a[2];
+	void *r = scratch (bytes);
+	if (gl.GetProgramStringARB)
+	  gl.GetProgramStringARB (a[0], a[1], r);
+	reply (r, bytes);
+	break;
+      }
     case OP_DRAW_ELEMENTS_INLINE:
       gl.BindBuffer (GL_ELEMENT_ARRAY_BUFFER, PRIV_ELEMENTS);
       gl.BufferData (GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr) a[3], a + 4, GL_STREAM_DRAW);

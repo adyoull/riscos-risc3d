@@ -1,3 +1,14 @@
+riscos-risc3d (0.5-1) rol; urgency=medium
+
+  * RISC3D 0.5: OpenGL 3.0/3.1 and OpenGL ES 3.0/3.1 (uniform blocks,
+    transform feedback, sync objects, instanced arrays, integer
+    attributes, sampler objects, indirect draws, compute shaders), and
+    the rest of the extensions riscos-mesa offers in OpenGL 2.1. Where
+    the driver's compatibility profile stops at 2.1 (Mesa's v3d), a
+    program that asks for OpenGL 3.1 gets 3.1 without it.
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Fri, 13 Nov 2026 09:00:00 +0000
+
 riscos-risc3d (0.4-1) rol; urgency=medium
 
   * RISC3D 0.4: OpenGL ES 1.1 (on desktop OpenGL: Debian's Mesa has no

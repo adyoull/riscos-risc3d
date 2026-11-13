@@ -53,12 +53,16 @@ ${T}strip out/obj/gl1test.elf
 ${T}gcc $AC $I -static -o out/obj/estest.elf demo/es/estest.c out/libRISC3D.a -lm
 ${T}strip out/obj/estest.elf
 "${RISCOS_TOOLCHAIN}/bin/elf2aif" -e out/obj/estest.elf "out/estest,ff8" >/dev/null
+${T}gcc $AC $I -static -o out/obj/gl3test.elf demo/gl3/gl3test.c out/libRISC3D.a -lm
+${T}strip out/obj/gl3test.elf
+"${RISCOS_TOOLCHAIN}/bin/elf2aif" -e out/obj/gl3test.elf "out/gl3test,ff8" >/dev/null
 
 aarch64-linux-gnu-gcc -O2 -Wall -Wextra $I -o out/rol-3d linux/rol-3d.c -ldl
 gcc -O2 -Wall -Wextra $I -o out/rol-3d-host linux/rol-3d.c -ldl
 gcc -O2 -Wall -DR3D_HOST -Itest/host $I -Idemo/test -o out/r3dtest-host demo/test/r3dtest.c lib/r3d_gl.c -lm
 gcc -O2 -Wall -DR3D_HOST -Itest/host $I -o out/gl1test-host demo/gl1/gl1test.c lib/r3d_gl.c -lm
 gcc -O2 -Wall -DR3D_HOST -Itest/host $I -o out/estest-host demo/es/estest.c lib/r3d_gl.c -lm
+gcc -O2 -Wall -DR3D_HOST -Itest/host $I -o out/gl3test-host demo/gl3/gl3test.c lib/r3d_gl.c -lm
 # the direct builds: Linux's libGL and libEGL, linked through stand-ins
 # with their names (no -dev packages, nor 64-bit ARM libraries, needed)
 direct () {				# compiler, output
@@ -72,24 +76,26 @@ direct () {				# compiler, output
 }
 direct gcc out/gl1test-direct
 direct aarch64-linux-gnu-gcc out/gl1test-linux
-# estest finds Mesa's functions through eglGetProcAddress: only EGL
-direct_es () {				# compiler, output
-  local cc=$1 o=$2 d=out/obj/stub-$(basename "$2")
+# estest and gl3test find Mesa's functions through eglGetProcAddress: only EGL
+direct_es () {				# compiler, output, source
+  local cc=$1 o=$2 src=${3:-demo/es/estest.c} d=out/obj/stub-$(basename "$2")
   mkdir -p "$d"
-  $cc -O2 -Wall -DDIRECT $I -c -o "$d/estest.o" demo/es/estest.c
-  $cc -shared -fPIC -Wl,-soname,libEGL.so.1 -o "$d/libEGL.so" -x c - <<<"$(nm -u "$d/estest.o" | awk '$2 ~ "^egl[A-Z]" {print "void " $2 " (void) {}"}')"
-  $cc -o "$o" "$d/estest.o" -L"$d" -lEGL
+  $cc -O2 -Wall -DDIRECT $I -c -o "$d/test.o" "$src"
+  $cc -shared -fPIC -Wl,-soname,libEGL.so.1 -o "$d/libEGL.so" -x c - <<<"$(nm -u "$d/test.o" | awk '$2 ~ "^egl[A-Z]" {print "void " $2 " (void) {}"}')"
+  $cc -o "$o" "$d/test.o" -L"$d" -lEGL
 }
 direct_es gcc out/estest-direct
 direct_es aarch64-linux-gnu-gcc out/estest-linux
+direct_es gcc out/gl3test-direct demo/gl3/gl3test.c
+direct_es aarch64-linux-gnu-gcc out/gl3test-linux demo/gl3/gl3test.c
 ls -la out/modules out/libRISC3D.a "out/r3dtest,ff8" "out/gl1test,ff8" out/rol-3d
 
 # the package (the kit carries it)
 tools/mkdeb.sh >/dev/null
 
 # the Pi test kit: a zip for RISC OS, with file types
-python3 tools/mkkit.py out/RISC3DTest-13.zip RISC3DTest "kit/!ReadMe,fff" kit/Cube,feb kit/Test,feb \
-  kit/GL,feb kit/ES,feb kit/Overlay,feb kit/linux-tests,fff "out/r3dcube,ff8" \
-  "out/r3dtest,ff8" "out/gl1test,ff8" "out/estest,ff8" out/gl1test-linux out/estest-linux \
-  "out/riscos-risc3d_0.4-1_arm64.deb"
+python3 tools/mkkit.py out/RISC3DTest-14.zip RISC3DTest "kit/!ReadMe,fff" kit/Cube,feb kit/Test,feb \
+  kit/GL,feb kit/ES,feb kit/GL3,feb kit/Overlay,feb kit/linux-tests,fff "out/r3dcube,ff8" \
+  "out/r3dtest,ff8" "out/gl1test,ff8" "out/estest,ff8" "out/gl3test,ff8" out/gl1test-linux \
+  out/estest-linux out/gl3test-linux "out/riscos-risc3d_0.5-1_arm64.deb"
 

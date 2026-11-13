@@ -43,6 +43,9 @@ for c in reg.find('commands'):
         n = q.find('name').text
         t = ''.join(q.itertext())
         t = t[:t.rfind(n)].strip()
+        # (the generated code's own names)
+        if n in ('a', 'f', 'g', 'd', 'at', 'all', 'room', 'got', 'v', 'k', 'rv', 'rn', 'rb', 'o'):
+            n += '_'
         params.append((t, n, q.get('len')))
     al = c.find('alias')
     commands[name] = (ret, params, al.get('name') if al is not None else None)
@@ -163,6 +166,42 @@ for listname, api in (('riscos-mesa-20.3.5-es11-extensions.txt', 'gles1'),
                     aliases.append((n, t))
                     have_alias.add(n)
 
+# --- step 2: OpenGL 3.0 and 3.1, OpenGL ES 3.0 and 3.1, and the GL 2.1
+# extensions riscos-mesa has (not GL_EXT_direct_state_access: step 3).
+# Added after the others, so the numbers above stay as they were.
+def take_cmds(req, api=None):
+    for en in req.findall('enum'):
+        if en.get('name') not in seen_e:
+            seen_e.add(en.get('name'))
+            enums_wanted.append(en.get('name'))
+    for c in req.findall('command'):
+        n = c.get('name')
+        if n in seen or n in have_alias:
+            continue
+        t = canonical(n)
+        if t not in seen:
+            seen.add(t)
+            want.append(t)
+        if t != n:
+            aliases.append((n, t))
+            have_alias.add(n)
+
+STEP2 = len(want)
+for f in reg.findall('feature'):
+    api, num = f.get('api'), float(f.get('number'))
+    if (api == 'gl' and 2.1 < num <= 3.1) or (api == 'gles2' and 2.0 < num <= 3.1):
+        for req in f.findall('require'):
+            take_cmds(req)
+STEP3 = {'GL_EXT_direct_state_access'}
+for x in surface_list('riscos-mesa-20.3.5-gl21-extensions.txt'):
+    e = ext.get(x)
+    if e is None or x in STEP3:
+        continue
+    for req in e.findall('require'):
+        if req.get('api') and req.get('api') != 'gl':
+            continue
+        take_cmds(req)
+
 # --- how each function travels -------------------------------------------
 
 HAND = {
@@ -203,6 +242,18 @@ HAND = {
     'glDebugMessageInsert', 'glDebugMessageCallback', 'glGetDebugMessageLog',
     'glPushDebugGroup', 'glObjectLabel', 'glGetObjectLabel', 'glObjectPtrLabel',
     'glGetObjectPtrLabel', 'glGetProgramBinary',
+    # step 2 (OpenGL 3.0/3.1, GLES 3.0/3.1, GL 2.1's extensions)
+    'glGetStringi', 'glGetInteger64v', 'glVertexAttribIPointer',
+    'glFenceSync', 'glIsSync', 'glDeleteSync', 'glClientWaitSync', 'glWaitSync', 'glGetSynciv',
+    'glDrawArraysIndirect', 'glDrawElementsIndirect',
+    # (in the library only: the same as a function carried already)
+    'glReadnPixels', 'glGetnTexImage', 'glGetnCompressedTexImage', 'glGetnPolygonStipple',
+    'glGetnUniformfv', 'glGetnUniformiv', 'glGetnUniformuiv', 'glGetnUniformdv',
+    'glGetnMapdv', 'glGetnMapfv', 'glGetnMapiv',
+    'glGetnPixelMapfv', 'glGetnPixelMapuiv', 'glGetnPixelMapusv',
+    'glColorPointerEXT', 'glEdgeFlagPointerEXT', 'glIndexPointerEXT', 'glNormalPointerEXT',
+    'glTexCoordPointerEXT', 'glVertexPointerEXT',
+    'glMultiModeDrawArraysIBM', 'glMultiModeDrawElementsIBM', 'glGetProgramStringARB',
 }
 # the library notes these before sending them (lib/r3d_gl.c: r3d_track_*)
 TRACK = {
@@ -218,9 +269,13 @@ TRACK = {
     # GLES 1.1's matrices, and vertex array objects (the arrays' state)
     'glOrthof', 'glFrustumf', 'glOrthox', 'glFrustumx', 'glLoadMatrixx', 'glMultMatrixx',
     'glRotatex', 'glTranslatex', 'glScalex', 'glBindVertexArray', 'glDeleteVertexArrays',
+    # step 2: instanced arrays' divisors, primitive restart (the indices
+    # of arrays in the program's memory)
+    'glVertexAttribDivisor', 'glEnable', 'glDisable', 'glPrimitiveRestartIndex',
 }
 # answers whose length only the driver knows: it marks the end
-SENTINEL = {'glGetUniformfv', 'glGetUniformiv', 'glGetMapdv', 'glGetMapfv', 'glGetMapiv'}
+SENTINEL = {'glGetUniformfv', 'glGetUniformiv', 'glGetMapdv', 'glGetMapfv', 'glGetMapiv',
+            'glGetUniformuiv', 'glGetActiveUniformBlockiv'}
 PIXMAP = {'glGetPixelMapfv', 'glGetPixelMapuiv', 'glGetPixelMapusv'}
 
 for n in HAND | TRACK | SENTINEL | PIXMAP:
@@ -230,21 +285,47 @@ for n in HAND | TRACK | SENTINEL | PIXMAP:
 SIZES = {'GLdouble': 8, 'GLclampd': 8, 'GLfloat': 4, 'GLclampf': 4, 'GLint': 4, 'GLuint': 4,
          'GLenum': 4, 'GLsizei': 4, 'GLbitfield': 4, 'GLshort': 2, 'GLushort': 2,
          'GLbyte': 1, 'GLubyte': 1, 'GLboolean': 1, 'GLchar': 1, 'void': 1,
-         'GLfixed': 4, 'GLclampx': 4, 'GLhalfNV': 2, 'GLint64': 8, 'GLuint64': 8}
+         'GLfixed': 4, 'GLclampx': 4, 'GLhalfNV': 2, 'GLint64': 8, 'GLuint64': 8,
+         'GLhandleARB': 4, 'GLcharARB': 1, 'GLintptr': 4, 'GLsizeiptr': 4}
 
 def is_ptr(t): return '*' in t
 def is_const_ptr(t): return is_ptr(t) and t.startswith('const')
 def base(t): return t.replace('const', '').replace('*', '').strip()
 def is_d(t): return t in ('GLdouble', 'GLclampd')
+def is_64(t): return t in ('GLint64', 'GLuint64')
 def is_f(t): return t in ('GLfloat', 'GLclampf')
-def words(t): return 2 if is_d(t) else 1
+def words(t): return 2 if is_d(t) or is_64(t) else 1
+def is_strs(t): return t.replace(' ', '') in ('constGLchar*const*', 'constGLcharARB*const*', 'constGLchar**')
+def is_wide(t): return base(t) in ('GLintptr', 'GLsizeiptr')
+# lengths gl.xml gives as COMPSIZE of something other than pname
+LEN = {
+    ('glGetBooleani_v', 'data'): 'r3d_count (target)',
+    ('glGetIntegeri_v', 'data'): 'r3d_count (target)',
+    ('glGetInteger64i_v', 'data'): 'r3d_count (target)',
+    ('glClearBufferiv', 'value'): '(buffer == GL_COLOR ? 4 : 1)',
+    ('glClearBufferuiv', 'value'): '(buffer == GL_COLOR ? 4 : 1)',
+    ('glClearBufferfv', 'value'): '(buffer == GL_COLOR ? 4 : 1)',
+    ('glGetUniformIndices', 'uniformNames'): 'uniformCount',
+    ('glGetUniformIndices', 'uniformIndices'): 'uniformCount',
+    ('glGetActiveUniformsiv', 'params'): 'uniformCount',
+    ('glClearBufferData', 'data'): 'r3d_texel_bytes (format, type)',
+    ('glClearBufferSubData', 'data'): 'r3d_texel_bytes (format, type)',
+    ('glGetnSeparableFilter', 'span'): '0',
+}
+cur_fn = [None]
 
-def len_expr(l):
+def len_expr(l, fn=None, pn=None, t=None):
+    if (fn, pn) in LEN:
+        return LEN[(fn, pn)]
+    if t is not None and l is not None and 'COMPSIZE' in l and base(t) in ('GLchar', 'GLcharARB') and t.count('*') == 1:
+        return '(strlen (%s) + 1)' % pn
     if l is None:
         raise ValueError
     if re.match(r'^\d+$', l):
         return l
     m = re.match(r'COMPSIZE\((\w+)\)$', l)
+    if m and m.group(1) in ('pname', 'target') and fn in ('glGetBooleani_v', 'glGetIntegeri_v', 'glGetInteger64i_v'):
+        return 'r3d_count (target)'
     if m and m.group(1) == 'pname':
         return 'r3d_count (pname)'
     if 'COMPSIZE' in l:
@@ -255,6 +336,8 @@ def kind(name):
     ret, al, _ = commands[name]
     if name in HAND:
         return 'hand'
+    if 'GLsync' in ret or any(base(t) == 'GLsync' for t, _, _ in al) or is_ptr(ret):
+        raise ValueError
     if name in SENTINEL:
         return 'sentinel'
     if name in PIXMAP:
@@ -262,13 +345,25 @@ def kind(name):
     ptrs = [p for p in al if is_ptr(p[0])]
     if not ptrs:
         return 'auto'
-    if all(is_const_ptr(t) for t, _, _ in ptrs):
+    new = want.index(name) >= STEP2
+    special = any(is_strs(t) or is_wide(t) for t, _, _ in ptrs)
+    if all(is_const_ptr(t) for t, _, _ in ptrs) and not special:
         for t, n, l in ptrs:
-            len_expr(l)
+            len_expr(l, name, n, t)
         return 'in'
-    if len(ptrs) == 1 and al[-1] == ptrs[0] and not is_ptr(ret):
-        len_expr(ptrs[0][2])
+    if len(ptrs) == 1 and al[-1] == ptrs[0] and (not new or ptrs[0][2] is not None and (
+            re.match(r'^\d+$', ptrs[0][2]) or (name, ptrs[0][1]) in LEN or ptrs[0][2] == 'COMPSIZE(pname)')):
+        len_expr(ptrs[0][2], name, ptrs[0][1], ptrs[0][0])
         return 'out'
+    if new:
+        # in and out arrays together, or answers of any length: 'mixed'
+        for t, n, l in ptrs:
+            if is_strs(t):
+                continue
+            if n == 'length' and is_const_ptr(t) and any(is_strs(u) for u, _, _ in ptrs):
+                continue
+            len_expr(l, name, n, t)
+        return 'mixed'
     NORULE.append(name)
     return 'none'
 
@@ -280,7 +375,7 @@ def kind_safe(n):
         NORULE.append(n)
         return 'none'
 kinds = {n: kind_safe(n) for n in want}
-if NORULE:
+if NORULE and not os.environ.get('R3D_LIST_NEW'):
     raise SystemExit('gen.py: no rule for ' + ' '.join(NORULE))
 
 # immediate mode, collected on the RISC OS side between glBegin and glEnd
@@ -365,6 +460,7 @@ typedef khronos_uint64_t GLuint64;
 typedef struct __GLsync *GLsync;
 typedef void (*GLDEBUGPROC) (GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam);
 typedef GLDEBUGPROC GLDEBUGPROCKHR;
+typedef GLDEBUGPROC GLDEBUGPROCARB;
 ''')
     for e in enums_wanted:
         if e in enum_values:
@@ -382,6 +478,7 @@ with open(os.path.join(out, 'r3d_ops.h'), 'w') as f:
     f.write('/* Generated by proto/gen.py from gl.xml: do not edit. */\n')
     f.write('#ifndef R3D_OPS_H\n#define R3D_OPS_H\n')
     f.write('#define R3D_PROTOCOL 2\n')
+    f.write('/* glObjectPtrLabel on a sync object: glObjectLabel with this as identifier */\n#define R3D_SYNC_LABEL 0x7FFF5000u\n')
     f.write('enum {\n  OP_SURFACE = 1, OP_PRESENT, OP_CLIENT_ARRAY, OP_DRAW_ELEMENTS_INLINE,\n'
             '  OP_SYNC, OP_INFO, OP_CONTEXT, OP_FIXED_ARRAY, OP_LIMITS, OP_STATS, OP_IMMEDIATE, OP_PRESENT_SLOT,\n'
             '  OP_OVERLAY, OP_PRESENT_OVERLAY,\n')
@@ -395,6 +492,8 @@ with open(os.path.join(out, 'r3d_ops.h'), 'w') as f:
 # --- both ends ------------------------------------------------------------
 
 def put_scalar(w, t, n):
+    if is_64(t):
+        return '  { %s v_ = %s; memcpy (a + %d, &v_, 8); }\n' % (t, n, w)
     if is_d(t):
         return '  r3d_d2w (a + %d, %s);\n' % (w, n)
     if is_f(t):
@@ -402,6 +501,8 @@ def put_scalar(w, t, n):
     return '  a[%d] = (uint32_t) %s;\n' % (w, n)
 
 def get_scalar(w, t):
+    if is_64(t):
+        return 'r3d_w2_64 (a + %d)' % w
     if is_d(t):
         return 'r3d_w2d (a + %d)' % w
     if is_f(t):
@@ -496,7 +597,7 @@ for name in want:
                 if not is_ptr(t):
                     c.write(put_scalar(pos[n], t, n))
             for i, (t, n, l) in enumerate(ptrs):
-                c.write('  size_t b%d = %s ? (size_t) r3d_nonneg (%s) * %d : 0;\n' % (i, n, len_expr(l), SIZES[base(t)]))
+                c.write('  size_t b%d = %s ? (size_t) r3d_nonneg (%s) * %d : 0;\n' % (i, n, len_expr(l, name, n, t), SIZES[base(t)]))
                 c.write('  f[%d] = (uint32_t) b%d;\n' % (nw + i, i))
             if np_ == 1:
                 c.write('  r3d_put_data (%s, f, %d, %s, b0);\n' % (op, nw + np_, ptrs[0][1]))
@@ -539,7 +640,7 @@ for name in want:
         sargs = ', '.join([get_scalar(pos[n], t) for t, n, _ in sc] + ['(%s) r' % pt])
         if k == 'out':
             c.write('  uint32_t r[64];\n  memset (r, 0, sizeof r);\n  r3d_sync (r, sizeof r);\n')
-            c.write('  size_t cnt = (size_t) r3d_nonneg (%s);\n' % len_expr(pl))
+            c.write('  size_t cnt = (size_t) r3d_nonneg (%s);\n' % len_expr(pl, name, pn, pt))
             c.write('  if (cnt * %d > sizeof r)\n    cnt = sizeof r / %d;\n' % (es, es))
             c.write('  if (%s)\n    memcpy (%s, r, cnt * %d);\n' % (pn, pn, es))
             s.write('    case %s:\n      {\n\tuint32_t r[64];\n\tmemset (r, 0, sizeof r);\n\tif (gl.%s)\n\t  gl.%s (%s);\n\treply (r, sizeof r);\n\treturn 1;\n      }\n' % (
@@ -561,6 +662,113 @@ for name in want:
                 s.write('\tif (gl.%s)\n\t  gl.%s (%s);\n' % (name[2:], name[2:], sargs.replace('(%s) r' % pt, '(%s) (r + 1)' % pt)))
                 s.write('\tr[0] = (uint32_t) size;\n')
             s.write('\treply (r, 4 + r[0] * %d);\n\treturn 1;\n      }\n' % es)
+    elif k == 'mixed':
+        ptrs = [(t, n, l) for t, n, l in al if is_ptr(t)]
+        np_ = len(ptrs)
+        has_strs = any(is_strs(t) for t, _, _ in ptrs)
+        def role(t, n):
+            if is_strs(t):
+                return 'strs'
+            if n == 'length' and has_strs and is_const_ptr(t):
+                return 'skip'
+            if is_const_ptr(t):
+                return 'wide' if is_wide(t) else 'in'
+            return 'out'
+        roles = [role(t, n) for t, n, _ in ptrs]
+        outs = [i for i, r in enumerate(roles) if r == 'out']
+        lenp = next((n for (t, n, _), r in zip(ptrs, roles) if r == 'skip'), None)
+        c.write('  uint32_t f[%d];\n  uint32_t *a = f;\n' % (nw + np_))
+        for t, n, _ in al:
+            if not is_ptr(t):
+                c.write(put_scalar(pos[n], t, n))
+        for i, ((t, n, l), r) in enumerate(zip(ptrs, roles)):
+            if r == 'strs':
+                cnt = len_expr(l, name, n, t) if (name, n) in LEN else l
+                c.write('  size_t b%d = %s ? r3d_strs (0, %s, %s, %s) : 0;\n' % (i, n, n, cnt, lenp or '0'))
+            elif r == 'skip':
+                c.write('  size_t b%d = 0;\n' % i)
+            elif r == 'wide':
+                c.write('  size_t b%d = %s ? (size_t) r3d_nonneg (%s) * 4 : 0;\n' % (i, n, len_expr(l, name, n, t)))
+            else:
+                c.write('  size_t b%d = %s ? (size_t) r3d_nonneg (%s) * %d : 0;\n' % (i, n, len_expr(l, name, n, t), SIZES[base(t)]))
+            c.write('  f[%d] = (uint32_t) b%d;\n' % (nw + i, i))
+        ins = [i for i, r in enumerate(roles) if r in ('in', 'strs', 'wide')]
+        if ins:
+            c.write('  size_t at = 0, all = %s;\n' % ' + '.join('(b%d + 3) / 4 * 4' % i for i in ins))
+            c.write('  char *g = malloc (all + 4);\n  if (!g)\n    return%s;\n' % ret_fail(ret))
+            for i in ins:
+                t, n, l = ptrs[i]
+                c.write('  memset (g + at, 0, (b%d + 3) / 4 * 4);\n' % i)
+                if roles[i] == 'strs':
+                    cnt = len_expr(l, name, n, t) if (name, n) in LEN else l
+                    c.write('  if (b%d)\n    r3d_strs (g + at, %s, %s, %s);\n' % (i, n, cnt, lenp or '0'))
+                elif roles[i] == 'wide':
+                    c.write('  for (size_t k = 0; k < b%d / 4; k++)\n    ((int32_t *) (void *) (g + at))[k] = (int32_t) %s[k];\n' % (i, n))
+                else:
+                    c.write('  if (b%d)\n    memcpy (g + at, %s, b%d);\n' % (i, n, i))
+                c.write('  at += (b%d + 3) / 4 * 4;\n' % i)
+            c.write('  r3d_put_data (OP_%s, f, %d, g, all);\n  free (g);\n' % (name, nw + np_))
+        else:
+            c.write('  r3d_put_data (OP_%s, f, %d, 0, 0);\n' % (name, nw + np_))
+        if outs or ret != 'void':
+            c.write('  size_t room = 4%s;\n' % ''.join(' + 4 + (b%d + 3) / 4 * 4' % i for i in outs))
+            c.write('  uint32_t *r = calloc (1, room);\n  if (!r)\n    return%s;\n' % ret_fail(ret))
+            c.write('  r3d_sync (r, room);\n')
+            if outs:
+                c.write('  const char *d = (const char *) (r + 1);\n  uint32_t got;\n')
+                for i in outs:
+                    t, n, l = ptrs[i]
+                    c.write('  memcpy (&got, d, 4);\n  d += 4;\n')
+                    c.write('  if (%s && got)\n    memcpy (%s, d, got < b%d ? got : b%d);\n' % (n, n, i, i))
+                    c.write('  d += (b%d + 3) / 4 * 4;\n' % i)
+            if ret != 'void':
+                c.write('  %s v = (%s) r[0];\n  free (r);\n  return v;\n' % (ret, ret))
+            else:
+                c.write('  free (r);\n')
+        # the other end
+        s.write('    case OP_%s:\n      {\n' % name)
+        s.write('\tconst char *d = (const char *) (a + %d);\n' % (nw + np_))
+        for i, ((t, n, l), r) in enumerate(zip(ptrs, roles)):
+            w = 'a[%d]' % (nw + i)
+            if r == 'in':
+                s.write('\tconst void *p%d = %s ? d : 0;\n\td += (%s + 3) / 4 * 4;\n' % (i, w, w))
+            elif r == 'strs':
+                s.write('\tchar **p%d = %s ? unpack_strs (d) : 0;\n\td += (%s + 3) / 4 * 4;\n' % (i, w, w))
+            elif r == 'wide':
+                s.write('\t%s *p%d = %s ? malloc (%s / 4 * sizeof *p%d) : 0;\n' % (base(t), i, w, w, i))
+                s.write('\tfor (uint32_t k = 0; p%d && k < %s / 4; k++)\n\t  p%d[k] = ((const int32_t *) (const void *) d)[k];\n' % (i, w, i))
+                s.write('\td += (%s + 3) / 4 * 4;\n' % w)
+            elif r == 'skip':
+                s.write('\tconst void *p%d = 0;\n' % i)
+            else:
+                s.write('\tvoid *p%d = %s ? calloc (1, %s) : 0;\n' % (i, w, w))
+        s.write('\t(void) d;\n')
+        args, pi = [], 0
+        for t, n, _ in al:
+            if is_ptr(t):
+                args.append('(%s) p%d' % (t, pi))
+                pi += 1
+            else:
+                args.append(get_scalar(pos[n], t))
+        call = 'gl.%s (%s)' % (name[2:], ', '.join(args))
+        if ret == 'void':
+            s.write('\tif (gl.%s)\n\t  %s;\n' % (name[2:], call))
+        else:
+            s.write('\tuint32_t rv = gl.%s ? (uint32_t) %s : 0;\n' % (name[2:], call))
+        if outs or ret != 'void':
+            s.write('\tsize_t rn = 4%s;\n' % ''.join(' + 4 + (a[%d] + 3) / 4 * 4' % (nw + i) for i in outs))
+            s.write('\tchar *rb = scratch (rn), *o = rb + 4;\n')
+            s.write('\tmemcpy (rb, &%s, 4);\n' % ('rv' if ret != 'void' else 'rn'))
+            for i in outs:
+                w = 'a[%d]' % (nw + i)
+                s.write('\tmemcpy (o, &%s, 4);\n\tif (p%d)\n\t  memcpy (o + 4, p%d, %s);\n\to += 4 + (%s + 3) / 4 * 4;\n' % (w, i, i, w, w))
+            s.write('\treply (rb, rn);\n')
+        for i, r in enumerate(roles):
+            if r == 'strs':
+                s.write('\tfree_strs (p%d);\n' % i)
+            elif r in ('wide', 'out'):
+                s.write('\tfree (p%d);\n' % i)
+        s.write('\treturn 1;\n      }\n')
     c.write('}\n')
 
 s.write('    }\n  return 0;\n}\n')
@@ -590,7 +798,11 @@ print('%d functions (%d by hand), %d other names for them' % (len(want), len(HAN
 # with no functions (formats, tokens, shader features) are the renderer's
 # to say. GL_OES_EGL_image (and _external): riscos-mesa's EGL gives
 # their functions itself.
-carried = set(want) | {n for n, _ in aliases}
+carried_all = set(want) | {n for n, _ in aliases}
+# (rol-3d before 0.5 has only the functions before step 2: its lists)
+old = set(want[:STEP2])
+carried_old = old | {n for n, t in aliases if t in old}
+carried = carried_all
 KEEP = {'GL_OES_EGL_image', 'GL_OES_EGL_image_external'}
 def ext_ok(e, api):
     if e.get('name') in KEEP:
@@ -609,7 +821,9 @@ with open(os.path.join(out, 'r3d_exts.h'), 'w') as f:
     # (gl.xml lists it for GLES 2 only; riscos-mesa has it in 1.1 too, and
     # rol-3d decodes ETC1 for GLES 1.1 as riscos-mesa does: linux/es1.c)
     ES1_EXTRA = {'GL_EXT_compressed_ETC1_RGB8_sub_texture'}
-    for api, var in (('gl', 'r3d_exts_gl'), ('gles1', 'r3d_exts_gles1'), ('gles2', 'r3d_exts_gles2')):
+    for api, var, carried in (('gl', 'r3d_exts_gl', carried_all), ('gles1', 'r3d_exts_gles1', carried_all),
+                              ('gles2', 'r3d_exts_gles2', carried_all),
+                              ('gl', 'r3d_exts_gl_04', carried_old), ('gles2', 'r3d_exts_gles2_04', carried_old)):
         # GLES 1.1 runs on desktop OpenGL, whose list names other
         # extensions: its list is riscos-mesa's own, those carried
         names = sorted(n for n, e in ext.items()
@@ -622,5 +836,5 @@ with open(os.path.join(out, 'r3d_exts.h'), 'w') as f:
             f.write('  "%s",\n' % n)
         f.write('};\n')
 if os.environ.get('R3D_LIST_NEW'):
-    for n in want[want.index('glAlphaFuncx'):]:
+    for n in want[want.index(os.environ['R3D_LIST_NEW']):]:
         print(kinds[n], commands[n][0], n, [p[0]+' '+p[1]+('['+str(p[2])+']' if p[2] else '') for p in commands[n][1]])

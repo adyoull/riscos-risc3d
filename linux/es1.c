@@ -11,7 +11,7 @@
 
    Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE). */
 
-#define PRIV_ES1(i) (PRIV + 80 + (i))		/* fixed-point arrays as floats */
+#define PRIV_ES1(i) priv_name (80 + (i))		/* fixed-point arrays as floats */
 #define GL_POINT_SIZE_ARRAY_OES 0x8B9C
 #define GL_POINT_SIZE_ARRAY_TYPE_OES 0x898A
 #define GL_POINT_SIZE_ARRAY_STRIDE_OES 0x898B

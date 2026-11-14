@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9, continued: kit 25 tests arrays in buffers on the GPU (14 Nov 2026)
+
+- **Kit 24 on the Pi:** ReplayNoHint-240 is identical to ReplayGPU-240
+  byte for byte, so TORCS's GL_FASTEST hint isn't the cause.
+  ReplayNoMip-240 has sharper scenery, but the car is still plain yellow
+  and the trees are still striped, so mipmaps aren't the main cause either.
+- **What the recording holds:** TORCS draws with client arrays (vertex
+  3 floats, normal 3 floats, texture coordinates 2 floats, stride 8),
+  about 500,000 glDrawElements calls each inside glPushClientAttrib /
+  glPopClientAttrib. The picture looks like texture coordinates read
+  wrongly on V3D. Since 0.9, rol-3d gives these arrays to Mesa as memory.
+  llvmpipe takes them directly, but V3D has Mesa copy them into buffers
+  (u_vbuf), so this is where the two drivers differ.
+- **Kit 25:** riscos-risc3d 0.13-1 unchanged. `replay` writes ReplayGPU,
+  ReplayBuffers (/riscos/3d/uploads = buffers, as 0.8),
+  ReplayBufNoMip and ReplaySoft.
+
 ## 0.9, continued: TORCS drawn wrongly only by the Pi's GPU; kit 24 (14 Nov 2026)
 
 - **TORCS recorded on the Pi (ctx-477.r3d, 3,462,636 commands, 250

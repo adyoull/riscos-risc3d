@@ -1,25 +1,29 @@
 #!/bin/sh
-# RISC3D test kit 25: draw a recording again here, writing the frames
-# asked for as PPM pictures into this folder:
+# RISC3D test kit 26: draw a recording again here, each time with one
+# thing changed, writing the frames asked for as PNG pictures into this
+# folder:
 #   ReplayGPU-<frame>      on the GPU, as the program had it
-#   ReplayBuffers-<frame>  on the GPU, arrays and indices put into buffers
-#                          by rol-3d (as 0.8 did) instead of given to Mesa
-#                          as memory
-#   ReplayBufNoMip-<frame> the same, and without mipmaps
+#   ReplayImm-<frame>      glDrawElements from arrays done as glBegin/glEnd
+#   ReplayNoPush-<frame>   glPush/PopClientAttrib done by rol-3d
+#   ReplayClamp-<frame>    GL_CLAMP as GL_CLAMP_TO_EDGE
+#   ReplaySized-<frame>    old texture formats (3, 4) as GL_RGB8, GL_RGBA8
+#   ReplayNoAlpha-<frame>  no alpha test (trees will have grey boxes)
+#   ReplayAll-<frame>      all of those at once
 #   ReplaySoft-<frame>     in Linux's software renderer
 # Run as root:
 #   sh /riscos/HardDisc4/RISC3DTest/replay /riscos/3d/recorded/ctx-477.r3d 240
 d=$(dirname "$0")
 [ -f "$1" ] || { echo "Give a recording (sh record list shows them)."; exit 1; }
 w=${2:-/50}
-u=/riscos/3d/uploads
-had=; [ -f $u ] && had=$(cat $u)
-/opt/riscos/rol-3d --replay "$1" "$d/ReplayGPU" "$w"
-echo buffers > $u
-/opt/riscos/rol-3d --replay "$1" "$d/ReplayBuffers" "$w"
-ROL3D_REPLAY_NOMIP=1 /opt/riscos/rol-3d --replay "$1" "$d/ReplayBufNoMip" "$w"
-if [ -n "$had" ]; then echo "$had" > $u; else rm -f $u; fi
-ROL3D_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 /opt/riscos/rol-3d --replay "$1" "$d/ReplaySoft" "$w"
-chown 1000:1000 "$d"/Replay*.ppm 2>/dev/null
-for f in "$d"/Replay*.ppm; do [ -e "$f" ] && mv "$f" "${f%.ppm}"; done
+r=/opt/riscos/rol-3d
+rm -f "$d"/Replay*
+$r --replay "$1" "$d/ReplayGPU" "$w"
+ROL3D_REPLAY=imm $r --replay "$1" "$d/ReplayImm" "$w"
+ROL3D_REPLAY=nopush $r --replay "$1" "$d/ReplayNoPush" "$w"
+ROL3D_REPLAY=clamp $r --replay "$1" "$d/ReplayClamp" "$w"
+ROL3D_REPLAY=sized $r --replay "$1" "$d/ReplaySized" "$w"
+ROL3D_REPLAY=noalpha $r --replay "$1" "$d/ReplayNoAlpha" "$w"
+ROL3D_REPLAY=imm,nopush,clamp,sized,noalpha $r --replay "$1" "$d/ReplayAll" "$w"
+ROL3D_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 $r --replay "$1" "$d/ReplaySoft" "$w"
+chown 1000:1000 "$d"/Replay* 2>/dev/null
 ls "$d" | grep Replay

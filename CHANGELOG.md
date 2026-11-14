@@ -1,6 +1,30 @@
 # Changelog
 
-## 0.9, continued: kit 25 tests arrays in buffers on the GPU (14 Nov 2026)
+## 0.9, continued: rol-3d 0.14 replays with one thing changed at a time; kit 26 (14 Nov 2026)
+
+- **Kit 25 withdrawn** (never run). It replayed with arrays in buffers,
+  but the owner had already run TORCS that way in kits 20 and 21, and it
+  was just as wrong. So the memory path isn't the cause.
+- **rol-3d 0.14 (riscos-risc3d 0.14-1):** `--replay` writes PNG
+  (uncompressed, no zlib needed). The owner's PPM uploads had every
+  byte above 127 replaced, so the PNGs avoid that.
+  `ROL3D_REPLAY=` takes a list of changes:
+  - `imm`: glDrawElements from arrays in memory drawn as glBegin/glEnd
+    (unit 0, float arrays).
+  - `nopush`: glPush/PopClientAttrib's array enables kept by rol-3d.
+  - `clamp`: GL_CLAMP as GL_CLAMP_TO_EDGE.
+  - `sized`: internal formats 1-4 and GL_RGB(A)/GL_COMPRESSED_RGB(A) as
+    sized formats.
+  - `noalpha`: alpha test never enabled.
+  - `nomip`, `nohint`: as 0.13.
+
+  Host (llvmpipe): the unchanged replay's PNG is identical to 0.13's
+  picture. `imm` is identical too (500,401 draws done as glBegin/glEnd,
+  none left). `all` differs only where alpha test matters.
+- **Kit 26:** `replay` writes ReplayGPU, Imm, NoPush, Clamp, Sized,
+  NoAlpha, All and Soft.
+
+## 0.9, continued: kit 25 tests arrays in buffers on the GPU (14 Nov 2026; withdrawn, see above)
 
 - **Kit 24 on the Pi:** ReplayNoHint-240 is identical to ReplayGPU-240
   byte for byte, so TORCS's GL_FASTEST hint isn't the cause.

@@ -1,3 +1,14 @@
+riscos-risc3d (0.14-1) rol; urgency=medium
+
+  * rol-3d 0.14: --replay writes PNG pictures, and ROL3D_REPLAY can
+    change the recording as it is drawn (imm: glDrawElements from arrays
+    done as glBegin/glEnd; nopush: glPush/PopClientAttrib done by rol-3d;
+    clamp: GL_CLAMP as GL_CLAMP_TO_EDGE; sized: unsized texture formats
+    as sized ones; noalpha: no alpha test; nomip; nohint), to find what
+    the Pi's GPU driver draws wrongly in TORCS.
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Sat, 14 Nov 2026 16:20:00 +0000
+
 riscos-risc3d (0.13-1) rol; urgency=medium
 
   * rol-3d 0.13: --replay reads every frame back (as the program's were),

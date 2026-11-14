@@ -59,7 +59,7 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
-#define ROL3D_VERSION "0.13"
+#define ROL3D_VERSION "0.14"
 /* what the library may send (OP_CONTEXT's reply, word 3): 6 = 0.6's
    commands (GL_EXT_direct_state_access, OP_TEMP_BIND); 7 = OP_UPLOADS
    (0.8); none: 0.5 */
@@ -2560,8 +2560,205 @@ probe_kind (const gid_t *g)
   close (p[0]);
 }
 
+/* 0.14: replay changes, to find what a driver draws wrongly
+   (ROL3D_REPLAY=imm,nopush,clamp,sized,noalpha,nomip,nohint) */
+static int rp_imm, rp_nopush, rp_clamp, rp_sized, rp_noalpha;
+
+/* an array the program enabled, if it's floats in its memory */
+struct rp_arr { int on; const float *p; GLint size, stride; };
+
+static int
+rp_array (GLenum cap, GLenum psize, GLenum ptype, GLenum pstride, GLenum ppointer,
+	  GLenum pbuffer, GLint fixed_size, struct rp_arr *r)
+{
+  r->on = gl.IsEnabled (cap);
+  if (!r->on)
+    return 1;
+  GLint type = GL_FLOAT, buf = 0, stride = 0, size = fixed_size;
+  if (psize)
+    gl.GetIntegerv (psize, &size);
+  gl.GetIntegerv (ptype, &type);
+  gl.GetIntegerv (pstride, &stride);
+  gl.GetIntegerv (pbuffer, &buf);
+  void *ptr = 0;
+  gl.GetPointerv (ppointer, &ptr);
+  if (type != GL_FLOAT || buf || !ptr)
+    return 0;
+  r->p = ptr;
+  r->size = size;
+  r->stride = stride ? stride / 4 : size;
+  return 1;
+}
+
+/* glDrawElements from arrays in memory, done as glBegin/glEnd instead
+   (texture unit 0 only); 0 if it can't be */
+static int
+rp_draw_immediate (GLenum mode, GLsizei count, GLenum type, const void *idx)
+{
+  struct rp_arr v, n, c, t;
+  GLint cat = GL_TEXTURE0;
+  if (!gl.Begin || !gl.GetPointerv)
+    return 0;
+  gl.GetIntegerv (GL_CLIENT_ACTIVE_TEXTURE, &cat);
+  if (cat != GL_TEXTURE0)
+    return 0;
+  if (!rp_array (GL_VERTEX_ARRAY, GL_VERTEX_ARRAY_SIZE, GL_VERTEX_ARRAY_TYPE, GL_VERTEX_ARRAY_STRIDE,
+		 GL_VERTEX_ARRAY_POINTER, GL_VERTEX_ARRAY_BUFFER_BINDING, 0, &v) || !v.on
+      || !rp_array (GL_NORMAL_ARRAY, 0, GL_NORMAL_ARRAY_TYPE, GL_NORMAL_ARRAY_STRIDE,
+		    GL_NORMAL_ARRAY_POINTER, GL_NORMAL_ARRAY_BUFFER_BINDING, 3, &n)
+      || !rp_array (GL_COLOR_ARRAY, GL_COLOR_ARRAY_SIZE, GL_COLOR_ARRAY_TYPE, GL_COLOR_ARRAY_STRIDE,
+		    GL_COLOR_ARRAY_POINTER, GL_COLOR_ARRAY_BUFFER_BINDING, 0, &c)
+      || !rp_array (GL_TEXTURE_COORD_ARRAY, GL_TEXTURE_COORD_ARRAY_SIZE, GL_TEXTURE_COORD_ARRAY_TYPE,
+		    GL_TEXTURE_COORD_ARRAY_STRIDE, GL_TEXTURE_COORD_ARRAY_POINTER,
+		    GL_TEXTURE_COORD_ARRAY_BUFFER_BINDING, 0, &t))
+    return 0;
+  if (gl.IsEnabled (GL_SECONDARY_COLOR_ARRAY) || gl.IsEnabled (GL_FOG_COORD_ARRAY))
+    return 0;
+  gl.Begin (mode);
+  for (GLsizei i = 0; i < count; i++)
+    {
+      GLuint k = type == GL_UNSIGNED_INT ? ((const GLuint *) idx)[i]
+	: type == GL_UNSIGNED_SHORT ? ((const GLushort *) idx)[i] : ((const GLubyte *) idx)[i];
+      if (c.on)
+	{
+	  const float *q = c.p + (size_t) k * c.stride;
+	  if (c.size == 4) gl.Color4fv (q); else gl.Color3fv (q);
+	}
+      if (n.on)
+	gl.Normal3fv (n.p + (size_t) k * n.stride);
+      if (t.on)
+	{
+	  const float *q = t.p + (size_t) k * t.stride;
+	  float tc[4] = { q[0], t.size > 1 ? q[1] : 0, t.size > 2 ? q[2] : 0, t.size > 3 ? q[3] : 1 };
+	  gl.TexCoord4fv (tc);
+	}
+      const float *q = v.p + (size_t) k * v.stride;
+      float vc[4] = { q[0], v.size > 1 ? q[1] : 0, v.size > 2 ? q[2] : 0, v.size > 3 ? q[3] : 1 };
+      gl.Vertex4fv (vc);
+    }
+  gl.End ();
+  return 1;
+}
+
+/* glPush/PopClientAttrib done here for the array enables (the program
+   sets pointers again before each draw) */
+static const GLenum rp_caps[] = { GL_VERTEX_ARRAY, GL_NORMAL_ARRAY, GL_COLOR_ARRAY, GL_TEXTURE_COORD_ARRAY,
+  GL_INDEX_ARRAY, GL_EDGE_FLAG_ARRAY, GL_SECONDARY_COLOR_ARRAY, GL_FOG_COORD_ARRAY };
+static unsigned char rp_stack[64][8];
+static int rp_depth;
+
+static void
+rp_push (void)
+{
+  if (rp_depth < 64)
+    for (int i = 0; i < 8; i++)
+      rp_stack[rp_depth][i] = gl.IsEnabled (rp_caps[i]);
+  rp_depth++;
+}
+
+static void
+rp_pop (void)
+{
+  if (rp_depth <= 0)
+    return;
+  if (--rp_depth < 64)
+    for (int i = 0; i < 8; i++)
+      {
+	if (rp_stack[rp_depth][i])
+	  gl.EnableClientState (rp_caps[i]);
+	else
+	  gl.DisableClientState (rp_caps[i]);
+      }
+}
+
+/* a picture as PNG: no compression (zlib stored blocks), so no zlib */
+static uint32_t
+crc32_png (uint32_t c, const unsigned char *b, size_t n)
+{
+  static uint32_t t[256];
+  if (!t[1])
+    for (uint32_t i = 0; i < 256; i++)
+      {
+	uint32_t x = i;
+	for (int k = 0; k < 8; k++)
+	  x = x & 1 ? 0xEDB88320u ^ (x >> 1) : x >> 1;
+	t[i] = x;
+      }
+  c = ~c;
+  while (n--)
+    c = t[(c ^ *b++) & 0xff] ^ (c >> 8);
+  return ~c;
+}
+
+static void
+png_chunk (FILE *o, const char *type, const unsigned char *d, uint32_t n)
+{
+  unsigned char h[8] = { n >> 24, n >> 16, n >> 8, n, type[0], type[1], type[2], type[3] };
+  fwrite (h, 1, 8, o);
+  if (n)
+    fwrite (d, 1, n, o);
+  uint32_t c = crc32_png (crc32_png (0, h + 4, 4), d, n);
+  unsigned char e[4] = { c >> 24, c >> 16, c >> 8, c };
+  fwrite (e, 1, 4, o);
+}
+
+/* rows of RGBX (4 bytes a pixel) as they come */
+static int
+write_png (const char *name, const char *px, int w, int h)
+{
+  size_t row = (size_t) w * 3 + 1, raw = row * h;
+  size_t blocks = (raw + 65534) / 65535;
+  size_t zn = 2 + raw + blocks * 5 + 4;
+  unsigned char *r = malloc (raw), *z = malloc (zn);
+  FILE *o = r && z ? fopen (name, "wb") : 0;
+  if (!o)
+    {
+      free (r);
+      free (z);
+      return 0;
+    }
+  for (int y = 0; y < h; y++)
+    {
+      unsigned char *d = r + row * y;
+      const unsigned char *s = (const unsigned char *) px + (size_t) w * 4 * y;
+      *d++ = 0;
+      for (int x = 0; x < w; x++, s += 4)
+	*d++ = s[0], *d++ = s[1], *d++ = s[2];
+    }
+  uint32_t a = 1, b = 0;
+  for (size_t i = 0; i < raw; i++)
+    {
+      a = (a + r[i]) % 65521;
+      b = (b + a) % 65521;
+    }
+  size_t at = 0, zi = 0;
+  z[zi++] = 0x78, z[zi++] = 0x01;
+  while (at < raw || !at)
+    {
+      size_t n = raw - at > 65535 ? 65535 : raw - at;
+      z[zi++] = at + n >= raw;
+      z[zi++] = n & 0xff, z[zi++] = n >> 8, z[zi++] = ~n & 0xff, z[zi++] = (~n >> 8) & 0xff;
+      memcpy (z + zi, r + at, n);
+      zi += n, at += n;
+      if (!n)
+	break;
+    }
+  uint32_t ad = (b << 16) | a;
+  z[zi++] = ad >> 24, z[zi++] = ad >> 16, z[zi++] = ad >> 8, z[zi++] = ad;
+  static const unsigned char sig[8] = { 0x89, 'P', 'N', 'G', 13, 10, 26, 10 };
+  fwrite (sig, 1, 8, o);
+  unsigned char ih[13] = { w >> 24, w >> 16, w >> 8, w, h >> 24, h >> 16, h >> 8, h, 8, 2, 0, 0, 0 };
+  png_chunk (o, "IHDR", ih, 13);
+  png_chunk (o, "IDAT", z, (uint32_t) zi);
+  png_chunk (o, "IEND", 0, 0);
+  fclose (o);
+  free (r);
+  free (z);
+  return 1;
+}
+
 /* a recording drawn again: every frame in the list (or every n-th) as
-   prefix-<frame>.ppm */
+   prefix-<frame>.png (0.14; was .ppm) */
 static int
 replay (const char *file, const char *prefix, const char *which)
 {
@@ -2589,6 +2786,19 @@ replay (const char *file, const char *prefix, const char *which)
     }
   unsigned every = 0, frame = 0, written = 0;
   int no_mip = getenv ("ROL3D_REPLAY_NOMIP") != 0, no_hint = getenv ("ROL3D_REPLAY_NOHINT") != 0;
+  const char *ch = getenv ("ROL3D_REPLAY");
+  if (ch)
+    {
+      no_mip |= strstr (ch, "nomip") != 0;
+      no_hint |= strstr (ch, "nohint") != 0;
+      rp_imm = strstr (ch, "imm") != 0;
+      rp_nopush = strstr (ch, "nopush") != 0;
+      rp_clamp = strstr (ch, "clamp") != 0;
+      rp_sized = strstr (ch, "sized") != 0;
+      rp_noalpha = strstr (ch, "noalpha") != 0;
+      fprintf (stderr, "rol-3d: replay changes: %s\n", ch);
+    }
+  unsigned long imm_done = 0, imm_not = 0;
   int list[64], nlist = 0;
   if (which && which[0] == '/')
     every = (unsigned) atoi (which + 1);
@@ -2633,16 +2843,9 @@ replay (const char *file, const char *prefix, const char *which)
 	  if (want)
 	    {
 	      char name[512];
-	      snprintf (name, sizeof name, "%s-%u.ppm", prefix, frame);
-	      FILE *o = n ? fopen (name, "wb") : 0;
-	      if (o)
-		{
-		  fprintf (o, "P6 %d %d 255\n", fb_w, fb_h);
-		  for (size_t i = 0; i < n; i += 4)
-		    fwrite (reply_area + i, 1, 3, o);
-		  fclose (o);
-		  written++;
-		}
+	      snprintf (name, sizeof name, "%s-%u.png", prefix, frame);
+	      if (n >= (size_t) fb_w * fb_h * 4 && write_png (name, reply_area, fb_w, fb_h))
+		written++;
 	    }
 	  continue;
 	}
@@ -2661,8 +2864,49 @@ replay (const char *file, const char *prefix, const char *which)
 	}
       if (no_hint && op == OP_glHint)
 	continue;
+      if (rp_noalpha && op == OP_glEnable && a[0] == GL_ALPHA_TEST)
+	continue;
+      if (rp_nopush && (op == OP_glPushClientAttrib || op == OP_glPopClientAttrib))
+	{
+	  if (op == OP_glPushClientAttrib)
+	    rp_push ();
+	  else
+	    rp_pop ();
+	  continue;
+	}
+      if (rp_clamp && (op == OP_glTexParameteri || op == OP_glTexParameterf)
+	  && (a[1] == GL_TEXTURE_WRAP_S || a[1] == GL_TEXTURE_WRAP_T || a[1] == GL_TEXTURE_WRAP_R))
+	{
+	  float fv;
+	  memcpy (&fv, &a[2], 4);
+	  GLint v = op == OP_glTexParameteri ? (GLint) a[2] : (GLint) fv;
+	  if (v == GL_CLAMP)
+	    {
+	      gl.TexParameteri (a[0], a[1], GL_CLAMP_TO_EDGE);
+	      continue;
+	    }
+	}
+      if (rp_sized && op == OP_glTexImage2D)
+	switch (a[2])
+	  {
+	  case 1: a[2] = GL_LUMINANCE8; break;
+	  case 2: a[2] = GL_LUMINANCE8_ALPHA8; break;
+	  case 3: case GL_RGB: case GL_COMPRESSED_RGB: a[2] = GL_RGB8; break;
+	  case 4: case GL_RGBA: case GL_COMPRESSED_RGBA: a[2] = GL_RGBA8; break;
+	  }
+      if (rp_imm && op == OP_DRAW_ELEMENTS_INLINE && memory_ok ())
+	{
+	  if (rp_draw_immediate (a[0], (GLsizei) a[1], a[2], a + 4))
+	    {
+	      imm_done++;
+	      continue;
+	    }
+	  imm_not++;
+	}
       dispatch (op, a, h[1]);
     }
+  if (rp_imm)
+    fprintf (stderr, "rol-3d: %lu draws done as glBegin/glEnd, %lu not\n", imm_done, imm_not);
   fprintf (stderr, "rol-3d: replayed %llu commands, %u frames, %u pictures (%s)\n",
 	   (unsigned long long) commands, frame, written, (const char *) gl.GetString (GL_RENDERER));
   return 0;

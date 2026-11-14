@@ -108,9 +108,9 @@ tools/mkdeb.sh >/dev/null
 
 # the Pi test kit: a zip for RISC OS, with file types
 # (the package as delivered, if there is a copy: KIT_DEB)
-python3 tools/mkkit.py out/RISC3DTest-25.zip RISC3DTest "kit/!ReadMe,fff" kit/Cube,feb kit/Test,feb \
+python3 tools/mkkit.py out/RISC3DTest-26.zip RISC3DTest "kit/!ReadMe,fff" kit/Cube,feb kit/Test,feb \
   kit/GL,feb kit/ES,feb kit/GL3,feb kit/Target,feb kit/TargetExpected,fff kit/Info,feb kit/Overlay,feb \
   kit/linux-tests,fff kit/Track,feb kit/Textures,feb kit/uploads,fff kit/check,fff kit/record,fff kit/replay,fff "out/gl1test08,ff8" "out/r3dcube,ff8" "out/r3dtest,ff8" "out/gl1test,ff8" "out/estest,ff8" \
   "out/gl3test,ff8" "out/targettest,ff8" "out/r3dinfo,ff8" out/gl1test-linux out/estest-linux \
-  out/gl3test-linux
+  out/gl3test-linux out/riscos-risc3d_0.14-1_arm64.deb
 

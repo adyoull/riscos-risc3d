@@ -59,7 +59,7 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
-#define ROL3D_VERSION "0.9"
+#define ROL3D_VERSION "0.10"
 /* what the library may send (OP_CONTEXT's reply, word 3): 6 = 0.6's
    commands (GL_EXT_direct_state_access, OP_TEMP_BIND); 7 = OP_UPLOADS
    (0.8); none: 0.5 */
@@ -2132,6 +2132,83 @@ dispatch (uint32_t op, const uint32_t *a, uint32_t n)
     }
 }
 
+/* --- checking (0.10): /riscos/3d/check makes each new context log GL's
+   errors after each command, the functions Linux's GL doesn't have, and
+   how many of each command it got (at frame 60, then every 600). For finding what a
+   program needs that doesn't come through. The program's own glGetError
+   then sees no errors. --------------------------------------------------- */
+
+static int checking = -1;
+
+/* (to the log only, not the kernel's) */
+static void
+chklog (const char *fmt, ...)
+{
+  char b[400];
+  va_list ap;
+  va_start (ap, fmt);
+  vsnprintf (b, sizeof b, fmt, ap);
+  va_end (ap);
+  if (write (2, b, strlen (b)) < 0) { }
+}
+static unsigned *op_count;
+static int in_begin, errors_logged;
+static unsigned frames_seen;
+
+static void
+check_start (void)
+{
+  checking = access ("/riscos/3d/check", F_OK) == 0;
+  if (!checking)
+    return;
+  op_count = calloc (0x8000, sizeof *op_count);
+  logmsg ("rol-3d: checking this context (/riscos/3d/check)\n");
+  void **fp = (void **) &gl;
+  for (int i = 0; gl_names[i]; i++)
+    if (!fp[i])
+      chklog ("rol-3d: check: Linux's GL has no %s\n", gl_names[i]);
+}
+
+static void
+check_op (uint32_t op)
+{
+  if (checking < 0 && have_context)
+    check_start ();
+  if (checking <= 0)
+    return;
+  if (op < 0x8000)
+    op_count[op]++;
+  if (op == OP_glBegin)
+    in_begin = 1;
+  else if (op == OP_glEnd)
+    in_begin = 0;
+  if (!in_begin && gl.GetError && errors_logged < 400)
+    {
+      GLenum e = gl.GetError ();
+      if (e)
+	chklog ("rol-3d: check: GL error &%X after command %u\n", e, op), errors_logged++;
+    }
+  if (op == OP_PRESENT || op == OP_PRESENT_SLOT || op == OP_PRESENT_OVERLAY)
+    if (++frames_seen == 60 || frames_seen % 600 == 0)
+      {
+	chklog ("rol-3d: check: commands in %u frames (command*times):\n", frames_seen);
+	char line[256];
+	size_t at = 0;
+	for (unsigned i = 0; i < 0x8000; i++)
+	  if (op_count[i])
+	    {
+	      at += (size_t) snprintf (line + at, sizeof line - at, " %u*%u", i, op_count[i]);
+	      if (at > 200)
+		{
+		  chklog ("%s\n", line);
+		  at = 0;
+		}
+	    }
+	if (at)
+	  chklog ("%s\n", line);
+      }
+}
+
 /* --- the ring ----------------------------------------------------------- */
 
 static char *blob;
@@ -2182,7 +2259,11 @@ drain_ring (void)
 	}
       const uint32_t *a = ring + at + 2;
       if (__builtin_expect (op < OP_BLOB, 1))
-	dispatch (op, a, n - 2);
+	{
+	  dispatch (op, a, n - 2);
+	  if (__builtin_expect (checking != 0, 0))
+	    check_op (op);
+	}
       else if (op == OP_BLOB)
 	{
 	  if (blob_len + a[0] > blob_cap)
@@ -2199,6 +2280,8 @@ drain_ring (void)
 	  memcpy ((char *) all + fixed, blob, blob_len);
 	  memset ((char *) all + fixed + blob_len, 0, 8);
 	  dispatch (op & ~R3D_WITH_BLOB, all, (uint32_t) ((fixed + blob_len + 3) / 4));
+	  if (__builtin_expect (checking != 0, 0))
+	    check_op (op & ~R3D_WITH_BLOB);
 	  free (all);
 	  blob_len = 0;
 	}

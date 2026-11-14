@@ -1,3 +1,12 @@
+riscos-risc3d (0.10-1) rol; urgency=medium
+
+  * rol-3d 0.10: /riscos/3d/check makes each new context log GL's errors
+    after each command, the functions Linux's GL hasn't got, and the
+    commands it got, into /riscos/3d/log.txt (to find what TORCS draws
+    wrongly).
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Sat, 14 Nov 2026 14:30:00 +0000
+
 riscos-risc3d (0.9-1) rol; urgency=medium
 
   * rol-3d 0.9: /riscos/3d/uploads saying "buffers" puts arrays from

@@ -1,37 +1,38 @@
-RISC3D test kit 20 (prototype, 14 November 2026)
+RISC3D test kit 21 (prototype, 14 November 2026)
 ================================================
 
-Kit 19 made TORCS faster (10-13 fps) but drew it wrongly: details
-missing and textures wrong. It also showed the Track test's picture
-differing from Linux's own. This kit is to find out which part is wrong.
-
-The package riscos-risc3d 0.9-1 (rol-3d 0.9) lets you switch rol-3d
-between 0.8's new way of passing arrays to Linux's driver ("memory") and
-0.7's old way ("buffers"), without restarting. TORCS drew correctly
-with 0.7.
+Kit 20 showed the Track test drawn right through RISC3D (18 of 76,800
+pixels differ by a shade from Linux's own, from texture filtering), so
+what TORCS draws wrongly (details missing, textures not applied) is
+something TORCS does that Track doesn't. This kit's rol-3d (0.10, in
+riscos-risc3d 0.10-1) can log what goes wrong while TORCS runs.
 
 Steps
 -----
- 1. Copy RISC3DTest to HardDisc4 (unzip it there, replacing kit 19).
+ 1. Copy RISC3DTest to HardDisc4 (unzip it there, replacing kit 20).
  2. In RiSH's Root shell:
-      apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.9-1_arm64.deb
-    It restarts rol-3d itself. Don't reload the modules: they're the
-    same. (If *RISC3D ever says no driver is registered:
-    *RMReInit Linux3D.)
- 3. In RiSH's Root shell:
+      apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.10-1_arm64.deb
+    It restarts rol-3d itself. Don't reload the modules.
+ 3. In RiSH's Root shell, the tests with Linux's Mesa directly:
       sh /riscos/HardDisc4/RISC3DTest/linux-tests
- 4. Double-click Track. TrackResults now has a line for each part of the
-    picture (strips untextured, strips textured, lines), to compare with
-    TrackLinuxResults. The pictures are TrackPic8 (0.8's library),
-    TrackPicB (buffers), TrackPicM (memory) and TrackLinuxPic (Linux's
-    Mesa directly): PPM files, so they can be looked at on the Mac.
- 5. TORCS both ways. In RiSH's Root shell:
-      sh /riscos/HardDisc4/RISC3DTest/uploads buffers
-    then run TORCS: does it draw correctly, and how fast? Then:
-      sh /riscos/HardDisc4/RISC3DTest/uploads memory
-    and run TORCS again.
+    Then double-click Textures: TexResults should match TexLinuxResults
+    line for line (the multitexture and big-texture drawing TORCS does).
+    Then, in RiSH's Root shell:
+      sh /riscos/HardDisc4/RISC3DTest/check on
+ 4. Run TORCS through RISC3D: start a race, drive for half a minute or
+    so (past 600 frames if you can), then quit TORCS.
+ 5. In RiSH's Root shell:
+      sh /riscos/HardDisc4/RISC3DTest/check off
+    and copy /riscos/3d/log.txt to the Mac.
+    (The check makes TORCS a little slower, and TORCS's own glGetError
+    sees no errors while it's on.)
+
+Also useful
+-----------
+ * TORCS both ways of passing arrays (from kit 20):
+      sh /riscos/HardDisc4/RISC3DTest/uploads buffers   (0.7's way)
+      sh /riscos/HardDisc4/RISC3DTest/uploads memory    (the default)
 
 Please send
 -----------
-TrackResults, TrackLinuxResults and the four pictures (copy them to the
-Mac), and what TORCS looked like and its fps each way.
+TexResults and TexLinuxResults, and /riscos/3d/log.txt.

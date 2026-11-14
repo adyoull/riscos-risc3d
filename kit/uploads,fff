@@ -1,5 +1,5 @@
 #!/bin/sh
-# RISC3D test kit 20: how rol-3d 0.9 takes arrays from a program's memory.
+# RISC3D test kit 21: how rol-3d 0.9 on takes arrays from a program's memory.
 #   sh /riscos/HardDisc4/RISC3DTest/uploads buffers   (0.7's way)
 #   sh /riscos/HardDisc4/RISC3DTest/uploads memory    (0.8's way, the default)
 # Programs started after this use it; no restart needed. Run as root.

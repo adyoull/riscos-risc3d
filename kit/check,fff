@@ -1,0 +1,12 @@
+#!/bin/sh
+# RISC3D test kit 21: rol-3d 0.10 checks the 3D contexts of programs
+# started after "on": it logs GL's errors after each command, the
+# functions Linux's GL hasn't got, and which commands came (at frame 60,
+# then every 600) into /riscos/3d/log.txt. Run as root.
+#   sh /riscos/HardDisc4/RISC3DTest/check on
+#   sh /riscos/HardDisc4/RISC3DTest/check off
+case "$1" in
+  on) mkdir -p /riscos/3d && : >/riscos/3d/check && echo "Checking programs started from now. Their findings go into /riscos/3d/log.txt." ;;
+  off) rm -f /riscos/3d/check && echo "Not checking programs started from now." ;;
+  *) echo "Say on or off."; exit 1 ;;
+esac

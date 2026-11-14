@@ -432,6 +432,205 @@ track (const char *pic)
   printf ("textures: %d in %.2f s\n", T_TEX, now () - t0);
 }
 
+/* gl1test multi: TORCS's multitexture drawing (grvtxtable.cpp): a car
+   in immediate mode with glMultiTexCoord2fv for units 0, 2 and 1 and a
+   texture matrix on units 1 and 2; then the track's way, arrays for
+   units 0-2 under glPushClientAttrib and strips with glDrawElements */
+static GLuint
+checker_tex (int a, int b)
+{
+  static unsigned char im[32 * 32 * 3];
+  for (int i = 0; i < 32 * 32; i++)
+    {
+      int on = ((i % 32) / 4 + (i / 32) / 4) & 1;
+      im[i * 3] = (unsigned char) (on ? a : 255 - a);
+      im[i * 3 + 1] = (unsigned char) (on ? b : 40);
+      im[i * 3 + 2] = (unsigned char) (on ? 30 : b);
+    }
+  GLuint t;
+  glGenTextures (1, &t);
+  glBindTexture (GL_TEXTURE_2D, t);
+  glTexImage2D (GL_TEXTURE_2D, 0, GL_RGB, 32, 32, 0, GL_RGB, GL_UNSIGNED_BYTE, im);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  return t;
+}
+
+static void
+multi_units (GLuint t0, GLuint t1, GLuint t2, float shift)
+{
+  static const float rot[16] = { 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+  glActiveTexture (GL_TEXTURE2);
+  glBindTexture (GL_TEXTURE_2D, t2);
+  glEnable (GL_TEXTURE_2D);
+  glMatrixMode (GL_TEXTURE);
+  glLoadIdentity ();
+  glMultMatrixf (rot);
+  glMatrixMode (GL_MODELVIEW);
+  glActiveTexture (GL_TEXTURE1);
+  glBindTexture (GL_TEXTURE_2D, t1);
+  glEnable (GL_TEXTURE_2D);
+  glMatrixMode (GL_TEXTURE);
+  glLoadIdentity ();
+  glTranslatef (shift, 0, 0);
+  glMatrixMode (GL_MODELVIEW);
+  glActiveTexture (GL_TEXTURE0);
+  glBindTexture (GL_TEXTURE_2D, t0);
+  glEnable (GL_TEXTURE_2D);
+}
+
+static void
+multi_off (void)
+{
+  glActiveTexture (GL_TEXTURE1);
+  glDisable (GL_TEXTURE_2D);
+  glMatrixMode (GL_TEXTURE);
+  glLoadIdentity ();
+  glMatrixMode (GL_MODELVIEW);
+  glActiveTexture (GL_TEXTURE2);
+  glMatrixMode (GL_TEXTURE);
+  glLoadIdentity ();
+  glMatrixMode (GL_MODELVIEW);
+  glDisable (GL_TEXTURE_2D);
+  glActiveTexture (GL_TEXTURE0);
+}
+
+static void
+multi (void)
+{
+  enum { N = 24 };
+  static GLfloat vx[N][3], nm[N][3], tx[N][2], tx1[N][2], tx2[N][2];
+  static GLushort ix[N];
+  for (int i = 0; i < N; i++)
+    {
+      vx[i][0] = (float) (i / 2) / (N / 2) - 0.5f;
+      vx[i][1] = (i & 1) ? 0.4f : -0.4f;
+      vx[i][2] = 0;
+      nm[i][0] = 0; nm[i][1] = 0; nm[i][2] = 1;
+      tx[i][0] = (float) (i / 2) / 4; tx[i][1] = (float) (i & 1);
+      tx1[i][0] = (float) (i / 2) / 7; tx1[i][1] = (float) (i & 1) * 0.5f;
+      tx2[i][0] = (float) (i & 1); tx2[i][1] = (float) (i / 2) / 5;
+      ix[i] = (GLushort) i;
+    }
+  GLuint t0 = checker_tex (250, 200), t1 = checker_tex (120, 230), t2 = checker_tex (60, 90);
+  glMatrixMode (GL_PROJECTION);
+  glLoadIdentity ();
+  glMatrixMode (GL_MODELVIEW);
+  const char *what[] = { "car (immediate, units 0, 2, 1)", "track (arrays, units 0-2)", "both, unit 0 alone after" };
+  for (int part = 0; part < 3; part++)
+    {
+      glClearColor (0.1f, 0.2f, 0.3f, 1);
+      glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      glLoadIdentity ();
+      if (part != 1)
+	{
+	  glTranslatef (0, 0.45f, 0);
+	  multi_units (t0, t1, t2, 0.25f);
+	  glBegin (GL_TRIANGLE_STRIP);
+	  glColor4f (1, 1, 1, 1);
+	  for (int i = 0; i < N; i++)
+	    {
+	      glNormal3fv (nm[i]);
+	      glMultiTexCoord2fv (GL_TEXTURE0, tx[i]);
+	      glMultiTexCoord2fv (GL_TEXTURE2, tx2[i]);
+	      glMultiTexCoord2fv (GL_TEXTURE1, tx1[i]);
+	      glVertex3fv (vx[i]);
+	    }
+	  glEnd ();
+	  multi_off ();
+	  glLoadIdentity ();
+	}
+      if (part != 0)
+	{
+	  glTranslatef (0, -0.45f, 0);
+	  multi_units (t0, t1, t2, 0.5f);
+	  glColor4f (1, 1, 1, 1);
+	  glPushClientAttrib (GL_CLIENT_VERTEX_ARRAY_BIT);
+	  glEnableClientState (GL_NORMAL_ARRAY);
+	  glNormalPointer (GL_FLOAT, 0, nm);
+	  glEnableClientState (GL_TEXTURE_COORD_ARRAY);
+	  glTexCoordPointer (2, GL_FLOAT, 0, tx);
+	  glClientActiveTexture (GL_TEXTURE1);
+	  glEnableClientState (GL_TEXTURE_COORD_ARRAY);
+	  glTexCoordPointer (2, GL_FLOAT, 0, tx1);
+	  glClientActiveTexture (GL_TEXTURE2);
+	  glEnableClientState (GL_TEXTURE_COORD_ARRAY);
+	  glTexCoordPointer (2, GL_FLOAT, 0, tx2);
+	  glEnableClientState (GL_VERTEX_ARRAY);
+	  glVertexPointer (3, GL_FLOAT, 0, vx);
+	  glClientActiveTexture (GL_TEXTURE0);
+	  glEnableClientState (GL_TEXTURE_COORD_ARRAY);
+	  for (int k = 0; k < N - 2; k += 8)
+	    glDrawElements (GL_TRIANGLE_STRIP, 10 < N - k ? 10 : N - k, GL_UNSIGNED_SHORT, ix + k);
+	  glPopClientAttrib ();
+	  multi_off ();
+	  glLoadIdentity ();
+	}
+      if (part == 2)
+	{
+	  /* unit 0 alone, as the HUD would draw */
+	  glTranslatef (0.6f, 0, 0);
+	  glBegin (GL_QUADS);
+	  glTexCoord2f (0, 0); glVertex2f (-0.2f, -0.1f);
+	  glTexCoord2f (1, 0); glVertex2f (0.2f, -0.1f);
+	  glTexCoord2f (1, 1); glVertex2f (0.2f, 0.1f);
+	  glTexCoord2f (0, 1); glVertex2f (-0.2f, 0.1f);
+	  glEnd ();
+	}
+      finish_frame ();
+      printf ("multi %s: %08lx\n", what[part], frame_hash ());
+    }
+}
+
+/* gl1test bigtex: large textures with every mipmap level given (as
+   TORCS's loader does), RGB and RGBA, drawn at sizes that use several
+   levels */
+static void
+bigtex (void)
+{
+  static const int sizes[] = { 1024, 512, 256 };
+  static unsigned char lv[1024 * 1024 * 4];
+  glMatrixMode (GL_PROJECTION);
+  glLoadIdentity ();
+  glMatrixMode (GL_MODELVIEW);
+  glLoadIdentity ();
+  for (int k = 0; k < 6; k++)
+    {
+      int size = sizes[k % 3], comp = k < 3 ? 4 : 3;
+      GLuint t;
+      glGenTextures (1, &t);
+      glBindTexture (GL_TEXTURE_2D, t);
+      glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
+      for (int l = 0, w = size; w >= 1; l++, w >>= 1)
+	{
+	  /* each level its own colours, so the level used shows */
+	  for (int i = 0; i < w * w; i++)
+	    for (int c = 0; c < comp; c++)
+	      lv[i * comp + c] = (unsigned char) (c == 3 ? 255 : ((i % w) / (w > 8 ? w / 8 : 1) * 37 + (i / w) / (w > 8 ? w / 8 : 1) * 11 + l * 50 + c * 80));
+	  glTexImage2D (GL_TEXTURE_2D, l, comp, w, w, 0, comp == 4 ? GL_RGBA : GL_RGB, GL_UNSIGNED_BYTE, lv);
+	}
+      glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+      glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      glEnable (GL_TEXTURE_2D);
+      glClearColor (0, 0, 0, 1);
+      glClear (GL_COLOR_BUFFER_BIT);
+      float q[] = { 0.9f, 0.4f, 0.15f, 0.05f };
+      for (int j = 0; j < 4; j++)
+	{
+	  float x = -0.95f + (float) j * 0.5f;
+	  glBegin (GL_QUADS);
+	  glTexCoord2f (0, 0); glVertex2f (x, -q[j]);
+	  glTexCoord2f (1, 0); glVertex2f (x + q[j], -q[j]);
+	  glTexCoord2f (1, 1); glVertex2f (x + q[j], q[j]);
+	  glTexCoord2f (0, 1); glVertex2f (x, q[j]);
+	  glEnd ();
+	}
+      finish_frame ();
+      printf ("bigtex %dx%d %s: %08lx; error %x\n", size, size, comp == 4 ? "RGBA" : "RGB", frame_hash (), glGetError ());
+      glDeleteTextures (1, &t);
+    }
+}
+
 int
 main (int argc, char **argv)
 {
@@ -453,6 +652,26 @@ main (int argc, char **argv)
     printf ("version: %s; GLSL %s; %d extensions\n", (const char *) glGetString (GL_VERSION),
 	    (const char *) glGetString (GL_SHADING_LANGUAGE_VERSION), nx);
   }
+  if (argc > 1 && !strcmp (argv[1], "bigtex"))
+    {
+      bigtex ();
+      if (argc > 2)
+	save_ppm (argv[2]);
+#ifndef DIRECT
+      r3d_close ();
+#endif
+      return 0;
+    }
+  if (argc > 1 && !strcmp (argv[1], "multi"))
+    {
+      multi ();
+      if (argc > 2)
+	save_ppm (argv[2]);
+#ifndef DIRECT
+      r3d_close ();
+#endif
+      return 0;
+    }
   if (argc > 1 && !strcmp (argv[1], "track"))
     {
       track (argc > 2 ? argv[2] : 0);

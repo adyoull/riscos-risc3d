@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.9, continued: kit 21, rol-3d checks what TORCS sends (14 Nov 2026)
+
+- **Kit 20 on the Pi (14 Nov):** Track's parts through RISC3D = Linux's
+  own for untextured strips (90365d90) and lines (f4f9c53d); textured
+  strips differ (520c3f2d vs 3dee8687), but only in 18 of 76,800 pixels
+  by up to 42 (texture filtering at edges): the same in all three ways
+  (0.8's library, buffers, memory). Track is drawn right. Memory way:
+  18.9 fps (Linux 31.4). So TORCS's missing details and textures come
+  from something Track doesn't do.
+- **rol-3d 0.10 (riscos-risc3d 0.10-1):** `/riscos/3d/check` makes each
+  new context log GL's errors after each command (not between glBegin
+  and glEnd; at most 400), the functions Linux's GL hasn't got, and how
+  many of each command came (at frame 60, then every 600), to the log
+  only. The program's glGetError then sees no errors.
+- **The owner's screenshots (14 Nov):** through Linux3D the car is plain
+  yellow (no livery, no cockpit) and the scenery's textures are smeared;
+  in software all is right. That looks like textures not applied
+  (incomplete, or the wrong texture coordinates).
+- **gl1test multi:** TORCS's grVtxTable multitexture drawing (the car in
+  immediate mode with glMultiTexCoord2fv for units 0, 2, 1 and texture
+  matrices on units 1 and 2; the track's arrays for units 0-2 under
+  glPushClientAttrib with glDrawElements strips; unit 0 alone after).
+  **gl1test bigtex:** 1024/512/256 RGBA and RGB textures with every
+  mipmap level given, drawn at four sizes. Both = Mesa directly on the
+  build machine.
+- **Kit 21:** `RISC3DTest-21.zip`, with the `check` script and a Textures
+  test (TexResults vs TexLinuxResults).
+
 ## 0.9, continued: kit 20 to find what TORCS draws wrongly (14 Nov 2026)
 
 - **Kit 19 on the Pi (14 Nov):** Track 2.4 fps with 0.7's way (buffers),

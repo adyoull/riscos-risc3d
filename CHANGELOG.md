@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.9, continued: rol-3d 0.15 checks textures on the GPU; kit 27 (14 Nov 2026)
+
+- **Kit 26 on the Pi:** only ReplaySoft is right. Imm, NoPush, Clamp,
+  Sized, NoAlpha and All are all as wrong as ReplayGPU, so vertex
+  arrays, Push/PopClientAttrib, GL_CLAMP, unsized formats and alpha test
+  are ruled out. (The machine rebooted once around the run; cause
+  unknown.)
+- **The pattern:** each texture looks like one row stretched across the
+  surface (trees in vertical stripes, grass in streaks, the car the
+  colour of one yellow row). The HUD text and dials are right in every
+  GPU picture, and they're textures without mipmaps. The car's texture
+  (171 in the build machine's recording) is an ordinary 512x512 RGBA
+  with levels 0-9, LINEAR_MIPMAP_LINEAR and REPEAT, and every upload
+  carries exactly the bytes its size needs.
+- **rol-3d 0.15 (riscos-risc3d 0.15-1):** `ROL3D_REPLAY=texcheck` keeps
+  every 2D level uploaded. At the first frame written, it reads each
+  level back (glGetTexImage, at the upload's alignment) and logs any
+  difference or size mismatch. It then writes `-cardmip` (every texture
+  in a 48-pixel grid, sampled as the program set it, with lighting, fog
+  and so on off) and `-cardbase` (level 0 only).
+
+  Host: 909 levels the same, 9 differ (all texture 156, TORCS's
+  GL_COMPRESSED_RGBA test texture in GL_BYTE, expected). Card right. The
+  frame picture is unchanged.
+- **Kit 27:** `replay` runs texcheck on the GPU and in software.
+
 ## 0.9, continued: rol-3d 0.14 replays with one thing changed at a time; kit 26 (14 Nov 2026)
 
 - **Kit 25 withdrawn** (never run). It replayed with arrays in buffers,

@@ -59,7 +59,7 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
-#define ROL3D_VERSION "0.14"
+#define ROL3D_VERSION "0.15"
 /* what the library may send (OP_CONTEXT's reply, word 3): 6 = 0.6's
    commands (GL_EXT_direct_state_access, OP_TEMP_BIND); 7 = OP_UPLOADS
    (0.8); none: 0.5 */
@@ -2757,6 +2757,175 @@ write_png (const char *name, const char *px, int w, int h)
   return 1;
 }
 
+/* 0.15: texcheck. Every 2D texture level the recording uploads is kept;
+   at the first frame written, each is read back from the driver and
+   compared, and two test cards are drawn and written: every texture in a
+   grid, sampled as the program set it (-cardmip) and from level 0 only
+   (-cardbase) */
+static int rp_texcheck;
+struct rp_level { GLuint name; GLint level, w, h, align; GLenum fmt, type; uint32_t bytes; unsigned char *data; };
+static struct rp_level *rp_lv;
+static size_t rp_nlv, rp_cap;
+
+static void
+rp_keep_level (const uint32_t *a)
+{
+  if (a[0] != GL_TEXTURE_2D || a[8] || !a[10])
+    return;
+  GLint name = 0, align = 4;
+  gl.GetIntegerv (GL_TEXTURE_BINDING_2D, &name);
+  gl.GetIntegerv (GL_UNPACK_ALIGNMENT, &align);
+  for (size_t i = 0; i < rp_nlv; i++)
+    if (rp_lv[i].name == (GLuint) name && (a[1] == 0 || rp_lv[i].level == (GLint) a[1]))
+      {
+	/* (level 0 again: the texture is new; its old levels go) */
+	free (rp_lv[i].data);
+	rp_lv[i] = rp_lv[--rp_nlv];
+	i--;
+      }
+  if (rp_nlv == rp_cap)
+    {
+      rp_cap = rp_cap ? rp_cap * 2 : 256;
+      rp_lv = realloc (rp_lv, rp_cap * sizeof *rp_lv);
+      if (!rp_lv)
+	{
+	  rp_texcheck = 0;
+	  return;
+	}
+    }
+  struct rp_level *l = &rp_lv[rp_nlv];
+  l->data = malloc (a[10]);
+  if (!l->data)
+    return;
+  memcpy (l->data, a + 11, a[10]);
+  l->name = (GLuint) name, l->level = (GLint) a[1], l->w = (GLint) a[3], l->h = (GLint) a[4];
+  l->align = align, l->fmt = a[6], l->type = a[7], l->bytes = a[10];
+  rp_nlv++;
+}
+
+static int
+rp_cmp_name (const void *x, const void *y)
+{
+  const struct rp_level *p = x, *q = y;
+  return p->name != q->name ? (p->name > q->name) - (p->name < q->name) : (p->level > q->level) - (p->level < q->level);
+}
+
+static void
+rp_card (const char *prefix, unsigned frame, int base_only)
+{
+  int cell = 48, cols = fb_w / cell, n = 0;
+  gl.BindFramebuffer (GL_FRAMEBUFFER, fbo);
+  gl.PushAttrib (GL_ALL_ATTRIB_BITS);
+  GLenum modes[3] = { GL_PROJECTION, GL_MODELVIEW, GL_TEXTURE };
+  for (int m = 0; m < 3; m++)
+    {
+      gl.MatrixMode (modes[m]);
+      gl.PushMatrix ();
+      gl.LoadIdentity ();
+    }
+  gl.MatrixMode (GL_PROJECTION);
+  gl.Ortho (0, fb_w, fb_h, 0, -1, 1);
+  gl.Viewport (0, 0, fb_w, fb_h);
+  GLenum off[] = { GL_LIGHTING, GL_FOG, GL_ALPHA_TEST, GL_BLEND, GL_DEPTH_TEST, GL_CULL_FACE, GL_SCISSOR_TEST,
+    GL_STENCIL_TEST, GL_TEXTURE_GEN_S, GL_TEXTURE_GEN_T, GL_COLOR_MATERIAL, GL_POLYGON_OFFSET_FILL };
+  for (size_t i = 0; i < sizeof off / sizeof off[0]; i++)
+    gl.Disable (off[i]);
+  if (gl.UseProgram)
+    gl.UseProgram (0);
+  gl.ActiveTexture (GL_TEXTURE0);
+  gl.Enable (GL_TEXTURE_2D);
+  gl.TexEnvi (GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+  gl.ClearColor (0.5f, 0.5f, 0.5f, 1);
+  gl.Clear (GL_COLOR_BUFFER_BIT);
+  gl.Color4f (1, 1, 1, 1);
+  for (size_t i = 0; i < rp_nlv; i++)
+    {
+      if (rp_lv[i].level || !gl.IsTexture (rp_lv[i].name))
+	continue;
+      gl.BindTexture (GL_TEXTURE_2D, rp_lv[i].name);
+      GLint minf = 0, base = 0, max = 1000;
+      gl.GetTexParameteriv (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, &minf);
+      if (base_only)
+	{
+	  gl.TexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	  gl.TexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+	}
+      float x = (float) (n % cols * cell), y = (float) (n / cols * cell), c = (float) cell - 2;
+      gl.Begin (GL_QUADS);
+      gl.TexCoord2f (0, 0), gl.Vertex2f (x, y);
+      gl.TexCoord2f (1, 0), gl.Vertex2f (x + c, y);
+      gl.TexCoord2f (1, 1), gl.Vertex2f (x + c, y + c);
+      gl.TexCoord2f (0, 1), gl.Vertex2f (x, y + c);
+      gl.End ();
+      if (base_only)
+	{
+	  gl.TexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minf);
+	  gl.TexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, max);
+	  (void) base;
+	}
+      n++;
+    }
+  for (int m = 2; m >= 0; m--)
+    {
+      gl.MatrixMode (modes[m]);
+      gl.PopMatrix ();
+    }
+  gl.PopAttrib ();
+  size_t got = present_frame (reply_area, area->reply_bytes);
+  char name[512];
+  snprintf (name, sizeof name, "%s-%s-%u.png", prefix, base_only ? "cardbase" : "cardmip", frame);
+  if (got)
+    write_png (name, reply_area, fb_w, fb_h);
+  fprintf (stderr, "rol-3d: texcheck: %d textures drawn into %s\n", n, name);
+}
+
+static void
+rp_check_textures (const char *prefix, unsigned frame)
+{
+  qsort (rp_lv, rp_nlv, sizeof *rp_lv, rp_cmp_name);
+  GLint was = 0;
+  gl.GetIntegerv (GL_TEXTURE_BINDING_2D, &was);
+  pack_tight ();
+  unsigned same = 0, differ = 0, gone = 0;
+  for (size_t i = 0; i < rp_nlv; i++)
+    {
+      struct rp_level *l = &rp_lv[i];
+      if (!gl.IsTexture (l->name))
+	{
+	  gone++;
+	  continue;
+	}
+      gl.BindTexture (GL_TEXTURE_2D, l->name);
+      GLint w = 0, h = 0;
+      gl.GetTexLevelParameteriv (GL_TEXTURE_2D, l->level, GL_TEXTURE_WIDTH, &w);
+      gl.GetTexLevelParameteriv (GL_TEXTURE_2D, l->level, GL_TEXTURE_HEIGHT, &h);
+      gl.PixelStorei (GL_PACK_ALIGNMENT, l->align);
+      unsigned char *r = calloc (1, l->bytes + 4096);
+      if (!r)
+	continue;
+      gl.GetTexImage (GL_TEXTURE_2D, l->level, l->fmt, l->type, r);
+      uint32_t bad = 0, first = 0;
+      for (uint32_t k = 0; k < l->bytes; k++)
+	if (r[k] != l->data[k] && !bad++)
+	  first = k;
+      if (bad || w != l->w || h != l->h)
+	{
+	  differ++;
+	  fprintf (stderr, "rol-3d: texcheck: texture %u level %d %dx%d (driver says %dx%d): %u of %u bytes differ, first at byte %u\n",
+		   l->name, l->level, l->w, l->h, w, h, bad, l->bytes, first);
+	}
+      else
+	same++;
+      free (r);
+    }
+  pack_restore ();
+  gl.BindTexture (GL_TEXTURE_2D, (GLuint) was);
+  fprintf (stderr, "rol-3d: texcheck at frame %u: %u texture levels read back the same, %u differ, %u deleted\n",
+	   frame, same, differ, gone);
+  rp_card (prefix, frame, 0);
+  rp_card (prefix, frame, 1);
+}
+
 /* a recording drawn again: every frame in the list (or every n-th) as
    prefix-<frame>.png (0.14; was .ppm) */
 static int
@@ -2796,6 +2965,7 @@ replay (const char *file, const char *prefix, const char *which)
       rp_clamp = strstr (ch, "clamp") != 0;
       rp_sized = strstr (ch, "sized") != 0;
       rp_noalpha = strstr (ch, "noalpha") != 0;
+      rp_texcheck = strstr (ch, "texcheck") != 0;
       fprintf (stderr, "rol-3d: replay changes: %s\n", ch);
     }
   unsigned long imm_done = 0, imm_not = 0;
@@ -2846,6 +3016,11 @@ replay (const char *file, const char *prefix, const char *which)
 	      snprintf (name, sizeof name, "%s-%u.png", prefix, frame);
 	      if (n >= (size_t) fb_w * fb_h * 4 && write_png (name, reply_area, fb_w, fb_h))
 		written++;
+	      if (rp_texcheck)
+		{
+		  rp_check_textures (prefix, frame);
+		  rp_texcheck = 0;
+		}
 	    }
 	  continue;
 	}
@@ -2886,6 +3061,8 @@ replay (const char *file, const char *prefix, const char *which)
 	      continue;
 	    }
 	}
+      if (rp_texcheck && op == OP_glTexImage2D)
+	rp_keep_level (a);
       if (rp_sized && op == OP_glTexImage2D)
 	switch (a[2])
 	  {

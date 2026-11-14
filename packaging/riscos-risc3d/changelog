@@ -1,3 +1,12 @@
+riscos-risc3d (0.15-1) rol; urgency=medium
+
+  * rol-3d 0.15: ROL3D_REPLAY=texcheck keeps every texture level the
+    recording uploads, reads each back from the driver at the first frame
+    written and says which differ, and draws two test cards (every texture
+    sampled as set, and from level 0 only).
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Sat, 14 Nov 2026 16:45:00 +0000
+
 riscos-risc3d (0.14-1) rol; urgency=medium
 
   * rol-3d 0.14: --replay writes PNG pictures, and ROL3D_REPLAY can

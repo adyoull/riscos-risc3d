@@ -1,29 +1,21 @@
 #!/bin/sh
-# RISC3D test kit 26: draw a recording again here, each time with one
-# thing changed, writing the frames asked for as PNG pictures into this
-# folder:
-#   ReplayGPU-<frame>      on the GPU, as the program had it
-#   ReplayImm-<frame>      glDrawElements from arrays done as glBegin/glEnd
-#   ReplayNoPush-<frame>   glPush/PopClientAttrib done by rol-3d
-#   ReplayClamp-<frame>    GL_CLAMP as GL_CLAMP_TO_EDGE
-#   ReplaySized-<frame>    old texture formats (3, 4) as GL_RGB8, GL_RGBA8
-#   ReplayNoAlpha-<frame>  no alpha test (trees will have grey boxes)
-#   ReplayAll-<frame>      all of those at once
-#   ReplaySoft-<frame>     in Linux's software renderer
+# RISC3D test kit 27: draw a recording again and check its textures on
+# the GPU. Writes into this folder:
+#   ReplayGPU-<frame>.png, ReplayGPU-cardmip-<frame>.png and
+#   ReplayGPU-cardbase-<frame>.png   on the GPU
+#   ReplaySoft-...                    the same in software
+#   ReplayLog                         what rol-3d said
 # Run as root:
 #   sh /riscos/HardDisc4/RISC3DTest/replay /riscos/3d/recorded/ctx-477.r3d 240
 d=$(dirname "$0")
 [ -f "$1" ] || { echo "Give a recording (sh record list shows them)."; exit 1; }
-w=${2:-/50}
+w=${2:-240}
 r=/opt/riscos/rol-3d
 rm -f "$d"/Replay*
-$r --replay "$1" "$d/ReplayGPU" "$w"
-ROL3D_REPLAY=imm $r --replay "$1" "$d/ReplayImm" "$w"
-ROL3D_REPLAY=nopush $r --replay "$1" "$d/ReplayNoPush" "$w"
-ROL3D_REPLAY=clamp $r --replay "$1" "$d/ReplayClamp" "$w"
-ROL3D_REPLAY=sized $r --replay "$1" "$d/ReplaySized" "$w"
-ROL3D_REPLAY=noalpha $r --replay "$1" "$d/ReplayNoAlpha" "$w"
-ROL3D_REPLAY=imm,nopush,clamp,sized,noalpha $r --replay "$1" "$d/ReplayAll" "$w"
-ROL3D_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 $r --replay "$1" "$d/ReplaySoft" "$w"
+sync
+ROL3D_REPLAY=texcheck $r --replay "$1" "$d/ReplayGPU" "$w" 2>&1 | tee "$d/ReplayLog"
+sync
+ROL3D_REPLAY=texcheck ROL3D_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 $r --replay "$1" "$d/ReplaySoft" "$w" 2>&1 | tee -a "$d/ReplayLog"
 chown 1000:1000 "$d"/Replay* 2>/dev/null
+sync
 ls "$d" | grep Replay

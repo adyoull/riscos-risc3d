@@ -1,35 +1,27 @@
-RISC3D test kit 26 (prototype, 14 November 2026)
+RISC3D test kit 27 (prototype, 14 November 2026)
 ================================================
 
-Kit 24's results: leaving out TORCS's glHint changed nothing. Leaving
-out mipmaps made the scenery sharper, but the car stayed plain yellow
-and the trees striped. Arrays in buffers (kits 20 and 21) made no
-difference either.
+Kit 26's results: only software was right, so none of those five
+changes is the cause. But the pictures show a pattern: each texture
+looks like one row of it stretched across the surface. The HUD text
+and dials (textures without mipmaps) are always right; the car, trees
+and grass (textures with mipmaps) are wrong.
 
-This kit's rol-3d (0.14) redraws your recording on the GPU several
-times, each with one more thing changed, to find what the Pi's GPU
-driver gets wrong:
-
-  ReplayGPU      unchanged
-  ReplayImm      TORCS's array drawing done as glBegin/glEnd instead
-  ReplayNoPush   glPushClientAttrib/glPopClientAttrib done by rol-3d
-  ReplayClamp    GL_CLAMP texture edges as GL_CLAMP_TO_EDGE
-  ReplaySized    TORCS's old-style texture formats as modern ones
-  ReplayNoAlpha  no alpha test (trees will show grey boxes: expected)
-  ReplayAll      all of those at once
-  ReplaySoft     software, for comparison
-
-It now writes PNG pictures (the PPMs got damaged on the way to me).
+This kit's rol-3d (0.15) checks the textures themselves on the GPU.
+After drawing frame 240 it reads every texture level back from the GPU
+and compares it with what TORCS uploaded, and it draws two test cards:
+every texture in a grid, with mipmaps (cardmip) and from the full-size
+level only (cardbase).
 
 Steps
 -----
- 1. Unzip RISC3DTest into HardDisc4, replacing the old one (kit 25 is
-    withdrawn: it tested buffers again, which you'd already done).
+ 1. Unzip RISC3DTest into HardDisc4, replacing kit 26.
  2. In RiSH's Root shell:
-      apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.14-1_arm64.deb
+      apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.15-1_arm64.deb
       sh /riscos/HardDisc4/RISC3DTest/replay /riscos/3d/recorded/ctx-477.r3d 240
-    Nothing needs reloading or restarting.
+    It runs twice: GPU, then software.
 
 Please send
 -----------
-The eight Replay...-240 pictures, and anything the replay printed.
+ReplayLog, and the six pictures: ReplayGPU-240, ReplayGPU-cardmip-240,
+ReplayGPU-cardbase-240 and the three ReplaySoft ones.

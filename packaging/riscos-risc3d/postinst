@@ -24,9 +24,15 @@ if [ "$1" = configure ]; then
   # 1.0.0049-1)
   for p in $(pidof rol-3d 2>/dev/null); do kill "$p" 2>/dev/null || true; done
   setsid /opt/riscos/rol-3d </dev/null >/dev/null 2>&1 &
-  echo "RISC3D is installed. Restart (shut down and switch on) to load its modules,"
-  echo "or in RISC OS: *RMLoad <IXFS\$HardDisc4>.TestBed.RISC3D.RISC3D then"
-  echo "*RMLoad <IXFS\$HardDisc4>.TestBed.RISC3D.Linux3D"
+  if [ -z "$2" ]; then
+    echo "RISC3D is installed. Restart (shut down and switch on) to load its modules,"
+    echo "or in RISC OS: *RMLoad <IXFS\$HardDisc4>.TestBed.RISC3D.RISC3D then"
+    echo "*RMLoad <IXFS\$HardDisc4>.TestBed.RISC3D.Linux3D"
+  else
+    echo "RISC3D is updated and its helper restarted. The modules are the same as"
+    echo "before (RISC3D 0.03, Linux3D 0.02): don't reload them. (If *RISC3D says"
+    echo "no driver is registered, *RMReInit Linux3D.)"
+  fi
   if ! grep -qa /opt/riscos/rol-3d /usr/sbin/init 2>/dev/null; then
     echo "This riscos-support's init doesn't start rol-3d: after each restart, until"
     echo "you have riscos-support 1.0.0049-1, start it as root: setsid /opt/riscos/rol-3d &"

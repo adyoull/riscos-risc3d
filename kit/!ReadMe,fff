@@ -1,57 +1,37 @@
-RISC3D test kit 19 (prototype, 13 November 2026)
+RISC3D test kit 20 (prototype, 14 November 2026)
 ================================================
 
-RISC3D 0.9: for TORCS, which ran slower through RISC3D than in software.
-TORCS draws each object of the track as many triangle strips from one set
-of arrays in its own memory. RISC3D 0.8's library sent every strip all of
-the arrays up to its last vertex, so most of each object was sent once
-for every strip: tens of megabytes a frame. 0.9 sends only the vertices
-each strip uses. The new package riscos-risc3d 0.8-1 (rol-3d 0.8) also
-hands those arrays to Linux's Mesa the way a Linux program does, instead
-of making a new buffer object for each one; the Track test measures both
-ways.
+Kit 19 made TORCS faster (10-13 fps) but drew it wrongly: details
+missing and textures wrong. It also showed the Track test's picture
+differing from Linux's own. This kit is to find out which part is wrong.
 
-TORCS itself only gets 0.9's library when riscos-mesa rebuilds its
-!MesaLibs with it (they have been asked). This kit measures the pattern
-on its own, and watches Linux while TORCS loads, to find out what makes
-TORCS's loading slower and slower.
-
-Needs
------
- * RISC OS on Linux on the Pi 4 with riscos-kernel-pi 6.6.78-9 (the GPU's
-   driver), as for the kits before.
- * A 16 million colour mode.
+The package riscos-risc3d 0.9-1 (rol-3d 0.9) lets you switch rol-3d
+between 0.8's new way of passing arrays to Linux's driver ("memory") and
+0.7's old way ("buffers"), without restarting. TORCS drew correctly
+with 0.7.
 
 Steps
 -----
- 1. Copy RISC3DTest to HardDisc4 (unzip it there, replacing kit 18).
+ 1. Copy RISC3DTest to HardDisc4 (unzip it there, replacing kit 19).
  2. In RiSH's Root shell:
-      apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.8-1_arm64.deb
-    It starts the new rol-3d itself; the modules are the same as kit 18's,
-    so no restart is needed.
+      apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.9-1_arm64.deb
+    It restarts rol-3d itself. Don't reload the modules: they're the
+    same. (If *RISC3D ever says no driver is registered:
+    *RMReInit Linux3D.)
  3. In RiSH's Root shell:
       sh /riscos/HardDisc4/RISC3DTest/linux-tests
-    It runs the tests with Linux's Mesa directly, to compare with; the
-    last lines are the track drawn directly.
- 4. Double-click Track. TrackResults has three "track:" lines:
-      1. with 0.8's library (as TORCS has now),
-      2. 0.9's library, arrays each in a buffer object of their own (0.8's
-         renderer),
-      3. 0.9's library, arrays given to Mesa as memory (the default now).
-    Compare the frames a second with TrackLinuxResults. All the "track
-    picture" lines should be the same number. The "textures" lines show
-    TORCS's way of loading textures, timed in groups of 50: they should
-    not get slower.
- 5. Double-click Info, GL3, Target, ES, Cube, Test and GL as before, to
-    check that nothing went backwards.
- 6. TORCS's loading: in RiSH's Root shell
-      sh /riscos/HardDisc4/RISC3DTest/watch 900 &
-    then start TORCS (the RISC3D build you have) and load the race as
-    before. Every 5 seconds for 15 minutes, WatchResults gets Linux's
-    memory, swap and busiest processes. It stops by itself.
+ 4. Double-click Track. TrackResults now has a line for each part of the
+    picture (strips untextured, strips textured, lines), to compare with
+    TrackLinuxResults. The pictures are TrackPic8 (0.8's library),
+    TrackPicB (buffers), TrackPicM (memory) and TrackLinuxPic (Linux's
+    Mesa directly): PPM files, so they can be looked at on the Mac.
+ 5. TORCS both ways. In RiSH's Root shell:
+      sh /riscos/HardDisc4/RISC3DTest/uploads buffers
+    then run TORCS: does it draw correctly, and how fast? Then:
+      sh /riscos/HardDisc4/RISC3DTest/uploads memory
+    and run TORCS again.
 
 Please send
 -----------
-TrackResults, TrackLinuxResults and WatchResults, and a word on whether
-the rest are as in kit 18. If anything stops, /riscos/3d/log.txt (the
-helper's log).
+TrackResults, TrackLinuxResults and the four pictures (copy them to the
+Mac), and what TORCS looked like and its fps each way.

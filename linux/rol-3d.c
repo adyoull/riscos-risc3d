@@ -59,7 +59,7 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
-#define ROL3D_VERSION "0.8"
+#define ROL3D_VERSION "0.9"
 /* what the library may send (OP_CONTEXT's reply, word 3): 6 = 0.6's
    commands (GL_EXT_direct_state_access, OP_TEMP_BIND); 7 = OP_UPLOADS
    (0.8); none: 0.5 */
@@ -901,6 +901,26 @@ static size_t slot_cap[16];
 static int
 memory_ok (void)
 {
+  /* 0.9: /riscos/3d/uploads saying "buffers" goes back to 0.7's way, for
+     comparing with a real program (read once, by each context) */
+  static int checked;
+  if (!checked)
+    {
+      checked = 1;
+      FILE *f = fopen ("/riscos/3d/uploads", "r");
+      char w[16] = "";
+      if (f)
+	{
+	  if (!fgets (w, sizeof w, f))
+	    w[0] = 0;
+	  fclose (f);
+	}
+      if (!strncmp (w, "buffers", 7))
+	{
+	  as_memory = 0;
+	  logmsg ("rol-3d: arrays from programs' memory go into buffers (/riscos/3d/uploads)\n");
+	}
+    }
   return as_memory && !strict_ctx && !vao_bound;
 }
 

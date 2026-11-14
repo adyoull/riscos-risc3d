@@ -1,0 +1,10 @@
+#!/bin/sh
+# RISC3D test kit 20: how rol-3d 0.9 takes arrays from a program's memory.
+#   sh /riscos/HardDisc4/RISC3DTest/uploads buffers   (0.7's way)
+#   sh /riscos/HardDisc4/RISC3DTest/uploads memory    (0.8's way, the default)
+# Programs started after this use it; no restart needed. Run as root.
+case "$1" in
+  buffers) mkdir -p /riscos/3d && echo buffers >/riscos/3d/uploads && echo "Arrays now go into buffers (0.7's way) for programs started from now." ;;
+  memory) rm -f /riscos/3d/uploads && echo "Arrays now go to Mesa as memory (the default) for programs started from now." ;;
+  *) echo "Say buffers or memory."; exit 1 ;;
+esac

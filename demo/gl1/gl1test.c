@@ -246,6 +246,29 @@ enum { T_OBJS = 60, T_ROWS = 40, T_COLS = 60, T_FRAMES = 20, T_TEX = 200 };
 static GLfloat t_v[T_OBJS][T_ROWS * T_COLS][3], t_n[T_OBJS][T_ROWS * T_COLS][3], t_t[T_OBJS][T_ROWS * T_COLS][2];
 static GLushort t_i[T_ROWS - 1][T_COLS * 2];
 
+static int t_parts = 7;			/* 1 strips, 2 textured, 4 lines */
+
+static unsigned long
+frame_hash (void)
+{
+  unsigned long h = 5381;
+  for (size_t i = 0; i < sizeof frame; i += 4)
+    h = h * 33 + frame[i] + frame[i + 1] * 7u + frame[i + 2] * 13u;
+  return h & 0xffffffffUL;
+}
+
+static void
+save_ppm (const char *name)
+{
+  FILE *f = name ? fopen (name, "wb") : 0;
+  if (!f)
+    return;
+  fprintf (f, "P6 %d %d 255\n", W, H);
+  for (int i = 0; i < W * H; i++)
+    fwrite (frame + i * 4, 1, 3, f);
+  fclose (f);
+}
+
 static void
 track_frame (int f)
 {
@@ -263,20 +286,25 @@ track_frame (int f)
       glTexCoordPointer (2, GL_FLOAT, 0, t_t[o]);
       glEnableClientState (GL_VERTEX_ARRAY);
       glVertexPointer (3, GL_FLOAT, 0, t_v[o]);
-      for (int r = 0; r < T_ROWS - 1; r++)
-	glDrawElements (GL_TRIANGLE_STRIP, T_COLS * 2, GL_UNSIGNED_SHORT, t_i[r]);
+      if (t_parts & 2)
+	glEnable (GL_TEXTURE_2D);
+      else
+	glDisable (GL_TEXTURE_2D);
+      if (t_parts & 1)
+	for (int r = 0; r < T_ROWS - 1; r++)
+	  glDrawElements (GL_TRIANGLE_STRIP, T_COLS * 2, GL_UNSIGNED_SHORT, t_i[r]);
       /* (and a row as a line, drawn from a first vertex) */
       glDisable (GL_TEXTURE_2D);
       glColor4f (1, 1, 0, 1);
-      glDrawArrays (GL_LINE_STRIP, (o % 7 + 3) * T_COLS, T_COLS);
-      glEnable (GL_TEXTURE_2D);
+      if (t_parts & 4)
+	glDrawArrays (GL_LINE_STRIP, (o % 7 + 3) * T_COLS, T_COLS);
       glPopClientAttrib ();
     }
   finish_frame ();
 }
 
 static void
-track (void)
+track (const char *pic)
 {
   for (int o = 0; o < T_OBJS; o++)
     for (int r = 0; r < T_ROWS; r++)
@@ -344,10 +372,30 @@ track (void)
 	printf ("  of which the renderer worked %.2f s, slept %llu times, %llu commands\n",
 		(st[0] - st0[0]) / 1e9, st[2] - st0[2], st[3] - st0[3]);
 #endif
-      unsigned long h = 5381;
-      for (size_t i = 0; i < sizeof frame; i += 4)
-	h = h * 33 + frame[i] + frame[i + 1] * 7u + frame[i + 2] * 13u;
-      printf ("track picture: %08lx\n", h & 0xffffffffUL);
+      printf ("track picture: %08lx\n", frame_hash ());
+      /* (the parts on their own, to say which differs) */
+      static const int parts[] = { 1, 3, 4 };
+      static const char *const pname[] = { "strips untextured", "strips textured", "lines from a first vertex" };
+      for (int k = 0; k < 3; k++)
+	{
+	  t_parts = parts[k];
+	  track_frame (T_FRAMES - 1);
+	  printf ("  %s: %08lx\n", pname[k], frame_hash ());
+	}
+      t_parts = 7;
+      track_frame (T_FRAMES - 1);
+      if (pic)
+	{
+	  char name[256];
+#ifdef DIRECT
+	  snprintf (name, sizeof name, "%s", pic);
+#elif defined R3D_08
+	  snprintf (name, sizeof name, "%s8", pic);
+#else
+	  snprintf (name, sizeof name, "%s%s", pic, way ? "M" : "B");
+#endif
+	  save_ppm (name);
+	}
     }
 
   /* the loader's textures (TORCS's grtexture.cpp, with the RISC OS port's
@@ -407,7 +455,7 @@ main (int argc, char **argv)
   }
   if (argc > 1 && !strcmp (argv[1], "track"))
     {
-      track ();
+      track (argc > 2 ? argv[2] : 0);
 #ifndef DIRECT
       r3d_close ();
 #endif

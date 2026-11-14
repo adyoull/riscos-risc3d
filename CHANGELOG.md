@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9, continued: kit 20 to find what TORCS draws wrongly (14 Nov 2026)
+
+- **Kit 19 on the Pi (14 Nov):** Track 2.4 fps with 0.7's way (buffers),
+  18.9 with 0.8's (memory), Linux directly 26.4; 0.8's library 8.6.
+  TORCS 10-13 fps through RISC3D (software 7-10), but drawn wrongly:
+  details missing and textures not applied (riscos-mesa's software draws
+  it right). Track's picture also differs from Linux's own (5f2b9680
+  against 4b0dddda) in all three ways, so not only the new path.
+- **rol-3d 0.9 (riscos-risc3d 0.9-1):** `/riscos/3d/uploads` saying
+  "buffers" goes back to 0.7's way, read by each new context, so a real
+  program can be compared both ways without a restart. An update's
+  postinst says not to reload the modules (unchanged); reloading RISC3D
+  alone had left Linux3D unregistered on the Pi.
+- **gl1test track** writes a hash for each part (strips untextured,
+  strips textured, lines from a first vertex) and saves the picture
+  (TrackPic8/B/M, TrackLinuxPic).
+- **Kit 20:** `RISC3DTest-20.zip` with riscos-risc3d 0.9-1, the `uploads`
+  script; `watch` dropped (the loading was UnixLib's).
+
 ## 0.9: arrays from a program's memory sent once, not once a strip; kit 19 (13 Nov 2026, in testing)
 
 The ROL conversation reported (`RISC3D/handoffs/2026-11-13-rol-torcs-slow-through-risc3d-pi4.md`)

@@ -1,10 +1,11 @@
 | RISC3D test: a track drawn as TORCS draws one (objects of many triangle
 | strips from arrays in the program's memory), with 0.8's library and
 | then 0.9's (both of the renderer's ways), and TORCS's texture loading.
-| Writes TrackResults; linux-tests writes TrackLinuxResults to compare.
-RMEnsure RISC3D 0.03 Error Install riscos-risc3d 0.8-1 and restart first (see !ReadMe)
-RMEnsure Linux3D 0.02 Error Install riscos-risc3d 0.8-1 and restart first (see !ReadMe)
-Run <Obey$Dir>.gl1test08 track { > <Obey$Dir>.TrackResults }
-Run <Obey$Dir>.gl1test track { >> <Obey$Dir>.TrackResults }
+| Writes TrackResults and the pictures TrackPic8, TrackPicB and TrackPicM
+| (PPM); linux-tests writes TrackLinuxResults and TrackLinuxPic to compare.
+RMEnsure RISC3D 0.03 Error Install riscos-risc3d 0.9-1 and restart first (see !ReadMe)
+RMEnsure Linux3D 0.02 Error Install riscos-risc3d 0.9-1 and restart first (see !ReadMe)
+Run <Obey$Dir>.gl1test08 track <Obey$Dir>.TrackPic { > <Obey$Dir>.TrackResults }
+Run <Obey$Dir>.gl1test track <Obey$Dir>.TrackPic { >> <Obey$Dir>.TrackResults }
 SetType <Obey$Dir>.TrackResults Text
 Filer_Run <Obey$Dir>.TrackResults

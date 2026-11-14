@@ -59,7 +59,7 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
-#define ROL3D_VERSION "0.15"
+#define ROL3D_VERSION "0.16"
 /* what the library may send (OP_CONTEXT's reply, word 3): 6 = 0.6's
    commands (GL_EXT_direct_state_access, OP_TEMP_BIND); 7 = OP_UPLOADS
    (0.8); none: 0.5 */
@@ -2561,8 +2561,9 @@ probe_kind (const gid_t *g)
 }
 
 /* 0.14: replay changes, to find what a driver draws wrongly
-   (ROL3D_REPLAY=imm,nopush,clamp,sized,noalpha,nomip,nohint) */
-static int rp_imm, rp_nopush, rp_clamp, rp_sized, rp_noalpha;
+   (ROL3D_REPLAY=imm,nopush,clamp,sized,noalpha,nomip,nohint; 0.16:
+   nofog,nolight,nocolmat) */
+static int rp_imm, rp_nopush, rp_clamp, rp_sized, rp_noalpha, rp_nofog, rp_nolight, rp_nocolmat;
 
 /* an array the program enabled, if it's floats in its memory */
 struct rp_arr { int on; const float *p; GLint size, stride; };
@@ -2966,6 +2967,9 @@ replay (const char *file, const char *prefix, const char *which)
       rp_sized = strstr (ch, "sized") != 0;
       rp_noalpha = strstr (ch, "noalpha") != 0;
       rp_texcheck = strstr (ch, "texcheck") != 0;
+      rp_nofog = strstr (ch, "nofog") != 0;
+      rp_nolight = strstr (ch, "nolight") != 0;
+      rp_nocolmat = strstr (ch, "nocolmat") != 0;
       fprintf (stderr, "rol-3d: replay changes: %s\n", ch);
     }
   unsigned long imm_done = 0, imm_not = 0;
@@ -3040,6 +3044,9 @@ replay (const char *file, const char *prefix, const char *which)
       if (no_hint && op == OP_glHint)
 	continue;
       if (rp_noalpha && op == OP_glEnable && a[0] == GL_ALPHA_TEST)
+	continue;
+      if (op == OP_glEnable && ((rp_nofog && a[0] == GL_FOG) || (rp_nolight && a[0] == GL_LIGHTING)
+				|| (rp_nocolmat && a[0] == GL_COLOR_MATERIAL)))
 	continue;
       if (rp_nopush && (op == OP_glPushClientAttrib || op == OP_glPopClientAttrib))
 	{

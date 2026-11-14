@@ -1,10 +1,9 @@
 #!/bin/sh
-# RISC3D test kit 27: draw a recording again and check its textures on
-# the GPU. Writes into this folder:
-#   ReplayGPU-<frame>.png, ReplayGPU-cardmip-<frame>.png and
-#   ReplayGPU-cardbase-<frame>.png   on the GPU
-#   ReplaySoft-...                    the same in software
-#   ReplayLog                         what rol-3d said
+# RISC3D test kit 28: draw a recording again on the GPU with fog,
+# lighting or colour material left off, writing PNG pictures into this
+# folder:
+#   ReplayNoFog-<frame>, ReplayNoLight-<frame>, ReplayNoColMat-<frame>,
+#   ReplayNoFogLight-<frame>, and ReplayLog (what rol-3d said)
 # Run as root:
 #   sh /riscos/HardDisc4/RISC3DTest/replay /riscos/3d/recorded/ctx-477.r3d 240
 d=$(dirname "$0")
@@ -12,10 +11,11 @@ d=$(dirname "$0")
 w=${2:-240}
 r=/opt/riscos/rol-3d
 rm -f "$d"/Replay*
-sync
-ROL3D_REPLAY=texcheck $r --replay "$1" "$d/ReplayGPU" "$w" 2>&1 | tee "$d/ReplayLog"
-sync
-ROL3D_REPLAY=texcheck ROL3D_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 $r --replay "$1" "$d/ReplaySoft" "$w" 2>&1 | tee -a "$d/ReplayLog"
+: > "$d/ReplayLog"
+for v in NoFog:nofog NoLight:nolight NoColMat:nocolmat NoFogLight:nofog,nolight; do
+  sync
+  ROL3D_REPLAY=${v#*:} $r --replay "$1" "$d/Replay${v%%:*}" "$w" 2>&1 | tee -a "$d/ReplayLog"
+done
 chown 1000:1000 "$d"/Replay* 2>/dev/null
 sync
 ls "$d" | grep Replay

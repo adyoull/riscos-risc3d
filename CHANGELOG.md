@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.9, continued: textures right on the GPU; rol-3d 0.16 tries fog and lighting; kit 28 (14 Nov 2026)
+
+- **Kit 27 on the Pi (recording ctx-477, 3,359,686 commands):** texcheck
+  on V3D: 909 levels read back the same and 9 differ, all texture 156,
+  just as in software and on the host. Both GPU test cards (mipmapped
+  and level 0) match the software ones. So V3D stores and samples every
+  texture right in a plain state. The fault comes from state that TORCS
+  has on while drawing: the cards had lighting, fog, alpha, blend,
+  culling, colour material and so on off, REPLACE, and identity
+  matrices.
+- **What TORCS has on:** linear fog (start 300, end 600, glFogi mode
+  GL_LINEAR, colour), lighting with GL_LIGHT0 and GL_COLOR_MATERIAL
+  (front-and-back, ambient-and-diffuse), single colour, smooth shading.
+  The prime suspect is fog: a fog value per vertex next to the texture
+  coordinates, and the stripes look like t read from something that
+  barely changes. gl1test's Track (right on the Pi) has no fog.
+- **rol-3d 0.16 (riscos-risc3d 0.16-1):** ROL3D_REPLAY nofog, nolight and
+  nocolmat (that glEnable dropped). Host: the unchanged replay is
+  identical to 0.15's; the variants differ as expected.
+- **Kit 28:** `replay` writes ReplayNoFog, ReplayNoLight, ReplayNoColMat
+  and ReplayNoFogLight (GPU).
+
 ## 0.9, continued: rol-3d 0.15 checks textures on the GPU; kit 27 (14 Nov 2026)
 
 - **Kit 26 on the Pi:** only ReplaySoft is right. Imm, NoPush, Clamp,

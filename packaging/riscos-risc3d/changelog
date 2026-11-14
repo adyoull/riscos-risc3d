@@ -1,3 +1,10 @@
+riscos-risc3d (0.16-1) rol; urgency=medium
+
+  * rol-3d 0.16: ROL3D_REPLAY can also leave fog, lighting or colour
+    material off (nofog, nolight, nocolmat).
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Sat, 14 Nov 2026 17:45:00 +0000
+
 riscos-risc3d (0.15-1) rol; urgency=medium
 
   * rol-3d 0.15: ROL3D_REPLAY=texcheck keeps every texture level the

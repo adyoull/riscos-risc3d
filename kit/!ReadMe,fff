@@ -1,36 +1,25 @@
-RISC3D test kit 23 (prototype, 14 November 2026)
+RISC3D test kit 24 (prototype, 14 November 2026)
 ================================================
 
-TORCS through RISC3D still draws its car plain yellow and the scenery
-smeared. Kit 22's log showed every texture TORCS loads arriving
-complete (208 of them, every mipmap level, no GL errors), and riscos-
-mesa's texture tests all pass on the GPU. So the next step is to record
-exactly what TORCS sends, and draw it again: on the Pi's GPU, in Linux's
-software renderer on the Pi, and on the build machine. Whichever of
-those draws the yellow car shows where the fault is.
+Your TORCS recording (ctx-477) draws correctly in software, both on the
+build machine and on the Pi, and wrongly on the Pi's GPU. So RISC3D
+passes TORCS's commands on correctly, and it's the GPU's driver that
+draws something differently. This kit's rol-3d (0.13) redraws the
+recording on the GPU with things left out, to find which.
 
-This kit's rol-3d (0.12, in riscos-risc3d 0.12-1) can record.
+Kit 23's GPU replay was garbled because it only read back the frames it
+saved, so the GPU gathered 240 frames into one job; 0.13 reads every
+frame back, as TORCS's frames were.
 
 Steps
 -----
- 1. Copy RISC3DTest to HardDisc4 (unzip it there, replacing kit 22).
+ 1. Copy RISC3DTest to HardDisc4 (unzip it there, replacing kit 23).
  2. In RiSH's Root shell:
-      apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.12-1_arm64.deb
-      sh /riscos/HardDisc4/RISC3DTest/check off
-      sh /riscos/HardDisc4/RISC3DTest/record on 250
- 3. Run TORCS through RISC3D: start a race straight away and drive for
-    about 20 seconds (until the car has been on screen a while), then
-    quit TORCS.
- 4. In RiSH's Root shell:
-      sh /riscos/HardDisc4/RISC3DTest/record off
-    It lists the recordings: the big one is TORCS's.
- 5. Draw it again, here:
-      sh /riscos/HardDisc4/RISC3DTest/replay /riscos/3d/recorded/ctx-NNN.r3d /25
-    (NNN from the list.) It writes ReplayGPU-25, -50, ... and
-    ReplaySoft-25, -50, ... into RISC3DTest: PPM pictures.
+      apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.13-1_arm64.deb
+      sh /riscos/HardDisc4/RISC3DTest/replay /riscos/3d/recorded/ctx-477.r3d 240
+    It writes ReplayGPU-240, ReplayNoMip-240, ReplayNoHint-240 and
+    ReplaySoft-240 (PPM pictures) into RISC3DTest.
 
 Please send
 -----------
-The recording (/riscos/3d/recorded/ctx-NNN.r3d: copy it to the Mac; it
-may be a few hundred MB), and a ReplayGPU and a ReplaySoft picture of a
-frame where the car shows.
+The four pictures.

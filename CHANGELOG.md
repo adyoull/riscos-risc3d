@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9, continued: TORCS drawn wrongly only by the Pi's GPU; kit 24 (14 Nov 2026)
+
+- **TORCS recorded on the Pi (ctx-477.r3d, 3,462,636 commands, 250
+  frames, 335 MB):** replayed on the build machine (llvmpipe), frame 240
+  is right: the car's livery, number and cockpit. Replayed on the Pi in
+  software (ROL3D_SOFTWARE + LIBGL_ALWAYS_SOFTWARE): the same picture (22
+  pixels differ). Replayed on the Pi's GPU: garbled. So the commands
+  RISC3D passes on are right, and the Pi's GPU driver (V3D, Mesa 25.0.7)
+  draws something in them differently.
+- **The GPU replay was garbled** because replay read back only the frames
+  it saved: nothing ended the other frames, so V3D gathered every frame
+  into one job. **rol-3d 0.13** reads back every frame. It can also
+  leave out mipmaps (`ROL3D_REPLAY_NOMIP`: mipmapped min filters become
+  GL_LINEAR) or glHint (`ROL3D_REPLAY_NOHINT`: TORCS sets
+  GL_PERSPECTIVE_CORRECTION_HINT to GL_FASTEST), to find what V3D gets
+  wrong. Host: replay unchanged byte for byte.
+- **Kit 24:** riscos-risc3d 0.13-1; `replay` writes ReplayGPU, ReplayNoMip,
+  ReplayNoHint and ReplaySoft.
+
 ## 0.9, continued: kit 23 records TORCS (14 Nov 2026)
 
 - **Kit 22 on the Pi (14 Nov):** riscos-mesa's texture-load and

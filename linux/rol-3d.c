@@ -59,7 +59,7 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
-#define ROL3D_VERSION "0.12"
+#define ROL3D_VERSION "0.13"
 /* what the library may send (OP_CONTEXT's reply, word 3): 6 = 0.6's
    commands (GL_EXT_direct_state_access, OP_TEMP_BIND); 7 = OP_UPLOADS
    (0.8); none: 0.5 */
@@ -2588,6 +2588,7 @@ replay (const char *file, const char *prefix, const char *which)
       return 1;
     }
   unsigned every = 0, frame = 0, written = 0;
+  int no_mip = getenv ("ROL3D_REPLAY_NOMIP") != 0, no_hint = getenv ("ROL3D_REPLAY_NOHINT") != 0;
   int list[64], nlist = 0;
   if (which && which[0] == '/')
     every = (unsigned) atoi (which + 1);
@@ -2626,9 +2627,11 @@ replay (const char *file, const char *prefix, const char *which)
 	  int want = every ? frame % every == 0 : nlist == 0;
 	  for (int i = 0; i < nlist; i++)
 	    want |= list[i] == (int) frame;
+	  /* (every frame read back, as the program's frames were: a GPU
+	     would otherwise gather every frame's drawing into one job) */
+	  size_t n = present_frame (reply_area, area->reply_bytes);
 	  if (want)
 	    {
-	      size_t n = present_frame (reply_area, area->reply_bytes);
 	      char name[512];
 	      snprintf (name, sizeof name, "%s-%u.ppm", prefix, frame);
 	      FILE *o = n ? fopen (name, "wb") : 0;
@@ -2643,6 +2646,21 @@ replay (const char *file, const char *prefix, const char *which)
 	    }
 	  continue;
 	}
+      /* (changes to try, to find what a driver draws wrongly) */
+      if (no_mip && (op == OP_glTexParameteri || op == OP_glTexParameterf) && a[1] == GL_TEXTURE_MIN_FILTER)
+	{
+	  float fv;
+	  memcpy (&fv, &a[2], 4);
+	  GLint v = op == OP_glTexParameteri ? (GLint) a[2] : (GLint) fv;
+	  if (v == GL_NEAREST_MIPMAP_NEAREST || v == GL_LINEAR_MIPMAP_NEAREST || v == GL_NEAREST_MIPMAP_LINEAR
+	      || v == GL_LINEAR_MIPMAP_LINEAR)
+	    {
+	      gl.TexParameteri (a[0], GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	      continue;
+	    }
+	}
+      if (no_hint && op == OP_glHint)
+	continue;
       dispatch (op, a, h[1]);
     }
   fprintf (stderr, "rol-3d: replayed %llu commands, %u frames, %u pictures (%s)\n",

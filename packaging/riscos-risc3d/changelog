@@ -1,3 +1,11 @@
+riscos-risc3d (0.13-1) rol; urgency=medium
+
+  * rol-3d 0.13: --replay reads every frame back (as the program's were),
+    and can leave out mipmaps (ROL3D_REPLAY_NOMIP) or glHint
+    (ROL3D_REPLAY_NOHINT), to find what a driver draws wrongly.
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Sat, 14 Nov 2026 16:00:00 +0000
+
 riscos-risc3d (0.12-1) rol; urgency=medium
 
   * rol-3d 0.12: /riscos/3d/rec/ makes each new context record its

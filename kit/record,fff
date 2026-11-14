@@ -1,5 +1,5 @@
 #!/bin/sh
-# RISC3D test kit 23: rol-3d 0.12 records the 3D commands of programs
+# RISC3D test kit 24: rol-3d 0.12 on records the 3D commands of programs
 # started after "on" (each context to /riscos/3d/rec/ctx-<number>.r3d, up
 # to the frames given, default 150, or 1 GB). Run as root.
 #   sh /riscos/HardDisc4/RISC3DTest/record on [frames]

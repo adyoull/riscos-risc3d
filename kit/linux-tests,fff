@@ -1,5 +1,5 @@
 #!/bin/sh
-# RISC3D test kit 23: the same tests drawn by Linux's Mesa directly, to
+# RISC3D test kit 24: the same tests drawn by Linux's Mesa directly, to
 # compare with. Run from RiSH's root shell, after installing riscos-risc3d:
 #   sh /riscos/HardDisc4/RISC3DTest/linux-tests
 # Writes LinuxResults, LinuxPicture (OpenGL), ESLinuxResults (GLES 2;

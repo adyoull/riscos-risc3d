@@ -1,12 +1,18 @@
 #!/bin/sh
-# RISC3D test kit 23: draw a recording again here, on the GPU and then in
-# Linux's software renderer, writing frames as PPM pictures into this
-# folder (ReplayGPU-<frame> and ReplaySoft-<frame>). Run as root.
-#   sh /riscos/HardDisc4/RISC3DTest/replay /riscos/3d/recorded/ctx-123.r3d 100,140
+# RISC3D test kit 24: draw a recording again here, writing the frames
+# asked for as PPM pictures into this folder:
+#   ReplayGPU-<frame>     on the GPU, as the program had it
+#   ReplayNoMip-<frame>   on the GPU, without mipmaps (min filter linear)
+#   ReplayNoHint-<frame>  on the GPU, without the program's glHint calls
+#   ReplaySoft-<frame>    in Linux's software renderer
+# Run as root:
+#   sh /riscos/HardDisc4/RISC3DTest/replay /riscos/3d/recorded/ctx-477.r3d 240
 d=$(dirname "$0")
 [ -f "$1" ] || { echo "Give a recording (sh record list shows them)."; exit 1; }
 w=${2:-/50}
 /opt/riscos/rol-3d --replay "$1" "$d/ReplayGPU" "$w"
+ROL3D_REPLAY_NOMIP=1 /opt/riscos/rol-3d --replay "$1" "$d/ReplayNoMip" "$w"
+ROL3D_REPLAY_NOHINT=1 /opt/riscos/rol-3d --replay "$1" "$d/ReplayNoHint" "$w"
 ROL3D_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 /opt/riscos/rol-3d --replay "$1" "$d/ReplaySoft" "$w"
 chown 1000:1000 "$d"/Replay*.ppm 2>/dev/null
 for f in "$d"/Replay*.ppm; do [ -e "$f" ] && mv "$f" "${f%.ppm}"; done

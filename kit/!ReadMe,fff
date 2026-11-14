@@ -7,9 +7,9 @@ passes TORCS's commands on correctly, and it's the GPU's driver that
 draws something differently. This kit's rol-3d (0.13) redraws the
 recording on the GPU with things left out, to find which.
 
-Kit 23's GPU replay was garbled because it only read back the frames it
-saved, so the GPU gathered 240 frames into one job; 0.13 reads every
-frame back, as TORCS's frames were.
+Your ReplayGPU-240 shows exactly TORCS's fault (plain yellow car,
+smeared scenery). 0.13 also reads every frame back during a replay, as
+TORCS's frames were, so the GPU's work is split into frames as it was.
 
 Steps
 -----

@@ -6,12 +6,15 @@
   frames, 335 MB):** replayed on the build machine (llvmpipe), frame 240
   is right: the car's livery, number and cockpit. Replayed on the Pi in
   software (ROL3D_SOFTWARE + LIBGL_ALWAYS_SOFTWARE): the same picture (22
-  pixels differ). Replayed on the Pi's GPU: garbled. So the commands
+  pixels differ). Replayed on the Pi's GPU (the owner's PNG of it): the plain yellow car
+  and smeared scenery, as TORCS showed. (The PPMs as uploaded here were
+  altered in transit, so looked garbled; the owner's own PNG is right.)
+  So the commands
   RISC3D passes on are right, and the Pi's GPU driver (V3D, Mesa 25.0.7)
   draws something in them differently.
-- **The GPU replay was garbled** because replay read back only the frames
-  it saved: nothing ended the other frames, so V3D gathered every frame
-  into one job. **rol-3d 0.13** reads back every frame. It can also
+- **rol-3d 0.13:** replay reads back every frame (as the program's
+  frames were; before, only the saved ones, so V3D could gather many
+  frames into one job). It can also
   leave out mipmaps (`ROL3D_REPLAY_NOMIP`: mipmapped min filters become
   GL_LINEAR) or glHint (`ROL3D_REPLAY_NOHINT`: TORCS sets
   GL_PERSPECTIVE_CORRECTION_HINT to GL_FASTEST), to find what V3D gets

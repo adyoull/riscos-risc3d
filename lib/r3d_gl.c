@@ -260,6 +260,8 @@ array_defaults (struct attrib *attribs, struct attrib *fixed)
 static int
 kick (int wait)
 {
+  if (cur->handle < 0)
+    return -1;			/* (closed: its shared memory has gone) */
   if (wait)
     __atomic_store_n (&cur->area->asking, 1, __ATOMIC_SEQ_CST);
   _kernel_oserror *e = _swix (RISC3D_Sync, _INR (0, 1), cur->handle, wait);
@@ -282,7 +284,7 @@ kick (int wait)
 static void
 publish (void)
 {
-  if (cur->published == cur->local_head)
+  if (cur->published == cur->local_head || cur->handle < 0)
     return;
   cur->published = cur->local_head;
   __atomic_store_n (&cur->area->head, cur->local_head, __ATOMIC_SEQ_CST);
@@ -3343,10 +3345,17 @@ static int atexit_set;
 static void
 close_all (void)
 {
+  /* (at exit, maybe before a library's own handler that still releases
+     its context, flushing: freeglut's fgDeinitialize, riscos-mesa found.
+     A closed context's shared memory is gone, so it's marked closed and
+     anything sent to it after is dropped) */
   for (int i = 0; i < MAX_OPEN; i++)
     if (open_ctx[i])
       {
 	_swix (RISC3D_Close, _IN (0), open_ctx[i]->handle);
+	open_ctx[i]->handle = -1;
+	if (cur == open_ctx[i])
+	  cur = &none;
 	open_ctx[i] = 0;
       }
 }
@@ -4352,7 +4361,7 @@ static void
 debug_deliver (void)
 {
   static int in;
-  if (in || !cur->debug_cb)
+  if (in || !cur->debug_cb || cur->handle < 0)
     return;
   in = 1;
   for (int rounds = 0; rounds < 4 && __atomic_load_n (&cur->area->debug_pending, __ATOMIC_ACQUIRE); rounds++)

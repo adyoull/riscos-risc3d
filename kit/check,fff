@@ -1,8 +1,8 @@
 #!/bin/sh
-# RISC3D test kit 21: rol-3d 0.10 checks the 3D contexts of programs
+# RISC3D test kit 22: rol-3d 0.10 on checks the 3D contexts of programs
 # started after "on": it logs GL's errors after each command, the
 # functions Linux's GL hasn't got, and which commands came (at frame 60,
-# then every 600) into /riscos/3d/log.txt. Run as root.
+# then every 600), and (0.11) texture uploads, into /riscos/3d/log.txt. Run as root.
 #   sh /riscos/HardDisc4/RISC3DTest/check on
 #   sh /riscos/HardDisc4/RISC3DTest/check off
 case "$1" in

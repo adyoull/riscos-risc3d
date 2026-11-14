@@ -59,7 +59,7 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
-#define ROL3D_VERSION "0.10"
+#define ROL3D_VERSION "0.11"
 /* what the library may send (OP_CONTEXT's reply, word 3): 6 = 0.6's
    commands (GL_EXT_direct_state_access, OP_TEMP_BIND); 7 = OP_UPLOADS
    (0.8); none: 0.5 */
@@ -2169,8 +2169,10 @@ check_start (void)
       chklog ("rol-3d: check: Linux's GL has no %s\n", gl_names[i]);
 }
 
+static int tex_logged;
+
 static void
-check_op (uint32_t op)
+check_op (uint32_t op, const uint32_t *a)
 {
   if (checking < 0 && have_context)
     check_start ();
@@ -2178,6 +2180,25 @@ check_op (uint32_t op)
     return;
   if (op < 0x8000)
     op_count[op]++;
+  /* (0.11: the textures' levels and filters, to see which are complete) */
+  if ((op == OP_glTexImage2D || op == OP_glTexParameteri || op == OP_glTexParameterf) && tex_logged < 4000 && !in_begin)
+    {
+      GLint bound = 0, unit = GL_TEXTURE0;
+      gl.GetIntegerv (GL_TEXTURE_BINDING_2D, &bound);
+      gl.GetIntegerv (GL_ACTIVE_TEXTURE, &unit);
+      if (op == OP_glTexImage2D)
+	chklog ("rol-3d: check: unit %d tex %d: image target &%X level %d internal &%X %ux%u format &%X type &%X\n",
+		unit - GL_TEXTURE0, bound, a[0], (int) a[1], a[2], a[3], a[4], a[6], a[7]), tex_logged++;
+      else
+	{
+	  float f;
+	  memcpy (&f, &a[2], 4);
+	  int v = op == OP_glTexParameteri ? (int) a[2] : (int) f;
+	  if (a[1] == GL_TEXTURE_MIN_FILTER || a[1] == GL_TEXTURE_MAX_LEVEL || a[1] == GL_TEXTURE_BASE_LEVEL
+	      || a[1] == 0x8191 /* GL_GENERATE_MIPMAP */)
+	    chklog ("rol-3d: check: unit %d tex %d: parameter &%X = &%X\n", unit - GL_TEXTURE0, bound, a[1], v), tex_logged++;
+	}
+    }
   if (op == OP_glBegin)
     in_begin = 1;
   else if (op == OP_glEnd)
@@ -2262,7 +2283,7 @@ drain_ring (void)
 	{
 	  dispatch (op, a, n - 2);
 	  if (__builtin_expect (checking != 0, 0))
-	    check_op (op);
+	    check_op (op, a);
 	}
       else if (op == OP_BLOB)
 	{
@@ -2281,7 +2302,7 @@ drain_ring (void)
 	  memset ((char *) all + fixed + blob_len, 0, 8);
 	  dispatch (op & ~R3D_WITH_BLOB, all, (uint32_t) ((fixed + blob_len + 3) / 4));
 	  if (__builtin_expect (checking != 0, 0))
-	    check_op (op & ~R3D_WITH_BLOB);
+	    check_op (op & ~R3D_WITH_BLOB, all);
 	  free (all);
 	  blob_len = 0;
 	}

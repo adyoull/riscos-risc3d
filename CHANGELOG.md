@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.9, continued: exit fix, kit 22 logs TORCS's textures (14 Nov 2026)
+
+- **Kit 21 on the Pi (14 Nov):** TexResults = TexLinuxResults exactly.
+  TORCS's check log (60 frames): no GL errors, and no glActiveTexture or
+  glClientActiveTexture. I told riscos-mesa those calls were being lost;
+  they checked (`MESA/handoffs/2026-11-14-mesa-risc3d-arb-names-ok-exit-abort.md`)
+  and the ARB names do reach RISC3D (their multitex test under QEMU).
+  TORCS on RISC OS runs with one texture unit unless -M, so the missing
+  calls are probably just TORCS not making them. Not the cause, then.
+- **Fixed: the abort at exit** riscos-mesa found. `close_all` (the
+  client's atexit handler) closed each context but left its handle and
+  `cur`; freeglut's own handler, run after it, released its context and
+  flushed into the unmapped ring (r3d_put_slow -> publish). Now a closed
+  context's handle is -1 and `cur` goes back to none, so later calls are
+  dropped; kick, publish and the debug delivery also check. This is
+  probably TORCS's abort when leaving the race too. Host: a program
+  whose earlier atexit handler draws after close_all ends cleanly.
+- **rol-3d 0.11 (riscos-risc3d 0.11-1):** with `/riscos/3d/check`, each
+  glTexImage2D (unit, texture, level, internal format, size, format,
+  type) and min filter / base / max level / generate-mipmap parameter is
+  logged (at most 4,000 lines), to see which textures are incomplete.
+- **Kit 22:** `RISC3DTest-22.zip` with riscos-risc3d 0.11-1.
+
 ## 0.9, continued: kit 21, rol-3d checks what TORCS sends (14 Nov 2026)
 
 - **Kit 20 on the Pi (14 Nov):** Track's parts through RISC3D = Linux's

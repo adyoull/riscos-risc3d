@@ -1,3 +1,10 @@
+riscos-risc3d (0.11-1) rol; urgency=medium
+
+  * rol-3d 0.11: with /riscos/3d/check, texture uploads (unit, texture,
+    level, sizes, formats) and filter/level parameters are logged too.
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Sat, 14 Nov 2026 15:20:00 +0000
+
 riscos-risc3d (0.10-1) rol; urgency=medium
 
   * rol-3d 0.10: /riscos/3d/check makes each new context log GL's errors

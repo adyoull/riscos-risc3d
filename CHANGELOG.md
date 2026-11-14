@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.9, continued: it's lighting; rol-3d 0.17 and gl1test lit narrow it down; kit 29 (14 Nov 2026)
+
+- **Kit 28 on the Pi:** ReplayNoLight and ReplayNoFogLight are right (car
+  livery, cockpit, trees). ReplayNoFog and ReplayNoColMat are as wrong as
+  before. So the fault needs GL_LIGHTING on: V3D (Mesa 25.0.7) draws
+  TORCS's textures wrongly when lit.
+- **TORCS's lighting (from the recording):**
+  - GL_LIGHT0 directional at (0, -15000, 10000, 0), set before the
+    camera; ambient 0.2, diffuse 1, specular 0.1.
+  - Colour material front-and-back, ambient-and-diffuse.
+  - Car material: ambient 0.8, specular 0.5, shininess 50, emission
+    0.4/0.2. Another material: specular 1, shininess 0, emission 0.
+  - Two-sided off, single colour; normals in client arrays.
+- **gl1test lit (new):** draws a plane as TORCS draws it (client arrays,
+  Push/PopClientAttrib, strips, a 128x128 mipmapped texture with every
+  level, MODULATE), with TORCS's light. Six parts: unlit, car material,
+  specular 1 with shininess 0, no specular, no colour material, normal
+  not in an array. Writes a PNG (gl1test's own writer). Host: through
+  RISC3D = Mesa directly, byte for byte (3ab4b9dc).
+- **rol-3d 0.17 (riscos-risc3d 0.17-1):** ROL3D_REPLAY nospec and noemis
+  (glMaterialfv/glLightfv GL_SPECULAR or GL_EMISSION given as black).
+  Host: the unchanged replay is identical; both variants differ.
+- **Kit 29:**
+  - `Lit` obey file (RISC3D).
+  - `litlinux` script (Linux's Mesa directly). It's not called `lit`,
+    because RISC OS names ignore case and it would clash with `Lit`.
+  - `replay` writes ReplayNoSpec and ReplayNoEmis.
+
 ## 0.9, continued: textures right on the GPU; rol-3d 0.16 tries fog and lighting; kit 28 (14 Nov 2026)
 
 - **Kit 27 on the Pi (recording ctx-477, 3,359,686 commands):** texcheck

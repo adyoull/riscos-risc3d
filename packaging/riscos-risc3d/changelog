@@ -1,3 +1,10 @@
+riscos-risc3d (0.17-1) rol; urgency=medium
+
+  * rol-3d 0.17: ROL3D_REPLAY can also give specular or emission colours
+    as black (nospec, noemis).
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Sat, 14 Nov 2026 20:45:00 +0000
+
 riscos-risc3d (0.16-1) rol; urgency=medium
 
   * rol-3d 0.16: ROL3D_REPLAY can also leave fog, lighting or colour

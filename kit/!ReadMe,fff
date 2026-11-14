@@ -1,24 +1,30 @@
-RISC3D test kit 28 (prototype, 14 November 2026)
+RISC3D test kit 29 (prototype, 14 November 2026)
 ================================================
 
-Kit 27's results: every texture reads back from the GPU exactly as
-TORCS uploaded it, and the GPU's test cards match software's. So the
-GPU stores and draws the textures right, as long as nothing else is
-switched on. The fault comes from something TORCS has switched on
-while drawing: fog, lighting or colour material.
+Kit 28's results: with lighting off, TORCS's textures draw right on the
+GPU; with it on, they don't. Fog and colour material aren't the cause.
 
-This kit's rol-3d (0.16) redraws your recording on the GPU with each
-of those left off in turn. The picture where the car's livery comes
-back names the cause.
+This kit narrows it down two ways:
+
+ - Lit (double-click) draws TORCS's lighting, with its light and
+   materials, on a textured plane, in six parts (top row: unlit, car
+   material, TORCS's other material; bottom row: no specular, no colour
+   material, normal not in an array). The litlinux script draws the same with
+   Linux's Mesa directly. If Linux's picture is wrong too, it's a bug in
+   the Pi's Mesa, not RISC3D's.
+ - replay redraws your TORCS recording with the specular highlights off
+   (NoSpec), then with the emission off (NoEmis).
 
 Steps
 -----
- 1. Unzip RISC3DTest into HardDisc4, replacing kit 27.
+ 1. Unzip RISC3DTest into HardDisc4, replacing kit 28.
  2. In RiSH's Root shell:
-      apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.16-1_arm64.deb
+      apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.17-1_arm64.deb
+      sh /riscos/HardDisc4/RISC3DTest/litlinux
       sh /riscos/HardDisc4/RISC3DTest/replay /riscos/3d/recorded/ctx-477.r3d 240
+ 3. Double-click Lit.
 
 Please send
 -----------
-The four pictures (ReplayNoFog-240, ReplayNoLight-240,
-ReplayNoColMat-240, ReplayNoFogLight-240) and ReplayLog.
+LitPicture/png (LitPicture.png on the Mac), LitLinuxPicture.png, ReplayNoSpec-240, ReplayNoEmis-240,
+and ReplayLog.

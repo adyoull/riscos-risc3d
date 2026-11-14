@@ -269,6 +269,225 @@ save_ppm (const char *name)
   fclose (f);
 }
 
+/* gl1test lit: TORCS's lighting (plib ssg + TORCS's light and
+   materials, as recorded on 14 Nov) on a mipmapped, textured plane drawn
+   as TORCS draws (client arrays, glPushClientAttrib, strips), in six
+   parts side by side; writes a PNG. Kit 28 showed V3D draws TORCS's
+   textures wrongly only with GL_LIGHTING on. */
+static void
+png_put32 (FILE *o, uint32_t v)
+{
+  unsigned char b[4] = { (unsigned char) (v >> 24), (unsigned char) (v >> 16), (unsigned char) (v >> 8), (unsigned char) v };
+  fwrite (b, 1, 4, o);
+}
+
+static uint32_t
+png_crc (uint32_t c, const unsigned char *b, size_t n)
+{
+  c = ~c;
+  while (n--)
+    {
+      c ^= *b++;
+      for (int k = 0; k < 8; k++)
+	c = c & 1 ? 0xEDB88320u ^ (c >> 1) : c >> 1;
+    }
+  return ~c;
+}
+
+static void
+save_png (const char *name)
+{
+  FILE *o = name ? fopen (name, "wb") : 0;
+  if (!o)
+    return;
+  static unsigned char raw[(W * 3 + 1) * H], z[(W * 3 + 1) * H + 64];
+  size_t row = W * 3 + 1, n = row * H, zi = 0;
+  for (int y = 0; y < H; y++)
+    {
+      raw[row * y] = 0;
+      for (int x = 0; x < W; x++)
+	memcpy (raw + row * y + 1 + x * 3, frame + ((size_t) y * W + x) * 4, 3);
+    }
+  uint32_t a = 1, b = 0;
+  for (size_t i = 0; i < n; i++)
+    a = (a + raw[i]) % 65521, b = (b + a) % 65521;
+  z[zi++] = 0x78, z[zi++] = 0x01;
+  for (size_t at = 0; at < n;)
+    {
+      size_t k = n - at > 65535 ? 65535 : n - at;
+      z[zi++] = at + k >= n;
+      z[zi++] = (unsigned char) k, z[zi++] = (unsigned char) (k >> 8);
+      z[zi++] = (unsigned char) ~k, z[zi++] = (unsigned char) (~k >> 8);
+      memcpy (z + zi, raw + at, k);
+      zi += k, at += k;
+    }
+  uint32_t ad = (b << 16) | a;
+  z[zi++] = (unsigned char) (ad >> 24), z[zi++] = (unsigned char) (ad >> 16), z[zi++] = (unsigned char) (ad >> 8), z[zi++] = (unsigned char) ad;
+  static const unsigned char sig[8] = { 0x89, 'P', 'N', 'G', 13, 10, 26, 10 };
+  fwrite (sig, 1, 8, o);
+  unsigned char ih[17] = { 'I', 'H', 'D', 'R', 0, 0, W >> 8, W & 255, 0, 0, H >> 8, H & 255, 8, 2, 0, 0, 0 };
+  png_put32 (o, 13);
+  fwrite (ih, 1, 17, o);
+  png_put32 (o, png_crc (0, ih, 17));
+  png_put32 (o, (uint32_t) zi);
+  fwrite ("IDAT", 1, 4, o);
+  fwrite (z, 1, zi, o);
+  png_put32 (o, png_crc (png_crc (0, (const unsigned char *) "IDAT", 4), z, zi));
+  png_put32 (o, 0);
+  fwrite ("IEND", 1, 4, o);
+  png_put32 (o, png_crc (0, (const unsigned char *) "IEND", 4));
+  fclose (o);
+}
+
+#define L_N 12
+static float l_v[L_N * L_N][3], l_n[L_N * L_N][3], l_t[L_N * L_N][2];
+static GLushort l_i[L_N - 1][L_N * 2];
+
+static void
+lit_part (int part, int x, int y, int w, int h)
+{
+  static const float amb[] = { 0.2f, 0.2f, 0.2f, 1 }, dif[] = { 1, 1, 1, 1 }, spe[] = { 0.1f, 0.1f, 0.1f, 1 };
+  static const float pos[] = { 0, -15000, 10000, 0 };
+  static const float one[] = { 1, 1, 1, 1 }, zero[] = { 0, 0, 0, 1 };
+  static const float m_amb[] = { 0.8f, 0.8f, 0.8f, 1 }, m_spe[] = { 0.5f, 0.5f, 0.5f, 1 }, m_em[] = { 0.4f, 0.4f, 0.4f, 1 };
+  glViewport (x, y, w, h);
+  glMatrixMode (GL_PROJECTION);
+  glLoadIdentity ();
+  glFrustum (-0.6, 0.6, -0.45, 0.45, 1, 50);
+  glMatrixMode (GL_MODELVIEW);
+  glLoadIdentity ();
+  /* the light as TORCS sets it: before the camera */
+  glLightfv (GL_LIGHT0, GL_AMBIENT, amb);
+  glLightfv (GL_LIGHT0, GL_DIFFUSE, dif);
+  glLightfv (GL_LIGHT0, GL_SPECULAR, spe);
+  glLightfv (GL_LIGHT0, GL_POSITION, pos);
+  glTranslatef (0, -0.15f, -1.9f);
+  glRotatef (-55, 1, 0, 0);
+  if (part == 0)
+    glDisable (GL_LIGHTING);
+  else
+    glEnable (GL_LIGHTING);
+  glEnable (GL_LIGHT0);
+  if (part == 4)
+    glDisable (GL_COLOR_MATERIAL);
+  else
+    {
+      glColorMaterial (GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+      glEnable (GL_COLOR_MATERIAL);
+    }
+  switch (part)
+    {
+    case 1:			/* TORCS's car material */
+    case 4:
+    case 5:
+      glMaterialfv (GL_FRONT_AND_BACK, GL_AMBIENT, m_amb);
+      glMaterialfv (GL_FRONT_AND_BACK, GL_SPECULAR, m_spe);
+      glMaterialfv (GL_FRONT_AND_BACK, GL_EMISSION, m_em);
+      glMaterialf (GL_FRONT_AND_BACK, GL_SHININESS, 50);
+      break;
+    case 2:			/* TORCS's other one: specular 1, shininess 0 */
+      glMaterialfv (GL_FRONT_AND_BACK, GL_SPECULAR, one);
+      glMaterialfv (GL_FRONT_AND_BACK, GL_EMISSION, zero);
+      glMaterialf (GL_FRONT_AND_BACK, GL_SHININESS, 0);
+      break;
+    default:			/* no specular */
+      glMaterialfv (GL_FRONT_AND_BACK, GL_SPECULAR, zero);
+      glMaterialfv (GL_FRONT_AND_BACK, GL_EMISSION, zero);
+      glMaterialf (GL_FRONT_AND_BACK, GL_SHININESS, 0);
+      break;
+    }
+  glColor4f (1, 0.9f, 0.3f, 1);
+  glNormal3f (0, 0, 1);
+  glPushClientAttrib (GL_CLIENT_VERTEX_ARRAY_BIT);
+  if (part != 5)		/* (5: normals not in an array) */
+    {
+      glEnableClientState (GL_NORMAL_ARRAY);
+      glNormalPointer (GL_FLOAT, 0, l_n);
+    }
+  glEnableClientState (GL_TEXTURE_COORD_ARRAY);
+  glTexCoordPointer (2, GL_FLOAT, 0, l_t);
+  glEnableClientState (GL_VERTEX_ARRAY);
+  glVertexPointer (3, GL_FLOAT, 0, l_v);
+  for (int r = 0; r < L_N - 1; r++)
+    glDrawElements (GL_TRIANGLE_STRIP, L_N * 2, GL_UNSIGNED_SHORT, l_i[r]);
+  glPopClientAttrib ();
+}
+
+static void
+lit (const char *pic)
+{
+  for (int r = 0; r < L_N; r++)
+    for (int c = 0; c < L_N; c++)
+      {
+	int k = r * L_N + c;
+	l_v[k][0] = (float) c / (L_N - 1) * 2 - 1;
+	l_v[k][1] = (float) r / (L_N - 1) * 2 - 1;
+	l_v[k][2] = 0;
+	l_n[k][0] = 0, l_n[k][1] = 0, l_n[k][2] = 1;
+	l_t[k][0] = (float) c / (L_N - 1) * 2;
+	l_t[k][1] = (float) r / (L_N - 1) * 2;
+      }
+  for (int r = 0; r < L_N - 1; r++)
+    for (int c = 0; c < L_N; c++)
+      {
+	l_i[r][c * 2] = (GLushort) ((r + 1) * L_N + c);
+	l_i[r][c * 2 + 1] = (GLushort) (r * L_N + c);
+      }
+  /* a 128x128 texture with every level made here (as TORCS's loader):
+     coloured squares and a diagonal, so a stretched row shows */
+  GLuint tex;
+  glGenTextures (1, &tex);
+  glBindTexture (GL_TEXTURE_2D, tex);
+  static unsigned char img[128 * 128 * 4], half[64 * 64 * 4];
+  for (int y = 0; y < 128; y++)
+    for (int x = 0; x < 128; x++)
+      {
+	unsigned char *p = img + (y * 128 + x) * 4;
+	int sq = ((x / 16) ^ (y / 16)) & 1;
+	p[0] = (unsigned char) (sq ? 230 : x * 2);
+	p[1] = (unsigned char) (sq ? 40 : y * 2);
+	p[2] = (unsigned char) (abs (x - y) < 6 ? 255 : 60);
+	p[3] = 255;
+      }
+  int sz = 128;
+  for (int lv = 0; sz >= 1; lv++, sz /= 2)
+    {
+      glTexImage2D (GL_TEXTURE_2D, lv, 4, sz, sz, 0, GL_RGBA, GL_UNSIGNED_BYTE, img);
+      int h2 = sz / 2;
+      for (int y = 0; y < h2; y++)
+	for (int x = 0; x < h2; x++)
+	  for (int c = 0; c < 4; c++)
+	    half[(y * h2 + x) * 4 + c] = (unsigned char) ((img[((2 * y) * sz + 2 * x) * 4 + c] + img[((2 * y) * sz + 2 * x + 1) * 4 + c]
+							   + img[((2 * y + 1) * sz + 2 * x) * 4 + c] + img[((2 * y + 1) * sz + 2 * x + 1) * 4 + c]) / 4);
+      memcpy (img, half, (size_t) h2 * h2 * 4);
+    }
+  glTexEnvi (GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glEnable (GL_TEXTURE_2D);
+  glEnable (GL_DEPTH_TEST);
+  glShadeModel (GL_SMOOTH);
+  glLightModeli (GL_LIGHT_MODEL_TWO_SIDE, 0);
+  glClearColor (0.3f, 0.3f, 0.35f, 1);
+  glViewport (0, 0, W, H);
+  glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  static const char *const name[6] = {
+    "unlit", "lit, TORCS's car material (specular 0.5, shininess 50, emission)",
+    "lit, specular 1, shininess 0 (TORCS's other material)", "lit, no specular",
+    "lit, car material, no colour material", "lit, car material, normal not in an array" };
+  for (int p = 0; p < 6; p++)
+    {
+      lit_part (p, (p % 3) * (W / 3), (1 - p / 3) * (H / 2), W / 3, H / 2);
+      printf ("lit part %d: %s (%s)\n", p + 1, name[p], p / 3 ? "bottom row" : "top row");
+    }
+  glViewport (0, 0, W, H);
+  finish_frame ();
+  printf ("lit picture: %08lx\n", frame_hash ());
+  save_png (pic);
+}
+
 static void
 track_frame (int f)
 {
@@ -667,6 +886,14 @@ main (int argc, char **argv)
       multi ();
       if (argc > 2)
 	save_ppm (argv[2]);
+#ifndef DIRECT
+      r3d_close ();
+#endif
+      return 0;
+    }
+  if (argc > 1 && !strcmp (argv[1], "lit"))
+    {
+      lit (argc > 2 ? argv[2] : 0);
 #ifndef DIRECT
       r3d_close ();
 #endif

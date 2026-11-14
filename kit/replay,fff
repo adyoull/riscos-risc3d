@@ -1,9 +1,7 @@
 #!/bin/sh
-# RISC3D test kit 28: draw a recording again on the GPU with fog,
-# lighting or colour material left off, writing PNG pictures into this
-# folder:
-#   ReplayNoFog-<frame>, ReplayNoLight-<frame>, ReplayNoColMat-<frame>,
-#   ReplayNoFogLight-<frame>, and ReplayLog (what rol-3d said)
+# RISC3D test kit 29: draw a recording again on the GPU with TORCS's
+# specular or emission colours given as black, writing PNG pictures into
+# this folder: ReplayNoSpec-<frame>, ReplayNoEmis-<frame>, and ReplayLog.
 # Run as root:
 #   sh /riscos/HardDisc4/RISC3DTest/replay /riscos/3d/recorded/ctx-477.r3d 240
 d=$(dirname "$0")
@@ -12,7 +10,7 @@ w=${2:-240}
 r=/opt/riscos/rol-3d
 rm -f "$d"/Replay*
 : > "$d/ReplayLog"
-for v in NoFog:nofog NoLight:nolight NoColMat:nocolmat NoFogLight:nofog,nolight; do
+for v in NoSpec:nospec NoEmis:noemis; do
   sync
   ROL3D_REPLAY=${v#*:} $r --replay "$1" "$d/Replay${v%%:*}" "$w" 2>&1 | tee -a "$d/ReplayLog"
 done

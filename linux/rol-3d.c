@@ -59,7 +59,7 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
-#define ROL3D_VERSION "0.11"
+#define ROL3D_VERSION "0.12"
 /* what the library may send (OP_CONTEXT's reply, word 3): 6 = 0.6's
    commands (GL_EXT_direct_state_access, OP_TEMP_BIND); 7 = OP_UPLOADS
    (0.8); none: 0.5 */
@@ -2230,6 +2230,64 @@ check_op (uint32_t op, const uint32_t *a)
       }
 }
 
+/* --- recording (0.12): /riscos/3d/rec/ existing (a directory anyone can
+   write to: the kit's `record on`) makes each new context write every
+   command it gets to /riscos/3d/rec/ctx-<pid>.r3d: words: opcode, the
+   argument words' count, the arguments (data that came ahead of a command
+   included). Up to /riscos/3d/rec/frames frames (default 200) or 1 GB.
+   `rol-3d --replay file prefix [frames]` draws a recording again on any
+   machine and writes chosen frames as PPM pictures. --------------------- */
+
+static FILE *rec_f;
+static int rec_state = -1;		/* -1 not looked, 0 off, 1 on */
+static unsigned rec_frames, rec_limit = 200;
+static uint64_t rec_bytes;
+
+static void
+rec_op (uint32_t op, const uint32_t *a, uint32_t n)
+{
+  if (rec_state < 0)
+    {
+      rec_state = 0;
+      struct stat st;
+      if (stat ("/riscos/3d/rec", &st) == 0 && S_ISDIR (st.st_mode))
+	{
+	  FILE *l = fopen ("/riscos/3d/rec/frames", "r");
+	  if (l)
+	    {
+	      unsigned v;
+	      if (fscanf (l, "%u", &v) == 1 && v > 0)
+		rec_limit = v;
+	      fclose (l);
+	    }
+	  char name[64];
+	  snprintf (name, sizeof name, "/riscos/3d/rec/ctx-%d.r3d", (int) getpid ());
+	  rec_f = fopen (name, "wb");
+	  rec_state = rec_f != 0;
+	  logmsg ("rol-3d: recording to %s: %s\n", name, rec_f ? "yes" : "can't");
+	}
+    }
+  if (rec_state <= 0)
+    return;
+  uint32_t h[2] = { op, n };
+  fwrite (h, 4, 2, rec_f);
+  fwrite (a, 4, n, rec_f);
+  rec_bytes += 8 + (uint64_t) n * 4;
+  if (op == OP_PRESENT || op == OP_PRESENT_SLOT || op == OP_PRESENT_OVERLAY || op == OP_glFinish)
+    {
+      fflush (rec_f);			/* (the context ends with _exit) */
+      if (op != OP_glFinish && ++rec_frames >= rec_limit)
+	rec_bytes = ~0ull >> 1;
+    }
+  if (rec_bytes > (1ull << 30))
+    {
+      fclose (rec_f);
+      rec_f = 0;
+      rec_state = 0;
+      logmsg ("rol-3d: recording ended after %u frames\n", rec_frames);
+    }
+}
+
 /* --- the ring ----------------------------------------------------------- */
 
 static char *blob;
@@ -2281,6 +2339,8 @@ drain_ring (void)
       const uint32_t *a = ring + at + 2;
       if (__builtin_expect (op < OP_BLOB, 1))
 	{
+	  if (__builtin_expect (rec_state != 0, 0))
+	    rec_op (op, a, n - 2);
 	  dispatch (op, a, n - 2);
 	  if (__builtin_expect (checking != 0, 0))
 	    check_op (op, a);
@@ -2300,6 +2360,8 @@ drain_ring (void)
 	  memcpy (all, a, fixed);
 	  memcpy ((char *) all + fixed, blob, blob_len);
 	  memset ((char *) all + fixed + blob_len, 0, 8);
+	  if (__builtin_expect (rec_state != 0, 0))
+	    rec_op (op & ~R3D_WITH_BLOB, all, (uint32_t) ((fixed + blob_len + 3) / 4));
 	  dispatch (op & ~R3D_WITH_BLOB, all, (uint32_t) ((fixed + blob_len + 3) / 4));
 	  if (__builtin_expect (checking != 0, 0))
 	    check_op (op & ~R3D_WITH_BLOB, all);
@@ -2498,9 +2560,101 @@ probe_kind (const gid_t *g)
   close (p[0]);
 }
 
+/* a recording drawn again: every frame in the list (or every n-th) as
+   prefix-<frame>.ppm */
+static int
+replay (const char *file, const char *prefix, const char *which)
+{
+  FILE *f = fopen (file, "rb");
+  if (!f)
+    {
+      fprintf (stderr, "rol-3d: can't open %s\n", file);
+      return 1;
+    }
+  area = calloc (1, R3D_AREA_BYTES);
+  if (!area)
+    return 1;
+  area->magic = R3D_MAGIC;
+  area->ring_words = R3D_RING_WORDS;
+  area->ring_offset = 4096;
+  area->reply_offset = 4096 + R3D_RING_WORDS * 4;
+  area->reply_bytes = R3D_REPLY_BYTES;
+  ring = (uint32_t *) ((char *) area + area->ring_offset);
+  reply_area = (char *) area + area->reply_offset;
+  sock = -1;
+  if (!gl_start () && !software_display ())
+    {
+      fprintf (stderr, "rol-3d: %s\n", gl_error);
+      return 1;
+    }
+  unsigned every = 0, frame = 0, written = 0;
+  int list[64], nlist = 0;
+  if (which && which[0] == '/')
+    every = (unsigned) atoi (which + 1);
+  else if (which)
+    for (const char *p = which; *p && nlist < 64; p++)
+      {
+	list[nlist++] = atoi (p);
+	while (p[1] && p[1] != ',')
+	  p++;
+	if (p[1] == ',')
+	  p++;
+      }
+  size_t cap = 1 << 20;
+  uint32_t *a = malloc (cap * 4);
+  uint32_t h[2];
+  uint64_t commands = 0;
+  while (a && fread (h, 4, 2, f) == 2)
+    {
+      if (h[1] + 8 > cap)
+	{
+	  cap = h[1] + 1024;
+	  a = realloc (a, cap * 4);
+	  if (!a)
+	    break;
+	}
+      if (fread (a, 4, h[1], f) != h[1])
+	break;
+      memset (a + h[1], 0, 32);
+      commands++;
+      uint32_t op = h[0];
+      if (op == OP_OVERLAY)
+	continue;			/* (no display here: frames are read back) */
+      if (op == OP_PRESENT || op == OP_PRESENT_SLOT || op == OP_PRESENT_OVERLAY)
+	{
+	  frame++;
+	  int want = every ? frame % every == 0 : nlist == 0;
+	  for (int i = 0; i < nlist; i++)
+	    want |= list[i] == (int) frame;
+	  if (want)
+	    {
+	      size_t n = present_frame (reply_area, area->reply_bytes);
+	      char name[512];
+	      snprintf (name, sizeof name, "%s-%u.ppm", prefix, frame);
+	      FILE *o = n ? fopen (name, "wb") : 0;
+	      if (o)
+		{
+		  fprintf (o, "P6 %d %d 255\n", fb_w, fb_h);
+		  for (size_t i = 0; i < n; i += 4)
+		    fwrite (reply_area + i, 1, 3, o);
+		  fclose (o);
+		  written++;
+		}
+	    }
+	  continue;
+	}
+      dispatch (op, a, h[1]);
+    }
+  fprintf (stderr, "rol-3d: replayed %llu commands, %u frames, %u pictures (%s)\n",
+	   (unsigned long long) commands, frame, written, (const char *) gl.GetString (GL_RENDERER));
+  return 0;
+}
+
 int
 main (int argc, char **argv)
 {
+  if (argc > 2 && !strcmp (argv[1], "--replay"))
+    return replay (argv[2], argc > 3 ? argv[3] : "frame", argc > 4 ? argv[4] : "/50");
   if (argc > 1 && !strcmp (argv[1], "--check"))
     {
       /* what would draw, or why nothing can: GLES first, then OpenGL */

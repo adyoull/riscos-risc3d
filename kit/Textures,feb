@@ -2,8 +2,8 @@
 | immediate mode and in arrays, with texture matrices) and big textures
 | with every mipmap level. Writes TexResults and TexPicture (PPM);
 | linux-tests writes TexLinuxResults and TexLinuxPicture to compare.
-RMEnsure RISC3D 0.03 Error Install riscos-risc3d 0.11-1 first (see !ReadMe)
-RMEnsure Linux3D 0.02 Error Install riscos-risc3d 0.11-1 first (see !ReadMe)
+RMEnsure RISC3D 0.03 Error Install riscos-risc3d 0.12-1 first (see !ReadMe)
+RMEnsure Linux3D 0.02 Error Install riscos-risc3d 0.12-1 first (see !ReadMe)
 Run <Obey$Dir>.gl1test multi <Obey$Dir>.TexPicture { > <Obey$Dir>.TexResults }
 Run <Obey$Dir>.gl1test bigtex { >> <Obey$Dir>.TexResults }
 SetType <Obey$Dir>.TexResults Text

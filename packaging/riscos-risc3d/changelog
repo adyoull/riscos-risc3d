@@ -1,3 +1,11 @@
+riscos-risc3d (0.12-1) rol; urgency=medium
+
+  * rol-3d 0.12: /riscos/3d/rec/ makes each new context record its
+    commands; rol-3d --replay draws a recording again and writes frames
+    as PPM pictures.
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Sat, 14 Nov 2026 15:40:00 +0000
+
 riscos-risc3d (0.11-1) rol; urgency=medium
 
   * rol-3d 0.11: with /riscos/3d/check, texture uploads (unit, texture,

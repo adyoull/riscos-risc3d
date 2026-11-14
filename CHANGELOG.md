@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9, continued: kit 23 records TORCS (14 Nov 2026)
+
+- **Kit 22 on the Pi (14 Nov):** riscos-mesa's texture-load and
+  multitexture tests pass on the GPU (all builds), and TORCS's own trace
+  shows every texture uploaded with all levels and no error. rol-3d's
+  log: 208 textures in all contexts, every mipmapped one complete, all on
+  unit 0. So the yellow car is not textures arriving incomplete.
+- **rol-3d 0.12 (riscos-risc3d 0.12-1):** `/riscos/3d/rec/` (a directory
+  anyone can write to) makes each new context record every command it
+  gets (opcode, count, argument words; data that came ahead included) to
+  `ctx-<pid>.r3d`, up to `/riscos/3d/rec/frames` frames (default 200) or
+  1 GB; flushed at each frame and glFinish. `rol-3d --replay file prefix
+  [frames|/n]` draws a recording again (a context in memory, no display)
+  and writes frames as PPM. Host: gl1test multi recorded and replayed =
+  its own picture byte for byte.
+- **Kit 23:** `record on|off|list` and `replay` scripts (the GPU, then
+  LIBGL_ALWAYS_SOFTWARE).
+
 ## 0.9, continued: exit fix, kit 22 logs TORCS's textures (14 Nov 2026)
 
 - **Kit 21 on the Pi (14 Nov):** TexResults = TexLinuxResults exactly.

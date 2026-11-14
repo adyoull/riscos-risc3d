@@ -1,32 +1,36 @@
-RISC3D test kit 22 (prototype, 14 November 2026)
+RISC3D test kit 23 (prototype, 14 November 2026)
 ================================================
 
-TORCS through RISC3D: the car plain yellow and the scenery smeared. Kit
-21's log showed no glActiveTexture at all from TORCS, but riscos-mesa
-has checked that those calls do reach RISC3D, and TORCS on RISC OS runs
-with one texture unit unless -M is given, so that was probably not it.
-This kit's rol-3d (0.11, in riscos-risc3d 0.11-1) also logs every
-texture TORCS uploads, level by level, and its filter settings. A
-texture with a level missing or the wrong size is drawn without its
-picture, which would give exactly that yellow car.
+TORCS through RISC3D still draws its car plain yellow and the scenery
+smeared. Kit 22's log showed every texture TORCS loads arriving
+complete (208 of them, every mipmap level, no GL errors), and riscos-
+mesa's texture tests all pass on the GPU. So the next step is to record
+exactly what TORCS sends, and draw it again: on the Pi's GPU, in Linux's
+software renderer on the Pi, and on the build machine. Whichever of
+those draws the yellow car shows where the fault is.
+
+This kit's rol-3d (0.12, in riscos-risc3d 0.12-1) can record.
 
 Steps
 -----
- 1. Copy RISC3DTest to HardDisc4 (unzip it there, replacing kit 21).
+ 1. Copy RISC3DTest to HardDisc4 (unzip it there, replacing kit 22).
  2. In RiSH's Root shell:
-      apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.11-1_arm64.deb
-    It restarts rol-3d itself. Don't reload the modules.
- 3. In RiSH's Root shell:
-      sh /riscos/HardDisc4/RISC3DTest/uploads memory
-      sh /riscos/HardDisc4/RISC3DTest/check on
- 4. Run TORCS through RISC3D: start a race, drive for half a minute,
-    then quit TORCS.
- 5. If you have it: riscos-mesa's test, MESA/tests/
-    riscos-mesa-multitex-test1.zip: double-click its Run.
- 6. In RiSH's Root shell:
+      apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.12-1_arm64.deb
       sh /riscos/HardDisc4/RISC3DTest/check off
-    and copy /riscos/3d/log.txt to the Mac.
+      sh /riscos/HardDisc4/RISC3DTest/record on 250
+ 3. Run TORCS through RISC3D: start a race straight away and drive for
+    about 20 seconds (until the car has been on screen a while), then
+    quit TORCS.
+ 4. In RiSH's Root shell:
+      sh /riscos/HardDisc4/RISC3DTest/record off
+    It lists the recordings: the big one is TORCS's.
+ 5. Draw it again, here:
+      sh /riscos/HardDisc4/RISC3DTest/replay /riscos/3d/recorded/ctx-NNN.r3d /25
+    (NNN from the list.) It writes ReplayGPU-25, -50, ... and
+    ReplaySoft-25, -50, ... into RISC3DTest: PPM pictures.
 
 Please send
 -----------
-/riscos/3d/log.txt (and riscos-mesa's test's Result files if you ran it).
+The recording (/riscos/3d/recorded/ctx-NNN.r3d: copy it to the Mac; it
+may be a few hundred MB), and a ReplayGPU and a ReplaySoft picture of a
+frame where the car shows.

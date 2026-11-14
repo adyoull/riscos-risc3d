@@ -1,0 +1,17 @@
+#!/bin/sh
+# RISC3D test kit 23: rol-3d 0.12 records the 3D commands of programs
+# started after "on" (each context to /riscos/3d/rec/ctx-<number>.r3d, up
+# to the frames given, default 150, or 1 GB). Run as root.
+#   sh /riscos/HardDisc4/RISC3DTest/record on [frames]
+#   sh /riscos/HardDisc4/RISC3DTest/record off
+#   sh /riscos/HardDisc4/RISC3DTest/record list
+case "$1" in
+  on) rm -rf /riscos/3d/rec; mkdir -p /riscos/3d/rec && chmod 1777 /riscos/3d/rec
+      echo "${2:-150}" >/riscos/3d/rec/frames
+      echo "Recording programs started from now (${2:-150} frames each)." ;;
+  off) [ -d /riscos/3d/rec ] && mv /riscos/3d/rec /riscos/3d/recorded.$$ 2>/dev/null
+       rm -rf /riscos/3d/recorded; [ -d /riscos/3d/recorded.$$ ] && mv /riscos/3d/recorded.$$ /riscos/3d/recorded
+       echo "Not recording. Recordings are in /riscos/3d/recorded:"; ls -l /riscos/3d/recorded 2>/dev/null ;;
+  list) ls -l /riscos/3d/rec /riscos/3d/recorded 2>/dev/null ;;
+  *) echo "Say on, off or list."; exit 1 ;;
+esac

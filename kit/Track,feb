@@ -3,8 +3,8 @@
 | then 0.9's (both of the renderer's ways), and TORCS's texture loading.
 | Writes TrackResults and the pictures TrackPic8, TrackPicB and TrackPicM
 | (PPM); linux-tests writes TrackLinuxResults and TrackLinuxPic to compare.
-RMEnsure RISC3D 0.03 Error Install riscos-risc3d 0.11-1 and restart first (see !ReadMe)
-RMEnsure Linux3D 0.02 Error Install riscos-risc3d 0.11-1 and restart first (see !ReadMe)
+RMEnsure RISC3D 0.03 Error Install riscos-risc3d 0.12-1 and restart first (see !ReadMe)
+RMEnsure Linux3D 0.02 Error Install riscos-risc3d 0.12-1 and restart first (see !ReadMe)
 Run <Obey$Dir>.gl1test08 track <Obey$Dir>.TrackPic { > <Obey$Dir>.TrackResults }
 Run <Obey$Dir>.gl1test track <Obey$Dir>.TrackPic { >> <Obey$Dir>.TrackResults }
 SetType <Obey$Dir>.TrackResults Text

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.9, continued: a bug in the Pi's Mesa; gl1test litx; kit 30 (15 Nov 2026)
+
+- **Kit 29 on the Pi:** LitLinuxPicture (Linux's own Mesa, no RISC OS)
+  = LitPicture (through RISC3D). Unlit is right; all five lit parts lose
+  their texture coordinates: horizontal stripes, and a plain colour
+  with the normal not in an array. ReplayNoSpec and ReplayNoEmis are
+  still wrong. So it's a bug in Debian's Mesa 25.0.7 on V3D with
+  GL_LIGHTING, not RISC3D's. No matching report or fix found in Mesa's
+  release notes.
+- **gl1test litx (new):** twelve variations of lit part 2, to find one
+  V3D gets right:
+  - as lit part 2, and unlit;
+  - glBegin/glEnd, VBO arrays, 4-component texture coordinates;
+  - GL_LIGHT0 off, local viewer, two-sided, separate specular;
+  - texture matrix scaled by 1.0001, GL_OBJECT_LINEAR texgen, flat
+    shading.
+
+  Host: through RISC3D = Mesa directly (68955b26).
+- **Kit 30:** `litx` script runs gl1test-linux litx on the GPU, on the
+  GPU with MESA_GL_VERSION_OVERRIDE=2.1, and in software. No new package
+  (still 0.17-1, not carried).
+
 ## 0.9, continued: it's lighting; rol-3d 0.17 and gl1test lit narrow it down; kit 29 (14 Nov 2026)
 
 - **Kit 28 on the Pi:** ReplayNoLight and ReplayNoFogLight are right (car

@@ -414,7 +414,7 @@ lit_part (int part, int x, int y, int w, int h)
 }
 
 static void
-lit (const char *pic)
+lit_setup (void)
 {
   for (int r = 0; r < L_N; r++)
     for (int c = 0; c < L_N; c++)
@@ -471,6 +471,12 @@ lit (const char *pic)
   glShadeModel (GL_SMOOTH);
   glLightModeli (GL_LIGHT_MODEL_TWO_SIDE, 0);
   glClearColor (0.3f, 0.3f, 0.35f, 1);
+}
+
+static void
+lit (const char *pic)
+{
+  lit_setup ();
   glViewport (0, 0, W, H);
   glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   static const char *const name[6] = {
@@ -485,6 +491,168 @@ lit (const char *pic)
   glViewport (0, 0, W, H);
   finish_frame ();
   printf ("lit picture: %08lx\n", frame_hash ());
+  save_png (pic);
+}
+
+/* gl1test litx: kit 29 showed Linux's own Mesa on the Pi (V3D, 25.0.7)
+   loses texture coordinates whenever GL_LIGHTING is on. Twelve variations
+   of lit part 2 (TORCS's car material), 4 x 3, to find what avoids it */
+static const char *const litx_name[12] = {
+  "lit, as lit part 2 (expected wrong on V3D)",
+  "unlit (expected right)",
+  "lit, glBegin/glEnd instead of arrays",
+  "lit, arrays in a buffer object (VBO)",
+  "lit, texture coordinates with 4 components",
+  "lit, but GL_LIGHT0 off",
+  "lit, GL_LIGHT_MODEL_LOCAL_VIEWER",
+  "lit, two-sided lighting",
+  "lit, separate specular colour",
+  "lit, texture matrix scaled by 1.0001 (not identity)",
+  "lit, texture coordinates generated (GL_OBJECT_LINEAR)",
+  "lit, flat shading" };
+
+static void
+litx_cell (int v, int x, int y, int w, int h)
+{
+  static const float s_plane[] = { 1, 0, 0, 1 }, t_plane[] = { 0, 1, 0, 1 };
+  int part = v == 1 ? 0 : 1;
+  /* lit_part's state set by hand around the draw */
+  glViewport (x, y, w, h);
+  glMatrixMode (GL_TEXTURE);
+  glLoadIdentity ();
+  if (v == 9)
+    glScalef (1.0001f, 1.0001f, 1);
+  glMatrixMode (GL_MODELVIEW);
+  glLightModeli (GL_LIGHT_MODEL_LOCAL_VIEWER, v == 6);
+  glLightModeli (GL_LIGHT_MODEL_TWO_SIDE, v == 7);
+  glLightModeli (GL_LIGHT_MODEL_COLOR_CONTROL, v == 8 ? GL_SEPARATE_SPECULAR_COLOR : GL_SINGLE_COLOR);
+  glShadeModel (v == 11 ? GL_FLAT : GL_SMOOTH);
+  if (v == 10)
+    {
+      glTexGeni (GL_S, GL_TEXTURE_GEN_MODE, GL_OBJECT_LINEAR);
+      glTexGeni (GL_T, GL_TEXTURE_GEN_MODE, GL_OBJECT_LINEAR);
+      glTexGenfv (GL_S, GL_OBJECT_PLANE, s_plane);
+      glTexGenfv (GL_T, GL_OBJECT_PLANE, t_plane);
+      glEnable (GL_TEXTURE_GEN_S);
+      glEnable (GL_TEXTURE_GEN_T);
+    }
+  if (v == 2 || v == 3 || v == 4)
+    {
+      /* lit_part draws with arrays; these draw the same plane themselves */
+      lit_part (part, x, y, w, h);	/* (sets the light, material, matrices) */
+      glClear (GL_DEPTH_BUFFER_BIT);
+      glEnable (GL_SCISSOR_TEST);
+      glScissor (x, y, w, h);
+      glClearColor (0.3f, 0.3f, 0.35f, 1);
+      glClear (GL_COLOR_BUFFER_BIT);
+      glDisable (GL_SCISSOR_TEST);
+      if (v == 2)
+	for (int r = 0; r < L_N - 1; r++)
+	  {
+	    glBegin (GL_TRIANGLE_STRIP);
+	    for (int i = 0; i < L_N * 2; i++)
+	      {
+		int k = l_i[r][i];
+		glNormal3fv (l_n[k]);
+		glTexCoord2fv (l_t[k]);
+		glVertex3fv (l_v[k]);
+	      }
+	    glEnd ();
+	  }
+      else
+	{
+	  static float t4[L_N * L_N][4];
+	  for (int k = 0; k < L_N * L_N; k++)
+	    t4[k][0] = l_t[k][0], t4[k][1] = l_t[k][1], t4[k][2] = 0, t4[k][3] = 1;
+	  GLuint b[2] = { 0, 0 };
+	  glPushClientAttrib (GL_CLIENT_VERTEX_ARRAY_BIT);
+	  if (v == 3)
+	    {
+	      glGenBuffers (2, b);
+	      glBindBuffer (GL_ARRAY_BUFFER, b[0]);
+	      glBufferData (GL_ARRAY_BUFFER, sizeof l_v + sizeof l_n + sizeof l_t, 0, GL_STATIC_DRAW);
+	      glBufferSubData (GL_ARRAY_BUFFER, 0, sizeof l_v, l_v);
+	      glBufferSubData (GL_ARRAY_BUFFER, sizeof l_v, sizeof l_n, l_n);
+	      glBufferSubData (GL_ARRAY_BUFFER, sizeof l_v + sizeof l_n, sizeof l_t, l_t);
+	      glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, b[1]);
+	      glBufferData (GL_ELEMENT_ARRAY_BUFFER, sizeof l_i, l_i, GL_STATIC_DRAW);
+	      glEnableClientState (GL_VERTEX_ARRAY);
+	      glVertexPointer (3, GL_FLOAT, 0, (void *) 0);
+	      glEnableClientState (GL_NORMAL_ARRAY);
+	      glNormalPointer (GL_FLOAT, 0, (void *) sizeof l_v);
+	      glEnableClientState (GL_TEXTURE_COORD_ARRAY);
+	      glTexCoordPointer (2, GL_FLOAT, 0, (void *) (sizeof l_v + sizeof l_n));
+	      for (int r = 0; r < L_N - 1; r++)
+		glDrawElements (GL_TRIANGLE_STRIP, L_N * 2, GL_UNSIGNED_SHORT, (void *) (r * sizeof l_i[0]));
+	      glBindBuffer (GL_ARRAY_BUFFER, 0);
+	      glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0);
+	    }
+	  else
+	    {
+	      glEnableClientState (GL_VERTEX_ARRAY);
+	      glVertexPointer (3, GL_FLOAT, 0, l_v);
+	      glEnableClientState (GL_NORMAL_ARRAY);
+	      glNormalPointer (GL_FLOAT, 0, l_n);
+	      glEnableClientState (GL_TEXTURE_COORD_ARRAY);
+	      glTexCoordPointer (4, GL_FLOAT, 0, t4);
+	      for (int r = 0; r < L_N - 1; r++)
+		glDrawElements (GL_TRIANGLE_STRIP, L_N * 2, GL_UNSIGNED_SHORT, l_i[r]);
+	    }
+	  glPopClientAttrib ();
+	  if (b[0])
+	    glDeleteBuffers (2, b);
+	}
+    }
+  else
+    {
+      lit_part (part, x, y, w, h);
+    }
+  if (v == 5)
+    {
+      /* drawn again over itself with GL_LIGHT0 off */
+      glClear (GL_DEPTH_BUFFER_BIT);
+      glDisable (GL_LIGHT0);
+      glEnable (GL_SCISSOR_TEST);
+      glScissor (x, y, w, h);
+      glClear (GL_COLOR_BUFFER_BIT);
+      glDisable (GL_SCISSOR_TEST);
+      glPushClientAttrib (GL_CLIENT_VERTEX_ARRAY_BIT);
+      glEnableClientState (GL_NORMAL_ARRAY);
+      glNormalPointer (GL_FLOAT, 0, l_n);
+      glEnableClientState (GL_TEXTURE_COORD_ARRAY);
+      glTexCoordPointer (2, GL_FLOAT, 0, l_t);
+      glEnableClientState (GL_VERTEX_ARRAY);
+      glVertexPointer (3, GL_FLOAT, 0, l_v);
+      for (int r = 0; r < L_N - 1; r++)
+	glDrawElements (GL_TRIANGLE_STRIP, L_N * 2, GL_UNSIGNED_SHORT, l_i[r]);
+      glPopClientAttrib ();
+      glEnable (GL_LIGHT0);
+    }
+  glDisable (GL_TEXTURE_GEN_S);
+  glDisable (GL_TEXTURE_GEN_T);
+  glMatrixMode (GL_TEXTURE);
+  glLoadIdentity ();
+  glMatrixMode (GL_MODELVIEW);
+  glLightModeli (GL_LIGHT_MODEL_LOCAL_VIEWER, 0);
+  glLightModeli (GL_LIGHT_MODEL_TWO_SIDE, 0);
+  glLightModeli (GL_LIGHT_MODEL_COLOR_CONTROL, GL_SINGLE_COLOR);
+  glShadeModel (GL_SMOOTH);
+}
+
+static void
+litx (const char *pic)
+{
+  lit_setup ();
+  glViewport (0, 0, W, H);
+  glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  for (int v = 0; v < 12; v++)
+    {
+      litx_cell (v, (v % 4) * (W / 4), (2 - v / 4) * (H / 3), W / 4, H / 3);
+      printf ("litx %2d (row %d, column %d): %s\n", v + 1, v / 4 + 1, v % 4 + 1, litx_name[v]);
+    }
+  glViewport (0, 0, W, H);
+  finish_frame ();
+  printf ("litx picture: %08lx\n", frame_hash ());
   save_png (pic);
 }
 
@@ -886,6 +1054,14 @@ main (int argc, char **argv)
       multi ();
       if (argc > 2)
 	save_ppm (argv[2]);
+#ifndef DIRECT
+      r3d_close ();
+#endif
+      return 0;
+    }
+  if (argc > 1 && !strcmp (argv[1], "litx"))
+    {
+      litx (argc > 2 ? argv[2] : 0);
 #ifndef DIRECT
       r3d_close ();
 #endif

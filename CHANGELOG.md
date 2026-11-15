@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.9: released (15 Nov 2026)
+
+- **Kit 34 on the Pi:** riscos-risc3d 0.19-1 installed, then apt update
+  and full-upgrade. apt-cache policy shows libgl1-mesa-dri and
+  mesa-libgallium 26.1.6-1~bpo13+1 installed (pin 500; trixie's
+  25.0.7 is also 500, and the higher version wins). With Mesa 26.1.6:
+  - lit: all six parts right, including the normal not in an array;
+  - litx2: all twelve cells right;
+  - the TORCS replay: right (livery, cockpit, trees, grass), with no
+    texture-matrix line, as 0.19 leaves it off.
+- **Earlier in the day (still Mesa 25.0.7, client 0.8 in !MesaLibs):**
+  TORCS ran about 24-30 fps by its trace, with 6,000-8,000 GL calls and
+  2-4 waits a frame. It then aborted at &691D5CEC (in the !MesaLibs
+  libraries) on going back to the menus after the race. The likely
+  cause is the closed-context crash fixed in this client (287b6cc).
+  It's confirmed once !MesaLibs carries 0.9.
+- **Client 0.9 (RISC3D-client-0.9.tgz, tag v0.9):**
+  - Arrays from the program's memory are sent from the lowest index
+    used (TORCS's strips; with rol-3d 0.8 on, given to Mesa as memory).
+  - Closed contexts drop later calls (the exit abort).
+  - New r3d_uploads().
+  - C library imports are the same as 0.8's.
+- **Package:** riscos-risc3d 0.19-1, carrying rol-3d 0.19 and the Mesa
+  pin.
+
 ## 0.9, continued: Mesa from trixie-backports, pinned; rol-3d 0.19; kit 34 (15 Nov 2026)
 
 - **ROL's answer (RISC3D/handoffs/2026-11-15-rol-mesa-from-backports-pinned.md):**

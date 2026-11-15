@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9, continued: Mesa 25.2 draws everything right (kit 33, 15 Nov 2026)
+
+- **Kit 33 on the Pi:** with Debian's Mesa 25.2 from trixie-backports,
+  unpacked in /opt/riscos/gl-test (Linux directly):
+  - lit: all six parts right, including the normal not in an array.
+  - litx and litx2: all cells right.
+  - The TORCS replay is right with rol-3d's V3D fix off and with it on.
+
+  So both V3D faults (lit texture coordinates with an identity texture
+  matrix or with fog, and the lit colour with a lone normal) are fixed
+  between 25.0.7 and 25.2. The way forward is a newer Mesa, not more
+  workarounds; how to ship it is the owner's choice.
+
 ## 0.9, continued: fog is V3D's second trigger; trying Mesa 25.2 (kit 33, 15 Nov 2026)
 
 - **Kit 32 on the Pi:**

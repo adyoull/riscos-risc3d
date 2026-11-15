@@ -1,5 +1,15 @@
 # Changelog
 
+## Kit 35: for the Windows Dev Kit 2023 (15 Nov 2026)
+
+- ROL built a Dev Kit test image with riscos-risc3d 0.19-1 and Mesa
+  26.1.6 installed (Adreno 690 through freedreno). Kit 35 has kit 34's
+  programs with a Dev Kit !ReadMe (nothing to install) and a `devkit`
+  script: machine, DRM devices and drivers, GPU/display kernel messages,
+  Mesa packages, `rol-3d --check`, linux-tests, lit and litx2 on the GPU
+  and in software, and rol-3d's log, into DevKitLog and DevKit-*.png.
+  No Pi-only scripts (newmesa, verify, litx). No code changed.
+
 ## 0.9: released (15 Nov 2026)
 
 - **Kit 34 on the Pi:** riscos-risc3d 0.19-1 installed, then apt update

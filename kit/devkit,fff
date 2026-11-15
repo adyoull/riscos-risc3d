@@ -1,0 +1,46 @@
+#!/bin/sh
+# RISC3D test kit 35 (Windows Dev Kit 2023, or any machine that isn't a
+# Pi): what Linux has for graphics, what rol-3d draws with, and the
+# Linux-side pictures, all in one go. Writes DevKitLog and DevKit-*.png
+# into this folder (and the *Linux* results that linux-tests writes).
+# Run in RiSH's Root shell:
+#   sh /riscos/HardDisc4/RISC3DTest/devkit
+d=$(dirname "$0")
+log="$d/DevKitLog"
+g=$(ls "$d"/gl1test-linux* 2>/dev/null | head -1)
+[ -n "$g" ] && chmod 755 "$g"
+rm -f "$d"/DevKit-*
+{
+  echo "== machine"
+  uname -a
+  cat /sys/firmware/devicetree/base/model 2>/dev/null; echo
+  cat /sys/class/dmi/id/product_name 2>/dev/null
+  echo "== DRM devices"
+  ls -l /dev/dri 2>&1
+  for c in /sys/class/drm/card[0-9]*; do
+    [ -e "$c" ] || continue
+    case "$c" in *-*) s=$(cat "$c/status" 2>/dev/null); echo "$(basename "$c"): $s"; continue;; esac
+    echo "$(basename "$c"): driver $(basename "$(readlink -f "$c/device/driver")" 2>/dev/null)"
+  done
+  echo "== kernel messages (GPU and display)"
+  dmesg 2>/dev/null | grep -i -E "msm|adreno|a6xx|a690|gmu|zap|drm|dpu|freedreno|v3d|firmware" | tail -120
+  echo "== Mesa packages"
+  apt-cache policy libgl1-mesa-dri mesa-libgallium libegl-mesa0 libgbm1 2>&1 | grep -E "^[a-z]|Installed|Candidate"
+  echo "== rol-3d"
+  /opt/riscos/rol-3d --check 2>&1 | tail -6
+  echo "== the same tests drawn by Linux's Mesa directly (linux-tests)"
+  sh "$d/linux-tests" 2>&1
+  if [ -n "$g" ]; then
+    echo "== lit and litx2: GPU, then software"
+    "$g" lit "$d/DevKit-lit-GPU.png"
+    LIBGL_ALWAYS_SOFTWARE=1 "$g" lit "$d/DevKit-lit-Soft.png"
+    "$g" litx2 "$d/DevKit-litx2-GPU.png"
+    LIBGL_ALWAYS_SOFTWARE=1 "$g" litx2 "$d/DevKit-litx2-Soft.png"
+  fi
+  echo "== rol-3d's log (last 150 lines)"
+  tail -150 /riscos/3d/log.txt 2>&1
+} > "$log" 2>&1
+chown 1000:1000 "$d"/DevKit* 2>/dev/null
+sync
+tail -30 "$log"
+echo "Done: please send DevKitLog and the DevKit-*.png pictures."

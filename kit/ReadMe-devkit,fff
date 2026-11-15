@@ -1,0 +1,35 @@
+RISC3D test kit 35: for the Windows Dev Kit 2023 (15 November 2026)
+==================================================================
+
+RISC3D lets RISC OS programs that use Mesa (OpenGL, OpenGL ES) draw with
+Linux's graphics driver: on the Dev Kit, the Adreno 690 through Mesa's
+freedreno driver. It has only been tried on a Raspberry Pi 4 so far, so
+this kit is mostly about finding out what happens on the Dev Kit.
+
+The test image already has everything installed (riscos-risc3d 0.19-1
+and Mesa 26.1.6), so there is nothing to install. The programs are the
+same as kit 34's; only this file and the devkit script are new.
+
+Steps
+-----
+ 1. Unzip RISC3DTest into HardDisc4 (anywhere will do).
+ 2. In RiSH's Root shell:
+      sh /riscos/HardDisc4/RISC3DTest/devkit
+    It writes DevKitLog and DevKit-*.png into the folder.
+ 3. On the desktop, in a 16 million colour mode, double-click in turn:
+      Info     what RISC3D will draw with (writes InfoResults)
+      Test     two short runs (writes Results)
+      Cube     a spinning cube: please note the frame rate in its title
+      Overlay  the same cube shown straight from the GPU, without
+               copying (title says why if it can't); frame rate again
+      GL       OpenGL 1.x/2.1 (writes GLResults and GLPicture)
+      ES       OpenGL ES (writes ESResults and ES pictures)
+      GL3      OpenGL 3.x / ES 3.x (writes GL3Results and GL3 pictures)
+      Lit      lighting on textures (writes LitResults, LitPicture)
+    If one of them fails or hangs, note which, and carry on with the rest.
+
+Please send
+-----------
+DevKitLog, DevKit-*.png, InfoResults, Results, GLResults, ESResults,
+GL3Results, LitResults, LitPicture, the Cube and Overlay frame rates,
+and whether anything looked wrong (a screenshot helps).

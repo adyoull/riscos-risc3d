@@ -114,3 +114,14 @@ python3 tools/mkkit.py out/RISC3DTest-34.zip RISC3DTest "kit/!ReadMe,fff" kit/Cu
   "out/gl3test,ff8" "out/targettest,ff8" "out/r3dinfo,ff8" out/gl1test-linux out/estest-linux \
   out/gl3test-linux out/riscos-risc3d_0.19-1_arm64.deb
 
+# kit 35: the same programs for the Windows Dev Kit 2023 test image (ROL's
+# WDK2023-GPU-test1, which has 0.19-1 and Mesa 26.1.6 installed): its own
+# !ReadMe and the devkit script; no Pi-only scripts (newmesa, verify)
+mkdir -p out/kit35 && cp "kit/ReadMe-devkit,fff" "out/kit35/!ReadMe,fff"
+python3 tools/mkkit.py out/RISC3DTest-35.zip RISC3DTest "out/kit35/!ReadMe,fff" kit/devkit,fff kit/Info,feb \
+  kit/Test,feb kit/Cube,feb kit/Overlay,feb kit/GL,feb kit/ES,feb kit/GL3,feb kit/Lit,feb kit/Target,feb \
+  kit/TargetExpected,fff kit/Track,feb kit/Textures,feb kit/linux-tests,fff kit/litlinux,fff kit/litx2,fff \
+  kit/check,fff kit/record,fff kit/replay,fff kit/uploads,fff "out/gl1test08,ff8" "out/r3dcube,ff8" \
+  "out/r3dtest,ff8" "out/gl1test,ff8" "out/estest,ff8" "out/gl3test,ff8" "out/targettest,ff8" \
+  "out/r3dinfo,ff8" out/gl1test-linux out/estest-linux out/gl3test-linux out/riscos-risc3d_0.19-1_arm64.deb
+

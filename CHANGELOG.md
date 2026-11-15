@@ -1,5 +1,32 @@
 # Changelog
 
+## !RISC3D: RISC3D finds its own driver (module 0.04, riscos-risc3d 0.20-1, kit 36; 15 Nov 2026)
+
+- The owner: programs' !Run files shouldn't have to name the driver. RISC3D
+  is now installed as **!RISC3D in !Boot.Resources**: !Boot/!Run set
+  RISC3D$Dir and RISC3D$Path, and it holds the RISC3D module and a folder
+  **GPU** with the driver for that machine (each GPU's own package puts it
+  there; PackMan allows several packages' files in one folder). A program
+  needs only `RMEnsure RISC3D 0.04 RMLoad RISC3D:RISC3D`.
+- **RISC3D module 0.04:** after starting (OS_AddCallBack), or at the first
+  Info/Open/*RISC3D if that comes first, it loads driver modules from
+  `<RISC3D$Dir>.GPU` (or `<RISC3D$Drivers>`, for testing), one at a time
+  in directory order, until one registers. A driver whose GPU isn't there
+  refuses to start, so RISC3D needs no table of machines. Nothing is loaded
+  if a driver has already registered. *RISC3D lists the folder and what
+  was tried. Info r0 = 4.
+- Reloading RISC3D now reloads Linux3D from GPU, which fixes "Linux3D left
+  unregistered after RISC3D is reloaded".
+- **riscos-risc3d 0.20-1:** !RISC3D in HardDisc4.!Boot.Resources with
+  GPU.Linux3D (TestBed.RISC3D goes); PreDesk.RISC3D runs !RISC3D's !Boot
+  and loads RISC3D:RISC3D only (rewritten if it is 0.19-1's or older).
+  rol-3d unchanged (0.19).
+- `dist/!RISC3D` (the app without a driver) and `out/RISC3D-0.04.zip`, the
+  release for a PackMan package. tools/mkkit.py takes SRC=SUB/NAME for
+  nested folders.
+- Kit 36: Auto (start-up, reload with RMLoad RISC3D:RISC3D only, a draw)
+  and a bare !RISC3D for native RISC OS with V3DRender.
+
 ## Kit 35: for the Windows Dev Kit 2023 (15 Nov 2026)
 
 - ROL built a Dev Kit test image with riscos-risc3d 0.19-1 and Mesa

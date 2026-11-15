@@ -125,3 +125,17 @@ python3 tools/mkkit.py out/RISC3DTest-35.zip RISC3DTest "out/kit35/!ReadMe,fff" 
   "out/r3dtest,ff8" "out/gl1test,ff8" "out/estest,ff8" "out/gl3test,ff8" "out/targettest,ff8" \
   "out/r3dinfo,ff8" out/gl1test-linux out/estest-linux out/gl3test-linux out/riscos-risc3d_0.19-1_arm64.deb
 
+
+# kit 36: RISC3D 0.04 loads its own driver from !RISC3D.GPU; riscos-risc3d
+# 0.20-1 installs !RISC3D in !Boot.Resources. The kit also carries a bare
+# !RISC3D (GPU empty) for native RISC OS.
+mkdir -p out/kit36 && cp "kit/ReadMe-36,fff" "out/kit36/!ReadMe,fff"
+python3 tools/mkkit.py out/RISC3DTest-36.zip RISC3DTest "out/kit36/!ReadMe,fff" kit/Auto,feb kit/Test,feb \
+  kit/Cube,feb kit/Info,feb kit/Lit,feb "out/r3dtest,ff8" "out/r3dcube,ff8" "out/r3dinfo,ff8" "out/gl1test,ff8" \
+  out/riscos-risc3d_0.20-1_arm64.deb \
+  "dist/!RISC3D/!Boot,feb=!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb=!RISC3D/!Run,feb" \
+  "dist/!RISC3D/!Help,fff=!RISC3D/!Help,fff" "out/modules/RISC3D,ffa=!RISC3D/RISC3D,ffa" \
+  "dist/!RISC3D/GPU/ReadMe,fff=!RISC3D/GPU/ReadMe,fff"
+# the !RISC3D release (for PackMan: the Packages project builds the package)
+python3 tools/mkkit.py out/RISC3D-0.04.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+  "dist/!RISC3D/!Help,fff" "out/modules/RISC3D,ffa" "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff"

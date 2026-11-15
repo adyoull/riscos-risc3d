@@ -1,0 +1,29 @@
+!RISC3D: RISC OS's 3D driver interface
+======================================
+
+RISC3D lets programs that draw with Mesa (OpenGL, OpenGL ES) use the
+machine's GPU. Programs don't call it themselves: Mesa does. With no GPU
+driver, Mesa draws in software as before.
+
+What's in here
+--------------
+  RISC3D   the module: the interface between Mesa and the GPU driver
+  GPU      the GPU driver for this machine, from its own package:
+             Linux3D    RISC OS on Linux (Linux's graphics driver draws)
+             V3DRender  Raspberry Pi 4 / 400 / CM4 (native RISC OS)
+           (empty if there is none for this machine yet)
+
+!RISC3D belongs in !Boot.Resources, where it is seen at start-up.
+
+For programs
+------------
+A program's !Run needs only:
+  RMEnsure RISC3D 0.04 RMLoad RISC3D:RISC3D
+RISC3D then loads the right driver from GPU itself: it tries each module
+there until one starts (a driver refuses to start where its GPU isn't
+there). *RISC3D says which driver is in use, and what was tried.
+
+For testing, *Set RISC3D$Drivers to another folder to load drivers from
+there instead of GPU.
+
+Copyright (c) 2026 Andrew Youll. MIT licence.

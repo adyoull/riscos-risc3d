@@ -1,3 +1,19 @@
+riscos-risc3d (0.20-1) rol; urgency=medium
+
+  * RISC3D is now !RISC3D in HardDisc4.!Boot.Resources, as on native RISC
+    OS: !RISC3D.RISC3D (module 0.04) and !RISC3D.GPU.Linux3D. Its !Boot
+    sets RISC3D$Dir and RISC3D$Path, so programs need only
+    "RMEnsure RISC3D 0.04 RMLoad RISC3D:RISC3D"; RISC3D 0.04 loads its
+    driver from GPU itself. HardDisc4.TestBed.RISC3D goes.
+  * The start-up file (PreDesk.RISC3D) now loads RISC3D:RISC3D only; it is
+    rewritten if it is still 0.19-1's or earlier (yours if you changed it;
+    not made again if you deleted it).
+  * Reloading RISC3D now reloads Linux3D from GPU (it used to be left
+    unregistered until *RMReInit Linux3D).
+  * rol-3d unchanged (0.19).
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Sun, 15 Nov 2026 22:30:00 +0000
+
 riscos-risc3d (0.19-1) rol; urgency=medium
 
   * Mesa from Debian's trixie-backports (ROL's choice, 15 Nov 2026): the

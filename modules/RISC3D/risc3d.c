@@ -50,9 +50,37 @@
 			      GPU, 2 not known (drivers registered with
 			      flags bit 1 only)
 
+   Finding the driver (0.04 on). RISC3D is installed as !RISC3D in
+   !Boot.Resources: its !Boot sets RISC3D$Dir and RISC3D$Path, and it
+   holds this module and a folder GPU with the driver module for that
+   machine (Linux3D on RISC OS on Linux; V3DRender on a Pi 4; ...). A
+   program's !Run then only needs
+     RMEnsure RISC3D 0.04 RMLoad RISC3D:RISC3D
+   and RISC3D loads the driver itself, just after it starts (a callback),
+   or at the first Info, Open or *RISC3D if that comes first. It tries each
+   module in GPU, in the order the filing system gives them, until one
+   registers; a driver whose hardware isn't there refuses to start, so
+   RISC OS doesn't keep it and the next is tried. Nothing is loaded if a
+   driver has already registered (loaded by hand or at start). The folder
+   is <RISC3D$Drivers> if that is set (for testing), else
+   <RISC3D$Dir>.GPU.
+
    Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE). */
 
 #include "cmodule.h"
+
+#define OS_GBPB			0x0C
+#define OS_ReadVarVal		0x23
+#define OS_AddCallBack		0x54
+#define OS_RemoveCallBack	0x5F
+#define MAXTRIED		6
+
+void drivers_callback (void);		/* header.s: saves everything, calls find_driver */
+static void *private_word;
+static int callback_pending, looked;
+static char folder[200];
+static struct { char name[32]; char why[80]; } tried[MAXTRIED];
+static int ntried;
 
 #define Wimp_ReadSysInfo 0x400F2
 #define MAXDRV 4
@@ -84,6 +112,100 @@ ctx_close (int i)
   ctx[i].used = 0;
 }
 
+static void
+copy (char *d, const char *s, size_t n)
+{
+  size_t l = 0;
+  while (s && s[l] >= ' ' && l < n - 1)
+    {
+      d[l] = s[l];
+      l++;
+    }
+  d[l] = 0;
+}
+
+static int best_driver (void);
+
+/* Loads the first module in the drivers folder that starts (see the top). */
+void
+find_driver (void)
+{
+  if (looked)
+    return;
+  looked = 1;
+  ntried = 0;
+  folder[0] = 0;
+  if (best_driver () >= 0)
+    return;
+  regs v = {{ (unsigned) "RISC3D$Drivers", (unsigned) folder, sizeof folder - 1, 0, 0 }};
+  int set = swix_regs (OS_ReadVarVal, &v) == 0 && v.r[2] > 0;
+  folder[set ? v.r[2] : 0] = 0;
+  if (!set)
+    {
+      regs d = {{ (unsigned) "RISC3D$Dir", (unsigned) folder, sizeof folder - 5, 0, 0 }};
+      if (swix_regs (OS_ReadVarVal, &d) || d.r[2] == 0)
+	{
+	  folder[0] = 0;
+	  return;			/* !RISC3D hasn't been seen */
+	}
+      memcpy (folder + d.r[2], ".GPU", 5);
+    }
+  /* OS_GBPB 10: name, type and so on for each object in the folder */
+  static unsigned buf[64];
+  int next = 0;
+  while (next != -1 && best_driver () < 0)
+    {
+      regs g = {{ 10, (unsigned) folder, (unsigned) buf, 1, (unsigned) next, sizeof buf, 0 }};
+      if (swix_regs (OS_GBPB, &g))
+	return;				/* no such folder: no driver */
+      next = (int) g.r[4];
+      if (g.r[3] == 0)
+	continue;
+      /* load, exec, length, attributes, object type, then the name */
+      unsigned load = buf[0], type = buf[4];
+      const char *name = (const char *) &buf[5];
+      if (type != 1 || (load & 0xFFF00000) != 0xFFF00000 || ((load >> 8) & 0xFFF) != 0xFFA)
+	continue;			/* only files of type Module */
+      char path[260];
+      size_t a = strlen (folder);
+      memcpy (path, folder, a);
+      path[a] = '.';
+      copy (path + a + 1, name, sizeof path - a - 1);
+      regs m = {{ 1, (unsigned) path }};
+      oserror *e = swix_regs (OS_Module, &m);
+      if (ntried < MAXTRIED)
+	{
+	  copy (tried[ntried].name, name, sizeof tried[ntried].name);
+	  copy (tried[ntried].why, e ? e->errmess : best_driver () >= 0 ? "registered" : "started, but didn't register",
+		sizeof tried[ntried].why);
+	  ntried++;
+	}
+    }
+}
+
+static void
+look_now (void)
+{
+  if (!looked)
+    {
+      if (callback_pending)
+	{
+	  regs r = {{ (unsigned) drivers_callback, (unsigned) private_word }};
+	  swix_regs (OS_RemoveCallBack, &r);
+	  callback_pending = 0;
+	}
+      find_driver ();
+    }
+}
+
+/* header.s's callback veneer calls this */
+void
+drivers_callback_c (void)
+{
+  callback_pending = 0;
+  find_driver ();
+}
+
 static int
 best_driver (void)
 {
@@ -100,12 +222,13 @@ mod_swi (unsigned number, regs *r)
     {
     case 0:
       {
+	look_now ();
 	int n = 0, c = 0, b = best_driver ();
 	for (int i = 0; i < MAXDRV; i++)
 	  n += drv[i].entry != 0;
 	for (int i = 0; i < MAXCTX; i++)
 	  c += ctx[i].used;
-	r->r[0] = 3;
+	r->r[0] = 4;
 	r->r[1] = (unsigned) n;
 	r->r[2] = (unsigned) c;
 	r->r[3] = b < 0 ? 0 : (unsigned) drv[b].name;
@@ -153,6 +276,7 @@ mod_swi (unsigned number, regs *r)
       return 0;
     case 2:
       {
+	look_now ();
 	int d = best_driver (), i;
 	if (d < 0)
 	  return ERR (err_nodriver);
@@ -207,7 +331,12 @@ mod_service (regs *r)
 oserror *
 mod_init (const char *tail, int instance, void *pw)
 {
-  (void) tail; (void) instance; (void) pw;
+  (void) tail; (void) instance;
+  private_word = pw;
+  /* find the driver once RISC OS has finished starting this module */
+  regs r = {{ (unsigned) drivers_callback, (unsigned) pw }};
+  if (!swix_regs (OS_AddCallBack, &r))
+    callback_pending = 1;
   return 0;
 }
 
@@ -215,6 +344,12 @@ oserror *
 mod_final (int fatal)
 {
   (void) fatal;
+  if (callback_pending)
+    {
+      regs r = {{ (unsigned) drivers_callback, (unsigned) private_word }};
+      swix_regs (OS_RemoveCallBack, &r);
+      callback_pending = 0;
+    }
   for (int i = 0; i < MAXCTX; i++)
     if (ctx[i].used)
       ctx_close (i);
@@ -225,6 +360,7 @@ oserror *
 mod_command (int index, const char *tail, int argc)
 {
   (void) index; (void) tail; (void) argc;
+  look_now ();
   int n = 0;
   for (int i = 0; i < MAXDRV; i++)
     if (drv[i].entry)
@@ -245,6 +381,22 @@ mod_command (int index, const char *tail, int argc)
     {
       write0 ("No 3D driver is registered");
       newline ();
+    }
+  if (folder[0])
+    {
+      write0 ("Drivers folder: ");
+      write0 (folder);
+      if (!ntried)
+	write0 (" (no driver modules tried)");
+      newline ();
+      for (int i = 0; i < ntried; i++)
+	{
+	  write0 ("  ");
+	  write0 (tried[i].name);
+	  write0 (": ");
+	  write0 (tried[i].why);
+	  newline ();
+	}
     }
   for (int i = 0; i < MAXCTX; i++)
     if (ctx[i].used)

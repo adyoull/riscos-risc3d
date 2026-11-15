@@ -1,14 +1,18 @@
-RISC3D 0.8 for RISC OS on Linux (prototype)
-===========================================
+RISC3D 0.10 for RISC OS on Linux (prototype)
+============================================
 
 What it puts where:
   /opt/riscos/rol-3d                        Linux's side: draws for RISC OS
                                             programs with Linux's Mesa (the
                                             GPU's driver: v3d on a Pi 4/5)
-  HardDisc4.TestBed.RISC3D.RISC3D           the RISC3D module (driver interface)
-  HardDisc4.TestBed.RISC3D.Linux3D          its driver for RISC OS on Linux
-  HardDisc4.!Boot.Choices.Boot.PreDesk.RISC3D   loads the two at start-up
+  HardDisc4.!Boot.Resources.!RISC3D         RISC3D, as on native RISC OS:
+    .RISC3D                                 the RISC3D module (driver interface)
+    .GPU.Linux3D                            its driver for RISC OS on Linux
+                                            (RISC3D loads it itself)
+  HardDisc4.!Boot.Choices.Boot.PreDesk.RISC3D   loads RISC3D at start-up
                                             (made once; yours to delete)
+
+Programs' !Run files need only: RMEnsure RISC3D 0.04 RMLoad RISC3D:RISC3D
 
 init (riscos-support 1.0.0049-1 or later) starts rol-3d at start-up; with
 an earlier one, this package starts it when installed, and it has to be

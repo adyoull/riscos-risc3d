@@ -1,0 +1,15 @@
+| RISC3D test kit 36: RISC3D loads its own driver from !RISC3D.GPU.
+| Writes AutoResults.
+RMEnsure RISC3D 0.04 Error RISC3D 0.04 isn't loaded: install riscos-risc3d 0.20-1 and restart (see !ReadMe)
+Echo == RISC3D as loaded at start-up { > <Obey$Dir>.AutoResults }
+Show RISC3D$* { >> <Obey$Dir>.AutoResults }
+RISC3D { >> <Obey$Dir>.AutoResults }
+Echo == reloaded with RMLoad RISC3D:RISC3D only { >> <Obey$Dir>.AutoResults }
+RMKill RISC3D
+RMLoad RISC3D:RISC3D
+RISC3D { >> <Obey$Dir>.AutoResults }
+Echo == drawing through it { >> <Obey$Dir>.AutoResults }
+Run <Obey$Dir>.r3dtest 100 { >> <Obey$Dir>.AutoResults }
+Help RISC3D { >> <Obey$Dir>.AutoResults }
+SetType <Obey$Dir>.AutoResults Text
+Filer_Run <Obey$Dir>.AutoResults

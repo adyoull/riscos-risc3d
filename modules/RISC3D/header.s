@@ -26,7 +26,7 @@ module_start:
 	.word	flags - module_start
 
 title:	.asciz	"RISC3D"
-help:	.asciz	"RISC3D\t0.03 (13 Nov 2026) 3D driver interface (prototype)"
+help:	.asciz	"RISC3D\t0.04 (15 Nov 2026) 3D driver interface (prototype)"
 swi_names:
 	.asciz	"RISC3D\0Info\0Register\0Open\0Close\0Sync\0"
 	.align	2
@@ -39,7 +39,7 @@ commands:
 	.word	cmd_help - module_start
 	.word	0
 cmd_help:
-	.asciz	"*RISC3D lists the 3D drivers registered with RISC3D and the contexts programs have open.\rSyntax: *RISC3D"
+	.asciz	"*RISC3D lists the 3D drivers registered with RISC3D, the drivers folder it looked in (native RISC OS) and the contexts programs have open.\rSyntax: *RISC3D"
 	.align	2
 flags:	.word	1				@ 32-bit compatible
 
@@ -49,6 +49,14 @@ service:
 	teq	r1, #0x53
 	movne	pc, lr
 	b	cm_service
+
+@ The callback after initialisation (OS_AddCallBack): SVC mode, every
+@ register (and lr_svc) kept for the interrupted code.
+	.global	drivers_callback
+drivers_callback:
+	stmfd	sp!, {r0-r12, lr}
+	bl	drivers_callback_c
+	ldmfd	sp!, {r0-r12, pc}
 
 @ oserror *call_driver (unsigned entry, unsigned r12, regs *r): calls a
 @ driver's entry with r0-r9 from r and its own r12; r0-r9 back into r.

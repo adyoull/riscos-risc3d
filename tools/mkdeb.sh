@@ -8,10 +8,12 @@ s=packaging/riscos-risc3d
 v=$(sed -n 's/^Version: //p' $s/control)
 P=out/pkg/riscos-risc3d
 rm -rf out/pkg
-mkdir -p $P/DEBIAN $P/opt/riscos $P/riscos/HardDisc4/TestBed/RISC3D $P/usr/share/doc/riscos-risc3d
+mkdir -p $P/DEBIAN $P/opt/riscos "$P/riscos/HardDisc4/!Boot/Resources/!RISC3D/GPU" $P/usr/share/doc/riscos-risc3d
 aarch64-linux-gnu-strip -o $P/opt/riscos/rol-3d out/rol-3d
 chmod 755 $P/opt/riscos/rol-3d
-cp "out/modules/RISC3D,ffa" "out/modules/Linux3D,ffa" $P/riscos/HardDisc4/TestBed/RISC3D/
+R="$P/riscos/HardDisc4/!Boot/Resources/!RISC3D"
+cp "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" "dist/!RISC3D/!Help,fff" "out/modules/RISC3D,ffa" "$R/"
+cp "dist/!RISC3D/GPU/ReadMe,fff" "out/modules/Linux3D,ffa" "$R/GPU/"
 cp $s/README $s/copyright $P/usr/share/doc/riscos-risc3d/
 gzip -9n -c $s/changelog > $P/usr/share/doc/riscos-risc3d/changelog.gz
 { sed -n '1,/^Architecture/p' $s/control

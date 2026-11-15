@@ -1,0 +1,37 @@
+RISC3D test kit 36 (prototype, 15 November 2026)
+================================================
+
+RISC3D now lives as !RISC3D in !Boot.Resources: the RISC3D module, and
+a folder GPU holding the GPU driver for the machine. A program's !Run
+needs only
+
+  RMEnsure RISC3D 0.04 RMLoad RISC3D:RISC3D
+
+and RISC3D 0.04 loads the driver from GPU itself: it tries each module
+there until one starts (a driver refuses to start where its GPU isn't).
+riscos-risc3d 0.20-1 installs !RISC3D with Linux3D in GPU.
+
+On RISC OS on Linux (RiSH's Root shell)
+-----------------------------------
+ 1. Unzip RISC3DTest into HardDisc4, replacing kit 34.
+ 2. apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.20-1_arm64.deb
+ 3. Restart (shut down and switch on).
+ 4. Double-click Auto. It shows RISC3D as loaded at start-up, then
+    reloads it with nothing but RMLoad RISC3D:RISC3D (Linux3D should be
+    loaded again from GPU by RISC3D), and draws through it.
+ 5. Optional: Test, Cube and Lit as before.
+
+On native RISC OS on the Pi 4 (optional)
+----------------------------------------
+ 1. Copy !RISC3D from this kit into !Boot.Resources (its GPU is empty).
+ 2. Copy V3DRender's module into !RISC3D.GPU.
+ 3. Double-click !RISC3D, then at the command line:
+      RMLoad RISC3D:RISC3D
+      RISC3D
+    It should say "Driver: V3DRender..." and list V3DRender as registered
+    under "Drivers folder". With GPU empty it says no driver is
+    registered (programs then draw in software).
+
+Please send
+-----------
+AutoResults, and on native RISC OS the *RISC3D output.

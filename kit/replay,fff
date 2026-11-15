@@ -1,14 +1,18 @@
 #!/bin/sh
-# RISC3D test kit 31: draw a recording again on the GPU (with rol-3d
-# 0.18's V3D fix, as TORCS will get it), writing ReplayGPU-<frame>.png
-# and ReplayLog into this folder. Run as root:
+# RISC3D test kit 32: draw a recording again on the GPU with rol-3d
+# 0.18's fix, once as normal and once without fog, writing
+# ReplayGPU-<frame>.png, ReplayNoFog-<frame>.png and ReplayLog here.
+# Run as root:
 #   sh /riscos/HardDisc4/RISC3DTest/replay /riscos/3d/recorded/ctx-477.r3d 240
 d=$(dirname "$0")
 [ -f "$1" ] || { echo "Give a recording (sh record list shows them)."; exit 1; }
 w=${2:-240}
 rm -f "$d"/Replay*
+: > "$d/ReplayLog"
 sync
-/opt/riscos/rol-3d --replay "$1" "$d/ReplayGPU" "$w" 2>&1 | tee "$d/ReplayLog"
+/opt/riscos/rol-3d --replay "$1" "$d/ReplayGPU" "$w" 2>&1 | tee -a "$d/ReplayLog"
+sync
+ROL3D_REPLAY=nofog /opt/riscos/rol-3d --replay "$1" "$d/ReplayNoFog" "$w" 2>&1 | tee -a "$d/ReplayLog"
 chown 1000:1000 "$d"/Replay* 2>/dev/null
 sync
 ls "$d" | grep Replay

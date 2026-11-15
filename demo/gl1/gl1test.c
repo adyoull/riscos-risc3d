@@ -656,6 +656,109 @@ litx (const char *pic)
   save_png (pic);
 }
 
+/* gl1test litx2: kit 31 showed rol-3d 0.18's texture-matrix nudge fixes
+   lit parts 1-5 on V3D but not part 6 (normal not in an array), nor
+   TORCS, which also has fog on. Twelve cells, all lit with TORCS's car
+   material and the texture matrix nudged as rol-3d 0.18 does (the
+   direct build doesn't go through rol-3d), unless said */
+static const char *const litx2_name[12] = {
+  "nudged, arrays N T V (expected right)",
+  "nudged, linear fog",
+  "nudged, linear fog, GL_FOG_HINT GL_NICEST",
+  "nudged, GL_EXP fog",
+  "nudged, fog from GL_FOG_COORD (current fog coordinate 0)",
+  "nudged, normal not in an array",
+  "nudged, normal not in an array, GL_REPLACE",
+  "nudged, colour array too",
+  "nudged, linear fog, normal not in an array",
+  "not nudged, linear fog (expected wrong)",
+  "nudged, linear fog, GL_LIGHT0 off",
+  "unlit, linear fog" };
+
+static void
+litx2_cell (int v, int x, int y, int w, int h)
+{
+  static const GLfloat nudge[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1.00000012f, 0, 0, 0, 0, 1 };
+  static const GLfloat fogc[] = { 0.6f, 0.6f, 0.7f, 1 };
+  static GLubyte col[L_N * L_N][4];
+  glMatrixMode (GL_TEXTURE);
+  if (v == 9)
+    glLoadIdentity ();
+  else
+    glLoadMatrixf (nudge);
+  glMatrixMode (GL_MODELVIEW);
+  int fog = v == 1 || v == 2 || v == 3 || v == 4 || v == 8 || v == 9 || v == 10 || v == 11;
+  if (fog)
+    {
+      glEnable (GL_FOG);
+      glFogfv (GL_FOG_COLOR, fogc);
+      glFogi (GL_FOG_MODE, v == 3 ? GL_EXP : GL_LINEAR);
+      glFogf (GL_FOG_DENSITY, 0.3f);
+      glFogf (GL_FOG_START, 1.0f);
+      glFogf (GL_FOG_END, 4.0f);
+      glHint (GL_FOG_HINT, v == 2 ? GL_NICEST : GL_DONT_CARE);
+      glFogi (GL_FOG_COORD_SRC, v == 4 ? GL_FOG_COORD : GL_FRAGMENT_DEPTH);
+      if (v == 4)
+	glFogCoordf (0);
+    }
+  if (v == 6)
+    glTexEnvi (GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+  int part = v == 11 ? 0 : (v == 5 || v == 6 || v == 8) ? 5 : 1;
+  if (v == 7)
+    {
+      for (int k = 0; k < L_N * L_N; k++)
+	col[k][0] = 255, col[k][1] = (GLubyte) (128 + k), col[k][2] = 64, col[k][3] = 255;
+      glEnableClientState (GL_COLOR_ARRAY);
+      glColorPointer (4, GL_UNSIGNED_BYTE, 0, col);
+    }
+  if (v == 10)
+    {
+      /* lit_part enables GL_LIGHT0; draw with it off afterwards */
+      lit_part (1, x, y, w, h);
+      glDisable (GL_LIGHT0);
+      glEnable (GL_SCISSOR_TEST);
+      glScissor (x, y, w, h);
+      glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      glDisable (GL_SCISSOR_TEST);
+      glPushClientAttrib (GL_CLIENT_VERTEX_ARRAY_BIT);
+      glEnableClientState (GL_NORMAL_ARRAY);
+      glNormalPointer (GL_FLOAT, 0, l_n);
+      glEnableClientState (GL_TEXTURE_COORD_ARRAY);
+      glTexCoordPointer (2, GL_FLOAT, 0, l_t);
+      glEnableClientState (GL_VERTEX_ARRAY);
+      glVertexPointer (3, GL_FLOAT, 0, l_v);
+      for (int r = 0; r < L_N - 1; r++)
+	glDrawElements (GL_TRIANGLE_STRIP, L_N * 2, GL_UNSIGNED_SHORT, l_i[r]);
+      glPopClientAttrib ();
+      glEnable (GL_LIGHT0);
+    }
+  else
+    lit_part (part, x, y, w, h);
+  glDisableClientState (GL_COLOR_ARRAY);
+  glDisable (GL_FOG);
+  glTexEnvi (GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+  glMatrixMode (GL_TEXTURE);
+  glLoadIdentity ();
+  glMatrixMode (GL_MODELVIEW);
+}
+
+static void
+litx2 (const char *pic)
+{
+  lit_setup ();
+  glViewport (0, 0, W, H);
+  glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  for (int v = 0; v < 12; v++)
+    {
+      litx2_cell (v, (v % 4) * (W / 4), (2 - v / 4) * (H / 3), W / 4, H / 3);
+      printf ("litx2 %2d (row %d, column %d): %s\n", v + 1, v / 4 + 1, v % 4 + 1, litx2_name[v]);
+    }
+  glViewport (0, 0, W, H);
+  finish_frame ();
+  printf ("litx2 picture: %08lx\n", frame_hash ());
+  save_png (pic);
+}
+
 static void
 track_frame (int f)
 {
@@ -1054,6 +1157,14 @@ main (int argc, char **argv)
       multi ();
       if (argc > 2)
 	save_ppm (argv[2]);
+#ifndef DIRECT
+      r3d_close ();
+#endif
+      return 0;
+    }
+  if (argc > 1 && !strcmp (argv[1], "litx2"))
+    {
+      litx2 (argc > 2 ? argv[2] : 0);
 #ifndef DIRECT
       r3d_close ();
 #endif

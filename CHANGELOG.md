@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.9, continued: 0.18 fixes the lit test but not TORCS; gl1test litx2; kit 32 (15 Nov 2026)
+
+- **Kit 31 on the Pi (rol-3d 0.18, "texture matrices kept off the
+  identity ..., 8 units"):** lit parts 1-5 now draw right through RISC3D.
+  Part 6 (normal not in an array) is still one plain colour. The TORCS
+  replay and TORCS itself are unchanged.
+- **The TORCS recording's draws:** 500,401 glDrawElements, lit and
+  textured, with normal, texture and vertex arrays (lit part 2's case);
+  the rest unlit, or glDrawArrays with T V. Current colour from
+  glColor4fv (colour material). Fog linear is on, which lit/litx don't
+  have.
+- **gl1test litx2 (new):** twelve lit cells with the 0.18 nudge applied
+  by the test itself (the direct build doesn't go through rol-3d):
+  - nudged, then with linear fog, fog with GL_NICEST, GL_EXP fog, and
+    fog from GL_FOG_COORD;
+  - normal not in an array (also with REPLACE), a colour array, and fog
+    with normal not in an array;
+  - not nudged with fog, nudged with fog and GL_LIGHT0 off, unlit with
+    fog.
+
+  Host: through RISC3D = direct (8befd9f3).
+- **Kit 32:**
+  - `litx2` script: gl1test-linux litx2 on the GPU and in software.
+  - `replay`: the TORCS recording with 0.18, as normal and with
+    ROL3D_REPLAY=nofog.
+  - No package (0.18-1 stays).
+
 ## 0.9, continued: V3D's lit-texture bug worked round in rol-3d 0.18; kit 31 (15 Nov 2026)
 
 - **Kit 30 on the Pi** (Linux's Mesa directly, 3.1 compat; the same

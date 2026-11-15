@@ -1,0 +1,19 @@
+#!/bin/sh
+# RISC3D test kit 32: twelve more variations of TORCS's lighting, with
+# rol-3d 0.18's texture-matrix nudge, drawn by Linux's Mesa directly:
+# fog, and normals not in an array. Writes LitX2-GPU.png, LitX2-Soft.png
+# and LitX2Results into this folder. Run as root:
+#   sh /riscos/HardDisc4/RISC3DTest/litx2
+d=$(dirname "$0")
+g=$(ls "$d"/gl1test-linux* 2>/dev/null | head -1)
+[ -n "$g" ] || { echo "gl1test-linux is missing"; exit 1; }
+chmod 755 "$g"
+rm -f "$d"/LitX2*
+{
+  echo "== GPU"
+  "$g" litx2 "$d/LitX2-GPU.png"
+  echo "== software"
+  LIBGL_ALWAYS_SOFTWARE=1 "$g" litx2 "$d/LitX2-Soft.png"
+} >"$d/LitX2Results" 2>&1
+chown 1000:1000 "$d"/LitX2* 2>/dev/null
+cat "$d/LitX2Results"

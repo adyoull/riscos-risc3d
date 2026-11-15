@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.9, continued: fog is V3D's second trigger; trying Mesa 25.2 (kit 33, 15 Nov 2026)
+
+- **Kit 32 on the Pi:**
+  - ReplayNoFog (0.18's fix, fog dropped) is RIGHT: livery, cockpit,
+    trees, grass.
+  - litx2 on the GPU is right for: nudged alone; fog from GL_FOG_COORD;
+    a colour array; fog with GL_LIGHT0 off; unlit with fog.
+  - It's wrong for every lit, nudged FRAGMENT_DEPTH fog (linear,
+    NICEST, EXP) and for not nudged with fog.
+  - Normal not in an array: plain colour with MODULATE but right with
+    REPLACE, so the lit colour is wrong there, not the texture
+    coordinates. Software: all right.
+- **Mesa release notes:**
+  - 25.0.0 switched the fixed-function vertex program to IO intrinsics.
+  - 25.1.0: "v3d/compiler: Fixup output types for all 8 outputs".
+  - 25.2.3: fog scale clamp.
+  - 25.3.0: "st/glsl: fix packed uniform handling in
+    st_nir_lower_fog()".
+
+  Debian has mesa 25.2.x in trixie-backports.
+- **Kit 33:** `newmesa` script (no package):
+  - Downloads mesa-libgallium, libegl-mesa0, libgbm1 and
+    libgl1-mesa-dri from trixie-backports, plus any dependency the Pi
+    lacks (LLVM), without installing them.
+  - Unpacks them into /opt/riscos/gl-test and removes the backports
+    source again.
+  - Runs gl1test-linux lit/litx/litx2 and the TORCS replay (with
+    ROL3D_TEXMAT=0, then default) with LD_LIBRARY_PATH,
+    __EGL_VENDOR_LIBRARY_DIRS, LIBGL_DRIVERS_PATH and GBM_BACKENDS_PATH
+    pointing at it.
+  - Writes NewMesa-*.png and NewMesaLog.
+
+  If 25.2 is right, rol-3d can carry it in /opt/riscos/gl (its private
+  Mesa path).
+
 ## 0.9, continued: 0.18 fixes the lit test but not TORCS; gl1test litx2; kit 32 (15 Nov 2026)
 
 - **Kit 31 on the Pi (rol-3d 0.18, "texture matrices kept off the

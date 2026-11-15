@@ -1,0 +1,57 @@
+#!/bin/sh
+# RISC3D test kit 33: try Debian's newer Mesa (trixie-backports) on the
+# Pi's GPU without installing it. The packages are downloaded (not
+# installed) and unpacked into /opt/riscos/gl-test; the Pi's own Mesa is
+# not touched, and trixie-backports is switched off again afterwards.
+# Then lit, litx and litx2 (Linux directly) and the TORCS recording
+# (rol-3d) are drawn with it, writing NewMesa-*.png and NewMesaLog into
+# this folder. Run as root:
+#   sh /riscos/HardDisc4/RISC3DTest/newmesa /riscos/3d/recorded/ctx-477.r3d
+d=$(dirname "$0")
+rec=$1
+T=/opt/riscos/gl-test
+L=/etc/apt/sources.list.d/risc3d-test-backports.list
+log="$d/NewMesaLog"
+: > "$log"
+say () { echo "$*" | tee -a "$log"; }
+
+say "== getting Mesa from trixie-backports"
+echo "deb http://deb.debian.org/debian trixie-backports main" > $L
+apt-get update >>"$log" 2>&1
+rm -rf $T /tmp/risc3d-newmesa
+mkdir -p /tmp/risc3d-newmesa && cd /tmp/risc3d-newmesa || exit 1
+apt-get download -t trixie-backports mesa-libgallium libegl-mesa0 libgbm1 libgl1-mesa-dri >>"$log" 2>&1
+# what libgallium needs that the Pi hasn't got (LLVM, usually)
+for p in $(dpkg-deb -f mesa-libgallium_*.deb Depends 2>/dev/null | tr ',' '\n' | sed 's/^ *//; s/ .*//; s/|.*//'); do
+  dpkg -s "$p" >/dev/null 2>&1 || { say "also getting $p"; apt-get download -t trixie-backports "$p" >>"$log" 2>&1 || apt-get download "$p" >>"$log" 2>&1; }
+done
+rm -f $L
+apt-get update >/dev/null 2>&1
+ls -la *.deb | tee -a "$log"
+mkdir -p $T/root
+for f in *.deb; do dpkg-deb -x "$f" $T/root; done
+ln -s root/usr/lib/aarch64-linux-gnu $T/lib
+ln -s root/usr/share $T/share
+cd /
+[ -e $T/lib/dri ] || { say "no Mesa unpacked: see NewMesaLog"; exit 1; }
+
+run () {
+  LD_LIBRARY_PATH=$T/lib __EGL_VENDOR_LIBRARY_DIRS=$T/share/glvnd/egl_vendor.d \
+  LIBGL_DRIVERS_PATH=$T/lib/dri GBM_BACKENDS_PATH=$T/lib/gbm "$@"
+}
+g=$(ls "$d"/gl1test-linux* 2>/dev/null | head -1)
+chmod 755 "$g"
+rm -f "$d"/NewMesa-*
+for t in lit litx litx2; do
+  say "== $t, Linux directly, new Mesa"
+  run "$g" $t "$d/NewMesa-$t.png" 2>&1 | tee -a "$log"
+done
+if [ -f "$rec" ]; then
+  say "== TORCS recording, new Mesa, rol-3d's V3D fix off"
+  ROL3D_TEXMAT=0 run /opt/riscos/rol-3d --replay "$rec" "$d/NewMesa-replay-nofix" 240 2>&1 | tee -a "$log"
+  say "== TORCS recording, new Mesa, rol-3d's V3D fix on"
+  run /opt/riscos/rol-3d --replay "$rec" "$d/NewMesa-replay" 240 2>&1 | tee -a "$log"
+fi
+chown 1000:1000 "$d"/NewMesa* 2>/dev/null
+sync
+say "== done. To remove the test Mesa: rm -rf $T"

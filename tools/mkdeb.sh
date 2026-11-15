@@ -17,5 +17,10 @@ gzip -9n -c $s/changelog > $P/usr/share/doc/riscos-risc3d/changelog.gz
 { sed -n '1,/^Architecture/p' $s/control
   echo "Installed-Size: $(du -sk --exclude=DEBIAN $P | cut -f1)"
   sed -n '/^Architecture/,$p' $s/control | tail -n +2; } > $P/DEBIAN/control
+# (0.19: Mesa from trixie-backports, pinned: ROL's choice, 15 Nov 2026)
+mkdir -p $P/etc/apt/sources.list.d $P/etc/apt/preferences.d
+install -m 644 $s/apt/debian-backports.sources $P/etc/apt/sources.list.d/
+install -m 644 $s/apt/riscos-risc3d-mesa $P/etc/apt/preferences.d/
+printf '%s\n' /etc/apt/sources.list.d/debian-backports.sources /etc/apt/preferences.d/riscos-risc3d-mesa > $P/DEBIAN/conffiles
 install -m 755 $s/postinst $s/prerm $s/postrm $P/DEBIAN/
 dpkg-deb --root-owner-group -Zxz --build $P "out/riscos-risc3d_${v}_arm64.deb"

@@ -1,7 +1,13 @@
 #!/bin/sh
 # Copyright (c) 2026 Andrew Youll. MIT licence.
 set -e
+# the backports source and Mesa pin go with the package (Mesa then stops
+# following backports; it isn't downgraded)
+if [ "$1" = remove ] || [ "$1" = purge ]; then
+  rm -f /etc/apt/sources.list.d/debian-backports.sources /etc/apt/preferences.d/riscos-risc3d-mesa
+fi
 if [ "$1" = purge ]; then
+  rm -f /var/lib/riscos/risc3d-backports
   pd=/riscos/HardDisc4/!Boot/Choices/Boot/PreDesk
   rm -f "$pd/RISC3D" "$pd/RISC3D,feb" /var/lib/riscos/risc3d-predesk
   rm -rf /riscos/3d

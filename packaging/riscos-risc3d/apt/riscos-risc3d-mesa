@@ -1,0 +1,4 @@
+Explanation: RISC3D needs Mesa 25.2 or later on V3D; trixie has 25.0.7
+Package: src:mesa
+Pin: release n=trixie-backports
+Pin-Priority: 500

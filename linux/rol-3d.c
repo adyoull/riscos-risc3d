@@ -59,7 +59,7 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
-#define ROL3D_VERSION "0.18"
+#define ROL3D_VERSION "0.19"
 /* what the library may send (OP_CONTEXT's reply, word 3): 6 = 0.6's
    commands (GL_EXT_direct_state_access, OP_TEMP_BIND); 7 = OP_UPLOADS
    (0.8); none: 0.5 */
@@ -1437,12 +1437,29 @@ texmat_all (void)
   gl.ActiveTexture ((GLenum) was);
 }
 
+/* Mesa's version from GL_VERSION ("... Mesa 25.0.7-2+deb13u1"), as
+   major * 100 + minor, or 0 */
+static int
+mesa_version (void)
+{
+  const char *v = (const char *) gl.GetString (GL_VERSION), *m = v ? strstr (v, "Mesa ") : 0;
+  int a = 0, b = 0;
+  if (!m || sscanf (m + 5, "%d.%d", &a, &b) != 2)
+    return 0;
+  return a * 100 + b;
+}
+
 static void
 texmat_start (void)
 {
   const char *e = getenv ("ROL3D_TEXMAT");
   const char *r = (const char *) gl.GetString (GL_RENDERER);
-  texmat_fix = e ? *e == '1' : r && strstr (r, "V3D") != 0;
+  /* (0.19: only below Mesa 25.2, which draws these right: kit 33) */
+  int mesa = mesa_version ();
+  texmat_fix = e ? *e == '1' : r && strstr (r, "V3D") != 0 && mesa > 0 && mesa < 2502;
+  if (!e && r && strstr (r, "V3D") && mesa > 0 && mesa < 2502)
+    logmsg ("rol-3d: Mesa %d.%d on V3D draws lit, textured and fogged scenes wrongly; Mesa 25.2 or later "
+	    "fixes it (apt update, then apt full-upgrade, with riscos-risc3d's backports pin)\n", mesa / 100, mesa % 100);
   if (!desktop_gl || strict_ctx || !gl.GetFloatv || !gl.LoadMatrixf || !gl.MatrixMode || !gl.ActiveTexture)
     texmat_fix = 0;
   if (!texmat_fix)

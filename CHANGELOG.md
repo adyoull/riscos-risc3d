@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.9, continued: Mesa from trixie-backports, pinned; rol-3d 0.19; kit 34 (15 Nov 2026)
+
+- **ROL's answer (RISC3D/handoffs/2026-11-15-rol-mesa-from-backports-pinned.md):**
+  - Debian's Mesa from trixie-backports, pinned, carried by
+    riscos-risc3d; ROL's images and packages are unchanged.
+  - Backports has Mesa 26.1.6-1~bpo13+1 now, not 25.2, so kit 33's
+    newmesa fetched 26.1.6 this morning. Its dependencies are all in
+    trixie main.
+  - riscos-support 1.0.0055-1's /var/lib/riscos/apt-again hook makes
+    Updates run apt update and full-upgrade a second time.
+- **riscos-risc3d 0.19-1:**
+  - Conffiles /etc/apt/sources.list.d/debian-backports.sources and
+    /etc/apt/preferences.d/riscos-risc3d-mesa (src:mesa,
+    n=trixie-backports, 500).
+  - postinst touches apt-again once (marker
+    /var/lib/riscos/risc3d-backports) and says how to upgrade by hand.
+  - postrm removes both files on remove or purge, and the marker on
+    purge. Mesa stays Recommends without a version (apt can't see
+    backports at first install).
+- **rol-3d 0.19:** mesa_version() reads GL_VERSION. The V3D
+  texture-matrix workaround now applies only when V3D runs Mesa below
+  25.2, and in that case it logs how to upgrade. Host: the TORCS replay
+  is unchanged.
+- **Kit 34:**
+  - Install, apt update, full-upgrade, then remove /opt/riscos/gl-test.
+  - The `check` script prints apt-cache policy and draws lit, litx2 and
+    the TORCS replay with the system Mesa. Then TORCS.
+
 ## 0.9, continued: Mesa 25.2 draws everything right (kit 33, 15 Nov 2026)
 
 - **Kit 33 on the Pi:** with Debian's Mesa 25.2 from trixie-backports,

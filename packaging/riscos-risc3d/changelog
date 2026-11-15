@@ -1,3 +1,16 @@
+riscos-risc3d (0.19-1) rol; urgency=medium
+
+  * Mesa from Debian's trixie-backports (ROL's choice, 15 Nov 2026): the
+    package carries /etc/apt/sources.list.d/debian-backports.sources and
+    /etc/apt/preferences.d/riscos-risc3d-mesa (src:mesa pinned at 500 to
+    trixie-backports; nothing else follows backports). On first install
+    it asks Updates to run apt again (/var/lib/riscos/apt-again), which
+    brings the newer Mesa. Removing the package removes both files.
+  * rol-3d 0.19: logs Mesa's version; the V3D texture-matrix workaround
+    is used only below Mesa 25.2, and a note says how to upgrade.
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Sun, 15 Nov 2026 09:50:00 +0000
+
 riscos-risc3d (0.18-1) rol; urgency=medium
 
   * rol-3d 0.18: works round a bug in the Pi 4's Mesa (V3D, 25.0.7):

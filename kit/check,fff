@@ -1,12 +1,25 @@
 #!/bin/sh
-# RISC3D test kit 22: rol-3d 0.10 on checks the 3D contexts of programs
-# started after "on": it logs GL's errors after each command, the
-# functions Linux's GL hasn't got, and which commands came (at frame 60,
-# then every 600), and (0.11) texture uploads, into /riscos/3d/log.txt. Run as root.
-#   sh /riscos/HardDisc4/RISC3DTest/check on
-#   sh /riscos/HardDisc4/RISC3DTest/check off
-case "$1" in
-  on) mkdir -p /riscos/3d && : >/riscos/3d/check && echo "Checking programs started from now. Their findings go into /riscos/3d/log.txt." ;;
-  off) rm -f /riscos/3d/check && echo "Not checking programs started from now." ;;
-  *) echo "Say on or off."; exit 1 ;;
-esac
+# RISC3D test kit 34: after installing riscos-risc3d 0.19-1 and upgrading
+# Mesa from trixie-backports, check what's installed and draw lit, litx2
+# and the TORCS recording with it. Writes Check-*.png and CheckLog into
+# this folder. Run as root:
+#   sh /riscos/HardDisc4/RISC3DTest/check /riscos/3d/recorded/ctx-477.r3d
+d=$(dirname "$0")
+log="$d/CheckLog"
+g=$(ls "$d"/gl1test-linux* 2>/dev/null | head -1)
+chmod 755 "$g"
+rm -f "$d"/Check-*
+{
+  echo "== Mesa packages"
+  apt-cache policy libgl1-mesa-dri mesa-libgallium 2>&1
+  echo "== lit, litx2 (Linux directly)"
+  "$g" lit "$d/Check-lit.png"
+  "$g" litx2 "$d/Check-litx2.png"
+  if [ -f "$1" ]; then
+    echo "== TORCS recording through rol-3d"
+    /opt/riscos/rol-3d --replay "$1" "$d/Check-replay" 240
+  fi
+} > "$log" 2>&1
+chown 1000:1000 "$d"/Check* 2>/dev/null
+sync
+cat "$log"

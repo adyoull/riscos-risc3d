@@ -1,30 +1,33 @@
-RISC3D test kit 33 (prototype, 15 November 2026)
+RISC3D test kit 34 (prototype, 15 November 2026)
 ================================================
 
-Kit 32's results: with rol-3d 0.18's fix and fog off, TORCS draws
-right (ReplayNoFog). So the Pi's Mesa (25.0.7) has a second trigger:
-lit texture coordinates are also lost when fog is on. A lone normal
-(not in an array) breaks the lit colour too.
+ROL chose how RISC3D gets a newer Mesa: Debian's own, from
+trixie-backports, pinned so that only Mesa follows backports. Note
+that backports now has Mesa 26.1.6 (not the 25.2 named before), and
+that is what kit 33's newmesa script fetched this morning too.
 
-Mesa's release notes since 25.0.7 list fixes in this very area (the
-fixed-function vertex program was rewritten in 25.0; V3D output and
-fog fixes came in 25.1-25.3). Debian has Mesa 25.2 for trixie in
-trixie-backports. This kit tries it WITHOUT installing it: the script
-downloads the packages, unpacks them into /opt/riscos/gl-test, and
-switches backports off again. Your system Mesa is not touched.
+riscos-risc3d 0.19-1 carries the two apt files that do this, and
+rol-3d 0.19 logs which Mesa it found, using its old V3D workaround only
+below Mesa 25.2.
 
-Steps
+Steps (RiSH's Root shell)
 -----
- 1. Unzip RISC3DTest into HardDisc4, replacing kit 32.
- 2. In RiSH's Root shell (needs the internet, a few minutes):
-      sh /riscos/HardDisc4/RISC3DTest/newmesa /riscos/3d/recorded/ctx-477.r3d
+ 1. Unzip RISC3DTest into HardDisc4, replacing kit 33.
+ 2. Install, then upgrade Mesa:
+      apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.19-1_arm64.deb
+      apt-get update
+      apt-get full-upgrade
+    (or Configure > Updates, Check then Install, instead of the last two)
+ 3. Remove kit 33's test copy:
+      rm -rf /opt/riscos/gl-test
+ 4. Check:
+      sh /riscos/HardDisc4/RISC3DTest/check /riscos/3d/recorded/ctx-477.r3d
+ 5. Play TORCS.
 
 Please send
 -----------
-NewMesaLog and the pictures NewMesa-lit.png, NewMesa-litx.png,
-NewMesa-litx2.png, NewMesa-replay-nofix-240.png and
-NewMesa-replay-240.png.
+CheckLog, Check-lit.png, Check-litx2.png, Check-replay-240.png, and how
+TORCS looks (and its frame rate).
 
-If the newer Mesa draws everything right, rol-3d can carry it as its
-own private Mesa (it already looks in /opt/riscos/gl first). To remove
-the test copy: rm -rf /opt/riscos/gl-test
+To go back: apt-get remove riscos-risc3d takes the pin away (Mesa then
+stays where it is).

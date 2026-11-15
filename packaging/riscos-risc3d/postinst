@@ -33,6 +33,18 @@ if [ "$1" = configure ]; then
     echo "before (RISC3D 0.03, Linux3D 0.02): don't reload them. (If *RISC3D says"
     echo "no driver is registered, *RMReInit Linux3D.)"
   fi
+  # Mesa 25.2 or later, from trixie-backports (pinned by this package's
+  # apt files): once, when those files first arrive, ask Updates to run
+  # apt again (riscos-support 1.0.0055-1's hook)
+  ag=/var/lib/riscos/risc3d-backports
+  if [ ! -e "$ag" ]; then
+    mkdir -p /var/lib/riscos
+    : > /var/lib/riscos/apt-again
+    : > "$ag"
+    echo "RISC3D needs Mesa 25.2 or later, which comes from Debian's trixie-backports"
+    echo "(now set up and pinned for Mesa only). Configure > Updates fetches it; by"
+    echo "hand: apt update, then apt full-upgrade."
+  fi
   if ! grep -qa /opt/riscos/rol-3d /usr/sbin/init 2>/dev/null; then
     echo "This riscos-support's init doesn't start rol-3d: after each restart, until"
     echo "you have riscos-support 1.0.0049-1, start it as root: setsid /opt/riscos/rol-3d &"

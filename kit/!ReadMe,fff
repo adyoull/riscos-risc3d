@@ -20,13 +20,13 @@ Steps (RiSH's Root shell)
     (or Configure > Updates, Check then Install, instead of the last two)
  3. Remove kit 33's test copy:
       rm -rf /opt/riscos/gl-test
- 4. Check:
-      sh /riscos/HardDisc4/RISC3DTest/check /riscos/3d/recorded/ctx-477.r3d
+ 4. Verify:
+      sh /riscos/HardDisc4/RISC3DTest/verify /riscos/3d/recorded/ctx-477.r3d
  5. Play TORCS.
 
 Please send
 -----------
-CheckLog, Check-lit.png, Check-litx2.png, Check-replay-240.png, and how
+VerifyLog, Verify-lit.png, Verify-litx2.png, Verify-replay-240.png, and how
 TORCS looks (and its frame rate).
 
 To go back: apt-get remove riscos-risc3d takes the pin away (Mesa then

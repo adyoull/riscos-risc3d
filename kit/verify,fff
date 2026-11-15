@@ -1,0 +1,25 @@
+#!/bin/sh
+# RISC3D test kit 34: after installing riscos-risc3d 0.19-1 and upgrading
+# Mesa from trixie-backports, check what's installed and draw lit, litx2
+# and the TORCS recording with it. Writes Verify-*.png and VerifyLog into
+# this folder. Run as root:
+#   sh /riscos/HardDisc4/RISC3DTest/verify /riscos/3d/recorded/ctx-477.r3d
+d=$(dirname "$0")
+log="$d/VerifyLog"
+g=$(ls "$d"/gl1test-linux* 2>/dev/null | head -1)
+chmod 755 "$g"
+rm -f "$d"/Verify-*
+{
+  echo "== Mesa packages"
+  apt-cache policy libgl1-mesa-dri mesa-libgallium 2>&1
+  echo "== lit, litx2 (Linux directly)"
+  "$g" lit "$d/Verify-lit.png"
+  "$g" litx2 "$d/Verify-litx2.png"
+  if [ -f "$1" ]; then
+    echo "== TORCS recording through rol-3d"
+    /opt/riscos/rol-3d --replay "$1" "$d/Verify-replay" 240
+  fi
+} > "$log" 2>&1
+chown 1000:1000 "$d"/Verify* 2>/dev/null
+sync
+cat "$log"

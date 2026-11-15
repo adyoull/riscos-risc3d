@@ -25,7 +25,7 @@
   is unchanged.
 - **Kit 34:**
   - Install, apt update, full-upgrade, then remove /opt/riscos/gl-test.
-  - The `check` script prints apt-cache policy and draws lit, litx2 and
+  - The `verify` script (`check` is kit 21's GL-error logging) prints apt-cache policy and draws lit, litx2 and
     the TORCS replay with the system Mesa. Then TORCS.
 
 ## 0.9, continued: Mesa 25.2 draws everything right (kit 33, 15 Nov 2026)

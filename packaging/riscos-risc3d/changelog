@@ -1,3 +1,14 @@
+riscos-risc3d (0.18-1) rol; urgency=medium
+
+  * rol-3d 0.18: works round a bug in the Pi 4's Mesa (V3D, 25.0.7):
+    with lighting on, textures lost their coordinates (TORCS: plain
+    yellow car, striped trees, smeared grass). On V3D only, a texture
+    matrix left at the identity is given to Mesa with r scaled by the
+    float after 1, which takes Mesa's working path; the program's own
+    matrices are unchanged. ROL3D_TEXMAT=0 turns it off, =1 on anywhere.
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Sun, 15 Nov 2026 08:45:00 +0000
+
 riscos-risc3d (0.17-1) rol; urgency=medium
 
   * rol-3d 0.17: ROL3D_REPLAY can also give specular or emission colours

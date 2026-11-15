@@ -1,8 +1,8 @@
 | RISC3D test: TORCS's lighting on a textured plane, in six parts.
 | Writes LitResults and LitPicture (PNG); the litlinux script writes
 | LitLinuxResults and LitLinuxPicture (Linux's Mesa directly) to compare.
-RMEnsure RISC3D 0.03 Error Install riscos-risc3d 0.17-1 first (see !ReadMe)
-RMEnsure Linux3D 0.02 Error Install riscos-risc3d 0.17-1 first (see !ReadMe)
+RMEnsure RISC3D 0.03 Error Install riscos-risc3d 0.18-1 first (see !ReadMe)
+RMEnsure Linux3D 0.02 Error Install riscos-risc3d 0.18-1 first (see !ReadMe)
 Run <Obey$Dir>.gl1test lit <Obey$Dir>.LitPicture/png { > <Obey$Dir>.LitResults }
 SetType <Obey$Dir>.LitPicture/png PNG
 SetType <Obey$Dir>.LitResults Text

@@ -59,7 +59,7 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
-#define ROL3D_VERSION "0.17"
+#define ROL3D_VERSION "0.18"
 /* what the library may send (OP_CONTEXT's reply, word 3): 6 = 0.6's
    commands (GL_EXT_direct_state_access, OP_TEMP_BIND); 7 = OP_UPLOADS
    (0.8); none: 0.5 */
@@ -1391,8 +1391,111 @@ sync_ops (uint32_t op, const uint32_t *a)
   reply (&r, 4);
 }
 
+/* 0.18: V3D's texture coordinates with lighting.
+
+   Mesa 25.0.7 on the Pi 4's GPU (V3D) loses fixed-function texture
+   coordinates when GL_LIGHTING is on with a light enabled and the
+   texture matrix is the identity (kit 29: Linux's own Mesa does it too;
+   kit 30: a texture matrix that isn't the identity, or texgen, draws
+   right). So on V3D a texture matrix left at the identity is given to
+   Mesa as the identity with r scaled by the float after 1: a different
+   matrix to Mesa, the same texture coordinates for 1D and 2D textures,
+   and r changed by one part in 8 million for 3D and cube ones. The
+   library keeps the program's own matrices, so programs reading them
+   back see the identity. ROL3D_TEXMAT=0 turns it off, =1 on anywhere. */
+static int texmat_fix;
+static GLint texmat_units;
+static const GLfloat texmat_near[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1.00000012f, 0, 0, 0, 0, 1 };
+
+static void
+texmat_unit (void)
+{
+  static const GLfloat id[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+  GLfloat m[16];
+  gl.GetFloatv (GL_TEXTURE_MATRIX, m);
+  if (memcmp (m, id, sizeof m))
+    return;
+  GLint mode = GL_MODELVIEW;
+  gl.GetIntegerv (GL_MATRIX_MODE, &mode);
+  if (mode != GL_TEXTURE)
+    gl.MatrixMode (GL_TEXTURE);
+  gl.LoadMatrixf (texmat_near);
+  if (mode != GL_TEXTURE)
+    gl.MatrixMode ((GLenum) mode);
+}
+
+static void
+texmat_all (void)
+{
+  GLint was = GL_TEXTURE0;
+  gl.GetIntegerv (GL_ACTIVE_TEXTURE, &was);
+  for (GLint i = 0; i < texmat_units; i++)
+    {
+      gl.ActiveTexture (GL_TEXTURE0 + (GLenum) i);
+      texmat_unit ();
+    }
+  gl.ActiveTexture ((GLenum) was);
+}
+
+static void
+texmat_start (void)
+{
+  const char *e = getenv ("ROL3D_TEXMAT");
+  const char *r = (const char *) gl.GetString (GL_RENDERER);
+  texmat_fix = e ? *e == '1' : r && strstr (r, "V3D") != 0;
+  if (!desktop_gl || strict_ctx || !gl.GetFloatv || !gl.LoadMatrixf || !gl.MatrixMode || !gl.ActiveTexture)
+    texmat_fix = 0;
+  if (!texmat_fix)
+    return;
+  texmat_units = 1;
+  gl.GetIntegerv (GL_MAX_TEXTURE_COORDS, &texmat_units);
+  if (texmat_units < 1 || texmat_units > 32)
+    texmat_units = 1;
+  texmat_all ();
+  while (gl.GetError () != GL_NO_ERROR)
+    ;
+  logmsg ("rol-3d: texture matrices kept off the identity (V3D's lit texture coordinates), %d units\n", texmat_units);
+}
+
+static void dispatch_main (uint32_t op, const uint32_t *a, uint32_t n);
+
 static void
 dispatch (uint32_t op, const uint32_t *a, uint32_t n)
+{
+  int had = have_context;
+  dispatch_main (op, a, n);
+  if (__builtin_expect (!had && have_context, 0))
+    texmat_start ();
+  if (__builtin_expect (!texmat_fix, 1))
+    return;
+  switch (op)
+    {
+    case OP_glLoadIdentity: case OP_glLoadMatrixf: case OP_glLoadMatrixd:
+    case OP_glMultMatrixf: case OP_glMultMatrixd: case OP_glLoadTransposeMatrixf:
+    case OP_glLoadTransposeMatrixd: case OP_glMultTransposeMatrixf: case OP_glMultTransposeMatrixd:
+    case OP_glTranslatef: case OP_glTranslated: case OP_glRotatef: case OP_glRotated:
+    case OP_glScalef: case OP_glScaled: case OP_glFrustum: case OP_glOrtho: case OP_glPopMatrix:
+      {
+	GLint mode = GL_MODELVIEW;
+	gl.GetIntegerv (GL_MATRIX_MODE, &mode);
+	if (mode == GL_TEXTURE)
+	  texmat_unit ();
+	break;
+      }
+    case OP_glPopAttrib: case OP_glCallList: case OP_glCallLists:
+    case OP_glMatrixLoadfEXT: case OP_glMatrixLoaddEXT: case OP_glMatrixMultfEXT: case OP_glMatrixMultdEXT:
+    case OP_glMatrixLoadIdentityEXT: case OP_glMatrixRotatefEXT: case OP_glMatrixRotatedEXT:
+    case OP_glMatrixScalefEXT: case OP_glMatrixScaledEXT: case OP_glMatrixTranslatefEXT:
+    case OP_glMatrixTranslatedEXT: case OP_glMatrixFrustumEXT: case OP_glMatrixOrthoEXT:
+    case OP_glMatrixPopEXT: case OP_glMatrixLoadTransposefEXT: case OP_glMatrixLoadTransposedEXT:
+    case OP_glMatrixMultTransposefEXT: case OP_glMatrixMultTransposedEXT:
+      texmat_all ();
+      break;
+    }
+}
+
+static void
+dispatch_main (uint32_t op, const uint32_t *a, uint32_t n)
 {
   if (__builtin_expect (!have_context, 0))
     {

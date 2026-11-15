@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.9, continued: V3D's lit-texture bug worked round in rol-3d 0.18; kit 31 (15 Nov 2026)
+
+- **Kit 30 on the Pi** (Linux's Mesa directly, 3.1 compat; the same
+  with MESA_GL_VERSION_OVERRIDE=2.1):
+  - Right on the GPU: unlit, GL_LIGHT0 off, a texture matrix scaled by
+    1.0001, and GL_OBJECT_LINEAR texgen.
+  - Wrong: glBegin/glEnd, VBO, 4-component texture coordinates, local
+    viewer, two-sided and flat shading. Separate specular is worse
+    still: one plain colour.
+  - Software: all right.
+
+  So Mesa 25.0.7 on V3D loses fixed-function texture coordinates when
+  lighting is on, a light is enabled, and the texture matrix is the
+  identity (the pass-through case).
+- **rol-3d 0.18 (riscos-risc3d 0.18-1):** on V3D only (GL_RENDERER
+  contains "V3D"; `ROL3D_TEXMAT=0` off, `=1` on anywhere), on desktop
+  compat contexts (and ES1, which runs on one), every texture matrix left
+  at the identity goes to Mesa as diag(1, 1, 1.00000012, 1). For 1D/2D
+  textures the coordinates are the same; for 3D and cube ones, r
+  changes by 1 part in 8 million.
+  - Set for every unit (GL_MAX_TEXTURE_COORDS) when the context is
+    made.
+  - Checked again after texture-mode matrix ops (load, mult, translate,
+    rotate, scale, frustum, ortho, pop).
+  - All units checked again after glPopAttrib, glCallList(s) and the
+    EXT_dsa glMatrix*EXT ops.
+
+  The library keeps the program's own matrices, so reads still give the
+  identity. A wrapper around dispatch (dispatch_main) does it; the
+  replay uses it too.
+- **Host, with ROL3D_TEXMAT=1 forced:** gl1test scene and answers, lit
+  (3ab4b9dc), litx (68955b26), multi (8e153fe7), estest all, gl3test
+  all, targettest and the TORCS replay are all identical to off.
+- **Kit 31:** install 0.18-1. `Lit` (through RISC3D) and `replay` (the
+  TORCS recording on the GPU, as normal) should both now be right; then
+  TORCS itself.
+
 ## 0.9, continued: a bug in the Pi's Mesa; gl1test litx; kit 30 (15 Nov 2026)
 
 - **Kit 29 on the Pi:** LitLinuxPicture (Linux's own Mesa, no RISC OS)

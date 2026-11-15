@@ -1,19 +1,14 @@
 #!/bin/sh
-# RISC3D test kit 29: draw a recording again on the GPU with TORCS's
-# specular or emission colours given as black, writing PNG pictures into
-# this folder: ReplayNoSpec-<frame>, ReplayNoEmis-<frame>, and ReplayLog.
-# Run as root:
+# RISC3D test kit 31: draw a recording again on the GPU (with rol-3d
+# 0.18's V3D fix, as TORCS will get it), writing ReplayGPU-<frame>.png
+# and ReplayLog into this folder. Run as root:
 #   sh /riscos/HardDisc4/RISC3DTest/replay /riscos/3d/recorded/ctx-477.r3d 240
 d=$(dirname "$0")
 [ -f "$1" ] || { echo "Give a recording (sh record list shows them)."; exit 1; }
 w=${2:-240}
-r=/opt/riscos/rol-3d
 rm -f "$d"/Replay*
-: > "$d/ReplayLog"
-for v in NoSpec:nospec NoEmis:noemis; do
-  sync
-  ROL3D_REPLAY=${v#*:} $r --replay "$1" "$d/Replay${v%%:*}" "$w" 2>&1 | tee -a "$d/ReplayLog"
-done
+sync
+/opt/riscos/rol-3d --replay "$1" "$d/ReplayGPU" "$w" 2>&1 | tee "$d/ReplayLog"
 chown 1000:1000 "$d"/Replay* 2>/dev/null
 sync
 ls "$d" | grep Replay

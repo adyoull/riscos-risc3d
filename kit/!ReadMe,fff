@@ -1,32 +1,24 @@
-RISC3D test kit 30 (prototype, 15 November 2026)
+RISC3D test kit 31 (prototype, 15 November 2026)
 ================================================
 
-Kit 29's results: Linux's own Mesa on the Pi draws TORCS's lighting
-wrongly too (LitLinuxPicture = LitPicture). So it's a bug in the Pi's
-Mesa (V3D, 25.0.7): with GL_LIGHTING on, textures lose their
-coordinates. It isn't specular, emission or colour material.
-
-This kit draws twelve variations of the lit plane with Linux's Mesa
-directly, to find one the bug doesn't touch, so that rol-3d can draw
-TORCS that way:
-
-  row 1: as before (wrong) | unlit (right) | glBegin/glEnd | arrays in a VBO
-  row 2: 4-component texture coordinates | GL_LIGHT0 off | local viewer |
-         two-sided lighting
-  row 3: separate specular colour | texture matrix not identity |
-         generated texture coordinates | flat shading
-
-It runs three times: the GPU as normal, the GPU with Mesa told to give
-OpenGL 2.1 instead of 3.1, and software (all right).
-
-Nothing to install (keep riscos-risc3d 0.17-1).
+Kit 30 found the way round the Pi's Mesa bug: with lighting on, V3D
+loses texture coordinates only while the texture matrix is the plain
+identity. rol-3d 0.18 now keeps the texture matrix a hair away from the
+identity (a change that does nothing to 2D textures), on V3D only.
+Programs still see their own matrices; other drivers are untouched.
 
 Steps
 -----
- 1. Unzip RISC3DTest into HardDisc4, replacing kit 29.
+ 1. Unzip RISC3DTest into HardDisc4, replacing kit 30.
  2. In RiSH's Root shell:
-      sh /riscos/HardDisc4/RISC3DTest/litx
+      apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.18-1_arm64.deb
+      sh /riscos/HardDisc4/RISC3DTest/uploads memory
+      sh /riscos/HardDisc4/RISC3DTest/replay /riscos/3d/recorded/ctx-477.r3d 240
+ 3. Double-click Lit: all six parts should now show the checker.
+ 4. Run TORCS: the car should have its livery and cockpit, and the
+    scenery its textures.
 
 Please send
 -----------
-LitX-GPU.png, LitX-GPU21.png, LitX-Soft.png and LitXResults.
+LitPicture (LitPicture.png on the Mac), ReplayGPU-240 and ReplayLog,
+and say how TORCS looks (and its frame rate).

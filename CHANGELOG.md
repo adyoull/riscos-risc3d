@@ -1,13 +1,19 @@
 # Changelog
 
-## Release 0.10 (16 Nov 2026): !RISC3D 0.04-6 with V3DRender
+## Release 0.10 (16 Nov 2026): !RISC3D 0.04-7 with V3DRender 0.15
+
+- The owner: V3DRender should be the latest: 0.15 (md5 229b10e6…; cache
+  work that no longer costs YSFlight its frames) replaces 0.13 in GPU.
+  `out/RISC3D-0.04-7.zip`. Release 0.10 is 0.04-7 (0.04-6 never published).
+
+## !RISC3D 0.04-6 with V3DRender 0.13
 
 - V3DRender 0.13 (passed on the owner's Pi 4; refuses to start anywhere but
   a Pi 4/400/CM4, before touching hardware) joins Linux3D in !RISC3D.GPU,
   from V3DRender's release (md5 0d13cc21…), kept in `third/V3DRender`. Its
   licence (GPL-2.0-or-later) and notice are in GPU.Licences and GPU.GPL-2;
   !Help says so. `out/RISC3D-0.04-6.zip`: the one package for every system.
-- Release 0.10 (tag v0.10): !RISC3D 0.04-6 (RISC3D module 0.04, Linux3D
+- (Superseded before publishing by 0.04-7.) !RISC3D 0.04-6 (RISC3D module 0.04, Linux3D
   0.04, V3DRender 0.13), riscos-risc3d 0.22-1 (rol-3d 0.19), client library
   0.9 (unchanged; RISC3D-client-0.9.tgz).
 

@@ -84,6 +84,8 @@ These are riscos-mesa's parts; its EGL-GUIDE has the details.
     as Linux's llvmpipe).
   - `V3DM$Stats 1`: on native RISC OS, the GPU work every 5 seconds.
 
+Writing a driver for another GPU: see [docs/DRIVER-GUIDE.md](docs/DRIVER-GUIDE.md).
+
 RISC3D's client library (`lib/`, `proto/`) is released as
 `RISC3D-client-<version>.tgz` for riscos-mesa to build in.
 

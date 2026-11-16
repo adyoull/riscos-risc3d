@@ -28,6 +28,20 @@ Programs reach it through [riscos-mesa](https://github.com/adyoull/riscos-mesa)'
 EGL and OSMesa. Its client library (`lib/`, `proto/`) is released as
 `RISC3D-client-<version>.tgz` for riscos-mesa to build in.
 
+### Where it runs
+
+| System | Driver | GPU | Tested |
+|---|---|---|---|
+| Native RISC OS, Raspberry Pi 4 / 400 / CM4 | V3DRender | V3D 4.2 (Mesa's v3d in riscos-mesa) | Yes |
+| RISC OS on Linux, Raspberry Pi 4 | Linux3D | V3D 4.2 (Linux's v3d, Mesa 26.1) | Yes |
+| RISC OS on Linux, Pinebook Pro | Linux3D | Mali-T860 (Linux's panfrost) | No: drivers are in ROL's kernel and Debian's Mesa |
+| RISC OS on Linux, Pinebook | Linux3D | Mali-400 (Linux's lima) | No: as above; an OpenGL ES 2.0-class GPU |
+| RISC OS on Linux, Windows Dev Kit 2023 | Linux3D | Adreno 690 (Linux's msm, Mesa's freedreno) | Test image with a tester |
+| Anything else | none | Mesa draws in software, as before | |
+
+On RISC OS on Linux, Linux3D hands the drawing to Linux, which uses whatever
+GPU it has, so any machine whose GPU Linux and Mesa drive should work.
+
 ## The parts
 
 | Part | What it is |

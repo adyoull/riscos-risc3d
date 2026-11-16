@@ -8,12 +8,13 @@ driver, Mesa draws in software as before.
 What's in here
 --------------
   RISC3D   the module: the interface between Mesa and the GPU driver
-  GPU      the GPU driver for this machine, from its own package:
+  GPU      the GPU drivers. Each starts only on the machine it is for,
+           so the same !RISC3D serves every machine:
              Linux3D    RISC OS on Linux (Linux's graphics driver draws)
-             V3DRender  Raspberry Pi 4 / 400 / CM4 (native RISC OS)
-           (empty if there is none for this machine yet)
+             V3DRender  Raspberry Pi 4 / 400 / CM4 (native RISC OS; to come)
 
 !RISC3D belongs in !Boot.Resources, where it is seen at start-up.
+Install and update it with PackMan (package RISC3D), on every system.
 
 For programs
 ------------

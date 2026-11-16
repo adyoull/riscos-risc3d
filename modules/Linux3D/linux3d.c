@@ -39,6 +39,7 @@ ERROR_BLOCK (err_nohelper, 0x81D310, "Linux's 3D helper isn't running (rol-3d)")
 ERROR_BLOCK (err_gone, 0x81D311, "Linux's 3D renderer for this context has gone");
 ERROR_BLOCK (err_full, 0x81D312, "Too many Linux3D contexts");
 ERROR_BLOCK (err_map, 0x81D313, "Linux3D couldn't map the renderer's memory");
+ERROR_BLOCK (err_notrol, 0x81D315, "Linux3D is the 3D driver for RISC OS on Linux only");
 static struct { int errnum; char errmess[240]; } err_helper = { 0x81D314, "" };
 
 static int
@@ -205,6 +206,11 @@ oserror *
 mod_init (const char *tail, int instance, void *pw)
 {
   (void) tail; (void) instance; (void) pw;
+  /* 0.03: refuse to start where this isn't RISC OS on Linux, so that
+     RISC3D (which tries each module in !RISC3D.GPU) moves on */
+  regs x = {{ 0, (unsigned) "IXSupport_LinuxSyscall" }};
+  if (swix_regs (0x39, &x))		/* OS_SWINumberFromString */
+    return ERR (err_notrol);
   /* (flags bit 1: may draw in software, ask: reason 3) */
   regs r = {{ 0, (unsigned) driver_entry, 0, (unsigned) "Linux3D (Linux's graphics driver)", 2 }};
   oserror *e = swix_regs (RISC3D_Register, &r);

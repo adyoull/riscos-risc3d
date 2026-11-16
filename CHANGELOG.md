@@ -1,5 +1,17 @@
 # Changelog
 
+## One RISC3D package for every system (!RISC3D 0.04-3, Linux3D 0.03; 16 Nov 2026)
+
+- The owner: RISC3D managed by PackMan everywhere, ROL included; ROL's
+  distribution packages carry it for updates, and the user can update it
+  with PackMan; one package for all systems.
+- **Linux3D 0.03** refuses to start where IXSupport_LinuxSyscall isn't
+  there (error &81D315 "Linux3D is the 3D driver for RISC OS on Linux
+  only"), so RISC3D moves on to the next module in GPU.
+- **`out/RISC3D-0.04-3.zip`**: !RISC3D with the icon and GPU.Linux3D; the
+  same on every system. V3DRender to be added to GPU (asked of V3DRender).
+  !Help and GPU.ReadMe say so.
+
 ## !RISC3D's icon and the RISC3D logo (16 Nov 2026)
 
 - `art/`: draw.py draws the icon (an isometric cube with a triangle mesh,

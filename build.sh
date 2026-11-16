@@ -149,3 +149,10 @@ python3 tools/mkkit.py out/RISC3DTest-37.zip RISC3DTest "out/kit37/!ReadMe,fff" 
   "dist/!RISC3D/GPU/ReadMe,fff=!RISC3D/GPU/ReadMe,fff"
 python3 tools/mkkit.py out/RISC3D-0.04-2.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
   "dist/!RISC3D/!Help,fff" "out/modules/RISC3D,ffa" "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff"
+
+# !RISC3D 0.04-3: one package for every system: RISC3D 0.04, the icon, and
+# every driver RISC3D has (each refuses to start where it doesn't belong):
+# GPU.Linux3D 0.03 (RISC OS on Linux only). V3DRender to follow.
+python3 tools/mkkit.py out/RISC3D-0.04-3.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+  "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" \
+  "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa"

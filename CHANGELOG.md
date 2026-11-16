@@ -1,5 +1,11 @@
 # Changelog
 
+## !RISC3D 0.04-5: its icon shown (16 Nov 2026)
+
+- The owner: no sprite was given to the Filer. !Boot and !Run now do
+  `IconSprites <RISC3D$Dir>.!Sprites` (the Wimp picks !Sprites11 itself on
+  high-resolution screens). `out/RISC3D-0.04-5.zip`.
+
 ## RISC OS's side by PackMan on ROL too (riscos-risc3d 0.22-1, Linux3D 0.04, !RISC3D 0.04-4; 16 Nov 2026)
 
 - ROL staged RISC3D 0.04-3 in riscos-harddisc 1.0.0058-1 (installed as

@@ -2,5 +2,6 @@
 | from !Boot.Resources: sets RISC3D: and loads RISC3D, which loads the
 | GPU driver from GPU itself. Programs need nothing in their !Run.
 Set RISC3D$Dir <Obey$Dir>
+IconSprites <RISC3D$Dir>.!Sprites
 Set RISC3D$Path <RISC3D$Dir>.
 RMEnsure RISC3D 0.04 RMLoad <RISC3D$Dir>.RISC3D

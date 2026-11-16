@@ -18,7 +18,7 @@ GL_EXT_direct_state_access (0.6) so far on the build machine.
 RISC3D is the PackMan package **RISC3D** on every system: `!RISC3D` in
 `!Boot.Resources`, holding the RISC3D module and a folder `GPU` with the
 drivers (each starts only on the machine it is for: Linux3D on RISC OS on
-Linux; V3DRender on the Raspberry Pi 4 to come). Its `!Boot` loads RISC3D
+Linux; V3DRender on the Raspberry Pi 4, 400 and CM4). Its `!Boot` loads RISC3D
 at start-up and RISC3D loads the first driver in `GPU` that starts, so
 programs need nothing in their `!Run`. `*RISC3D` says which driver is in
 use. On RISC OS on Linux, the Debian package `riscos-risc3d` adds Linux's

@@ -11,7 +11,8 @@ What's in here
   GPU      the GPU drivers. Each starts only on the machine it is for,
            so the same !RISC3D serves every machine:
              Linux3D    RISC OS on Linux (Linux's graphics driver draws)
-             V3DRender  Raspberry Pi 4 / 400 / CM4 (native RISC OS; to come)
+             V3DRender  Raspberry Pi 4 / 400 / CM4 (native RISC OS)
+           with their licences (V3DRender is GPL-2.0-or-later: GPU.Licences)
 
 !RISC3D belongs in !Boot.Resources, where it is seen at start-up.
 Install and update it with PackMan (package RISC3D), on every system.
@@ -28,4 +29,7 @@ can check in its !Run:
 For testing, *Set RISC3D$Drivers to another folder to load drivers from
 there instead of GPU.
 
-Copyright (c) 2026 Andrew Youll. MIT licence.
+RISC3D and Linux3D: Copyright (c) 2026 Andrew Youll, MIT licence.
+V3DRender: Copyright (c) 2026 Andrew Youll and others, GPL-2.0-or-later
+(see GPU.Licences). Sources: github.com/adyoull/riscos-risc3d and
+github.com/adyoull/riscos-v3drender.

@@ -21,6 +21,7 @@
 #define NR_read		3
 #define NR_write	4
 #define NR_close	6
+#define NR_access	33
 #define NR_munmap	91
 #define NR_mmap2	192
 #define NR_socket	281
@@ -40,6 +41,7 @@ ERROR_BLOCK (err_gone, 0x81D311, "Linux's 3D renderer for this context has gone"
 ERROR_BLOCK (err_full, 0x81D312, "Too many Linux3D contexts");
 ERROR_BLOCK (err_map, 0x81D313, "Linux3D couldn't map the renderer's memory");
 ERROR_BLOCK (err_notrol, 0x81D315, "Linux3D is the 3D driver for RISC OS on Linux only");
+ERROR_BLOCK (err_norol3d, 0x81D316, "Linux3D needs Linux's riscos-risc3d package (rol-3d), which isn't installed");
 static struct { int errnum; char errmess[240]; } err_helper = { 0x81D314, "" };
 
 static int
@@ -211,6 +213,12 @@ mod_init (const char *tail, int instance, void *pw)
   regs x = {{ 0, (unsigned) "IXSupport_LinuxSyscall" }};
   if (swix_regs (0x39, &x))		/* OS_SWINumberFromString */
     return ERR (err_notrol);
+  /* 0.04: and only where Linux's side is installed (riscos-risc3d), else
+     programs would be sent to a helper that never comes and lose their
+     software drawing (only "not there" refuses; anything else may be a
+     call the gateway doesn't allow, so carry on) */
+  if (lsys (NR_access, (unsigned) "/opt/riscos/rol-3d", 1 /* X_OK */, 0, 0, 0, 0) == -2)
+    return ERR (err_norol3d);
   /* (flags bit 1: may draw in software, ask: reason 3) */
   regs r = {{ 0, (unsigned) driver_entry, 0, (unsigned) "Linux3D (Linux's graphics driver)", 2 }};
   oserror *e = swix_regs (RISC3D_Register, &r);

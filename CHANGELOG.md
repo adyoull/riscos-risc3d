@@ -1,5 +1,23 @@
 # Changelog
 
+## RISC OS's side by PackMan on ROL too (riscos-risc3d 0.22-1, Linux3D 0.04, !RISC3D 0.04-4; 16 Nov 2026)
+
+- ROL staged RISC3D 0.04-3 in riscos-harddisc 1.0.0058-1 (installed as
+  PackMan would, with an adopt list for 0.19-1..0.21-1's unrecorded copy).
+- **riscos-risc3d 0.22-1:** Linux's side only (rol-3d, the Mesa pin);
+  Depends riscos-harddisc (>= 1.0.0058-1). Its postinst puts back any of
+  !RISC3D's files that dpkg removed on the upgrade from 0.21-1 (same paths
+  as PackMan's copy), from the staged copy, when PackMan's Status has
+  RISC3D installed; never over a file there under either name. Removes the
+  PreDesk.RISC3D file it made (Resources boot loads !RISC3D).
+- **Linux3D 0.04:** refuses to start where /opt/riscos/rol-3d isn't
+  installed (&81D316), as ROL asked: every ROL image now has !RISC3D, and
+  without riscos-risc3d programs would be sent to a helper that never comes
+  instead of drawing in software.
+- **`out/RISC3D-0.04-4.zip`**: !RISC3D with Linux3D 0.04.
+- V3DRender 0.12 is NOT added yet: it must first refuse to start without
+  V3D (other machines would load it otherwise).
+
 ## One RISC3D package for every system (!RISC3D 0.04-3, Linux3D 0.03; 16 Nov 2026)
 
 - The owner: RISC3D managed by PackMan everywhere, ROL included; ROL's

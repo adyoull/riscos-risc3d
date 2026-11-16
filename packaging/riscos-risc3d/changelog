@@ -1,3 +1,19 @@
+riscos-risc3d (0.22-1) rol; urgency=medium
+
+  * RISC OS's side moves to PackMan, as on every system: the package RISC3D
+    (!RISC3D in !Boot.Resources, with Linux3D), which riscos-harddisc
+    1.0.0058-1 installs and PackMan then updates. This package keeps only
+    Linux's side: rol-3d and the Mesa pin. It depends on that
+    riscos-harddisc.
+  * On an upgrade from 0.21-1, dpkg removes 0.21-1's files in !RISC3D, which
+    are at the same paths as PackMan's copy: the postinst puts back any that
+    are missing, from riscos-harddisc's staged copy, when PackMan's Status
+    records RISC3D.
+  * The PreDesk.RISC3D start-up file is no longer needed (!Boot.Resources
+    loads !RISC3D) and is removed if it is the one this package made.
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Mon, 16 Nov 2026 09:30:00 +0000
+
 riscos-risc3d (0.21-1) rol; urgency=medium
 
   * !RISC3D's !Boot (and !Run) now also load RISC3D, as on native RISC OS:

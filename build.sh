@@ -156,3 +156,8 @@ python3 tools/mkkit.py out/RISC3D-0.04-2.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" 
 python3 tools/mkkit.py out/RISC3D-0.04-3.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
   "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" \
   "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa"
+
+# !RISC3D 0.04-4: Linux3D 0.04 (starts only where rol-3d is installed)
+python3 tools/mkkit.py out/RISC3D-0.04-4.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+  "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" \
+  "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa"

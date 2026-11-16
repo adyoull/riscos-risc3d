@@ -1,16 +1,17 @@
 Package: riscos-risc3d
-Version: 0.21-1
+Version: 0.22-1
 Architecture: arm64
 Maintainer: Andrew Youll <adyoull@users.noreply.github.com>
 Section: misc
 Priority: optional
-Depends: libc6, riscos-support (>= 1.0.0044-1), riscos-harddisc
+Depends: libc6, riscos-support (>= 1.0.0044-1), riscos-harddisc (>= 1.0.0058-1)
 Recommends: libegl1, libgles2, libgl1, libopengl0, libgbm1, libgl1-mesa-dri
 Description: RISC3D: GPU drawing for RISC OS programs (prototype)
  RISC OS programs' OpenGL and OpenGL ES, through riscos-mesa's EGL, drawn
- by Linux's graphics driver (the GPU's where there is one): !RISC3D in
- !Boot.Resources (the RISC3D module, with Linux3D as its GPU driver),
- loaded at start-up, and rol-3d, Linux's side. Frames go
+ by Linux's graphics driver (the GPU's where there is one): rol-3d,
+ Linux's side. RISC OS's side, !RISC3D in !Boot.Resources (the RISC3D
+ module with its Linux3D driver), is the PackMan package RISC3D, which
+ riscos-harddisc installs and PackMan updates. Frames go
  straight onto the screen where rol-fb has overlays. Debian's Mesa
  (recommended) is what draws; without it programs keep riscos-mesa's
  software rendering.

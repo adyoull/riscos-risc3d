@@ -1,26 +1,23 @@
-RISC3D 0.10 for RISC OS on Linux (prototype)
-============================================
+RISC3D for RISC OS on Linux (prototype): Linux's side
+=======================================================
 
 What it puts where:
   /opt/riscos/rol-3d                        Linux's side: draws for RISC OS
                                             programs with Linux's Mesa (the
                                             GPU's driver: v3d on a Pi 4/5)
-  HardDisc4.!Boot.Resources.!RISC3D         RISC3D, as on native RISC OS:
-    .RISC3D                                 the RISC3D module (driver interface)
-    .GPU.Linux3D                            its driver for RISC OS on Linux
-                                            (RISC3D loads it itself)
-  HardDisc4.!Boot.Choices.Boot.PreDesk.RISC3D   loads RISC3D at start-up
-                                            (made once; yours to delete)
+  /etc/apt/sources.list.d/debian-backports.sources, and
+  /etc/apt/preferences.d/riscos-risc3d-mesa    Mesa from trixie-backports
 
-Programs need nothing in their !Run: !RISC3D's !Boot loads RISC3D.
+RISC OS's side is the PackMan package RISC3D: !RISC3D in !Boot.Resources
+(the RISC3D module, and Linux3D in its GPU folder). riscos-harddisc
+installs it; PackMan updates it, as on native RISC OS. Linux3D starts only
+where this package is installed.
 
-init (riscos-support 1.0.0049-1 or later) starts rol-3d at start-up; with
-an earlier one, this package starts it when installed, and it has to be
-started again after each restart (as root: setsid /opt/riscos/rol-3d &).
-Its log: /riscos/3d/log.txt.
+init (riscos-support 1.0.0049-1 or later) starts rol-3d at start-up. Its
+log: /riscos/3d/log.txt.
 
-Programs use it through riscos-mesa's EGL (from riscos-mesa's release with
-RISC3D). Set RISC3D$Disable to turn it off for programs started after.
+Programs use it through riscos-mesa's EGL. Set RISC3D$Disable to turn it
+off for programs started after.
 
 Zero-copy frames (straight onto the screen) need rol-fb's overlays
 (riscos-support 1.0.0048-1 or later) and a 16 million colour mode.

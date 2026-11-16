@@ -10,7 +10,7 @@ where none is, Mesa draws in software as before.
 **Release 0.10, 16 November 2026.** It draws on the GPU on native RISC OS
 on a Raspberry Pi 4 (through V3DRender) and on RISC OS on Linux (through
 Linux3D). ClassiCube, Warzone 2100, YSFlight and TORCS have run on the Pi 4's
-GPU both ways. It covers OpenGL 1.x to 3.1 and OpenGL ES 1.1 to 3.1, with
+GPU. It covers OpenGL 1.x to 3.1 and OpenGL ES 1.1 to 3.1, with
 riscos-mesa's extensions. The SWI chunk (&C3D00) and error numbers are still
 provisional.
 

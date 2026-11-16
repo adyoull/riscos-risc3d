@@ -7,11 +7,12 @@ above it, 3D drivers below it. Programs use Mesa as they do now; where a
 driver is registered the drawing is done by the machine's GPU driver, and
 where none is, Mesa draws in software as before.
 
-**Prototype, 13 November 2026.** The SWI chunk (&C3D00) and error numbers
-are provisional and the wire format will change. OpenGL 1.x/2.1, GLES 1.1
-and GLES 2 (with riscos-mesa's extensions) have been drawn on a Raspberry
-Pi 4's GPU (V3D 4.2); OpenGL 3.0/3.1 and GLES 3.0/3.1 (0.5) too;
-GL_EXT_direct_state_access (0.6) so far on the build machine.
+**Release 0.10, 16 November 2026.** It draws on the GPU on native RISC OS
+on a Raspberry Pi 4 (through V3DRender) and on RISC OS on Linux (through
+Linux3D). ClassiCube, Warzone 2100, YSFlight and TORCS have run on the Pi 4's
+GPU both ways. It covers OpenGL 1.x to 3.1 and OpenGL ES 1.1 to 3.1, with
+riscos-mesa's extensions. The SWI chunk (&C3D00) and error numbers are still
+provisional.
 
 ## Installing
 
@@ -21,11 +22,36 @@ drivers (each starts only on the machine it is for: Linux3D on RISC OS on
 Linux; V3DRender on the Raspberry Pi 4, 400 and CM4). Its `!Boot` loads RISC3D
 at start-up and RISC3D loads the first driver in `GPU` that starts, so
 programs need nothing in their `!Run`. `*RISC3D` says which driver is in
-use. On RISC OS on Linux, the Debian package `riscos-risc3d` adds Linux's
-side (`rol-3d` and a newer Mesa); the images install both.
+use. On RISC OS on Linux, Linux's side is the Debian package
+`riscos-risc3d` (`rol-3d` and Mesa 26.1.6 from trixie-backports), which
+ROL's riscos-support (1.0.0068 on) brings in through Configure's Updates;
+riscos-harddisc (1.0.0064 on) installs the PackMan package.
 
-Programs reach it through [riscos-mesa](https://github.com/adyoull/riscos-mesa)'s
-EGL and OSMesa. Its client library (`lib/`, `proto/`) is released as
+### For programs
+
+Programs reach RISC3D through [riscos-mesa](https://github.com/adyoull/riscos-mesa)'s
+EGL and OSMesa (!MesaLibs). They don't choose between the GPU and software:
+RISC3D does, by the driver it has loaded, and with none Mesa draws in
+software.
+
+- **!MesaLibs 20.3.5-20 or later** (20.3.5-21 also carries the so/2 loader)
+  has both routes: the command stream for RISC OS on Linux, and
+  `libMesaGPU` (Mesa 26.1.6's v3d driver) for native RISC OS on a Pi 4.
+- **On native RISC OS, a program draws on the GPU only if it is linked
+  with libMesaGPU:**
+  - mixed (shared) builds: `-lMesaGPU` after `-lOSMesa`;
+  - static builds: `-Wl,-u,riscos_mesa_gpu -lMesaGPU` (about 15 MB more).
+
+  Older programs, and programs without it, still work but draw in software
+  there.
+- **On RISC OS on Linux,** any program built against a RISC3D-aware
+  riscos-mesa (20.3.5-19 on) uses the GPU. No libMesaGPU is needed.
+- **In a program's !Run:** nothing is needed, since !RISC3D loads RISC3D at
+  start-up. A program that must have it can check with
+  `RMEnsure RISC3D 0.04 Error This program needs !RISC3D`. Never name a
+  driver.
+
+RISC3D's client library (`lib/`, `proto/`) is released as
 `RISC3D-client-<version>.tgz` for riscos-mesa to build in.
 
 ### Where it runs
@@ -94,14 +120,13 @@ file RISC3D_Open returned, as Mesa does through a DRM device on Linux.
 `RISCOS_TOOLCHAIN=.../toolchain/env ./build.sh` builds everything into
 `out/`. On the build machine: `out/rol-3d-host &` then
 `out/r3dtest-host 100`. On RISC OS on Linux: `/opt/riscos/rol-3d` (init
-starts it), `RMLoad RISC3D`, `RMLoad Linux3D`, then `r3dtest` or
-`r3dcube`.
+starts it) and !RISC3D in `!Boot.Resources` (it loads RISC3D, which loads
+Linux3D), then `r3dtest` or `r3dcube`.
 
 ## Not done
 
-- Mesa's EGL as the front end (riscos-mesa): the hardware path behind the
-  standard API, software where there is no driver.
-- Zero-copy presentation; window moves and resizes; vsync.
+- Window moves and resizes, and vsync, for RISC OS on Linux's zero-copy
+  frames.
 - More of GL's state kept here (enables, bound textures), and immediate
   mode packed tighter in the ring.
 - glDrawElements with indices in a buffer object and arrays in the

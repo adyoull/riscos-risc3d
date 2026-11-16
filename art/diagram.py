@@ -32,7 +32,7 @@ arrow(1000,268,1058,268,col=(150,150,160))
 d.text((70*S,522*S),'RISC OS on Linux',font=fb,fill=BLUE)
 box(60,570,560,105,'Linux3D (driver)',['GL calls written as commands into memory','shared with Linux: no SWI per call'],GREEN)
 box(60,710,560,105,'rol-3d (Linux)',["replays the commands with Linux's Mesa","(Debian's 26.1); frames straight to the screen"],GREEN)
-box(60,850,560,105,"Linux's GPU driver",['Pi 4: v3d. Pinebook Pro: panfrost,','Pinebook: lima (untested). Else software.'],GREEN)
+box(60,850,560,130,"Linux's GPU driver",['Pi 4: v3d. Untested: Pinebook Pro (panfrost),','Pinebook (lima), Windows Dev Kit 2023','(Adreno, freedreno). Else software.'],GREEN)
 d.line([700*S,487*S,700*S,505*S],fill=BLUE,width=5*S); d.line([340*S,505*S,1060*S,505*S],fill=BLUE,width=5*S); arrow(340,505,340,568); arrow(340,675,340,708); arrow(340,815,340,848)
 # right: native
 d.text((680*S,522*S),'Native RISC OS on a Pi 4',font=fb,fill=BLUE)
@@ -41,5 +41,5 @@ box(780,710,560,105,'V3DRender (driver)',["after Linux's v3d: GPU memory and MMU
 box(780,850,560,105,'V3D 4.2 GPU',['Raspberry Pi 4, 400, CM4'],AMB)
 arrow(1060,505,1060,568); arrow(1060,675,1060,708,'Linux-style requests',lx=12,ly=-14); arrow(1060,815,1060,848)
 foot='Programs need nothing in their !Run: !RISC3D loads RISC3D, and RISC3D loads the driver for the machine.'
-d.text(((W-d.textlength(foot,font=fr))/2,990*S),foot,font=fr,fill=(70,80,110))
+d.text(((W-d.textlength(foot,font=fr))/2,1012*S),foot,font=fr,fill=(70,80,110))
 im=im.resize((W//S,H//S),Image.LANCZOS); im.save('docs/images/risc3d-how-it-works.png')

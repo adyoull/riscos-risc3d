@@ -1,3 +1,11 @@
+riscos-risc3d (0.21-1) rol; urgency=medium
+
+  * !RISC3D's !Boot (and !Run) now also load RISC3D, as on native RISC OS:
+    programs need nothing in their !Run. The PreDesk.RISC3D file is kept
+    (it runs the same !Boot; harmless).
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Mon, 16 Nov 2026 08:00:00 +0000
+
 riscos-risc3d (0.20-1) rol; urgency=medium
 
   * RISC3D is now !RISC3D in HardDisc4.!Boot.Resources, as on native RISC

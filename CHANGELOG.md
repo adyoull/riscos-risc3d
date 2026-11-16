@@ -1,5 +1,13 @@
 # Changelog
 
+## !RISC3D loads RISC3D at start-up (riscos-risc3d 0.21-1, !RISC3D 0.04-2, kit 37; 16 Nov 2026)
+
+- Kit 36 worked. The owner asked for programs not to need a path to load
+  RISC3D: !RISC3D's !Boot (and !Run) now also do
+  `RMEnsure RISC3D 0.04 RMLoad <RISC3D$Dir>.RISC3D`, so RISC3D (and through
+  it the GPU driver) is there from start-up and programs need nothing in
+  their !Run. Module unchanged (0.04).
+
 ## !RISC3D: RISC3D finds its own driver (module 0.04, riscos-risc3d 0.20-1, kit 36; 15 Nov 2026)
 
 - The owner: programs' !Run files shouldn't have to name the driver. RISC3D

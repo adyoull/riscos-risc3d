@@ -139,3 +139,13 @@ python3 tools/mkkit.py out/RISC3DTest-36.zip RISC3DTest "out/kit36/!ReadMe,fff" 
 # the !RISC3D release (for PackMan: the Packages project builds the package)
 python3 tools/mkkit.py out/RISC3D-0.04.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
   "dist/!RISC3D/!Help,fff" "out/modules/RISC3D,ffa" "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff"
+
+# kit 37 and !RISC3D 0.04-2: !RISC3D's !Boot loads RISC3D itself
+mkdir -p out/kit37 && cp "kit/ReadMe-37,fff" "out/kit37/!ReadMe,fff"
+python3 tools/mkkit.py out/RISC3DTest-37.zip RISC3DTest "out/kit37/!ReadMe,fff" kit/Test,feb \
+  "out/r3dtest,ff8" out/riscos-risc3d_0.21-1_arm64.deb \
+  "dist/!RISC3D/!Boot,feb=!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb=!RISC3D/!Run,feb" \
+  "dist/!RISC3D/!Help,fff=!RISC3D/!Help,fff" "out/modules/RISC3D,ffa=!RISC3D/RISC3D,ffa" \
+  "dist/!RISC3D/GPU/ReadMe,fff=!RISC3D/GPU/ReadMe,fff"
+python3 tools/mkkit.py out/RISC3D-0.04-2.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+  "dist/!RISC3D/!Help,fff" "out/modules/RISC3D,ffa" "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff"

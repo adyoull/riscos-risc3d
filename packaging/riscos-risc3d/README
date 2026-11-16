@@ -12,7 +12,7 @@ What it puts where:
   HardDisc4.!Boot.Choices.Boot.PreDesk.RISC3D   loads RISC3D at start-up
                                             (made once; yours to delete)
 
-Programs' !Run files need only: RMEnsure RISC3D 0.04 RMLoad RISC3D:RISC3D
+Programs need nothing in their !Run: !RISC3D's !Boot loads RISC3D.
 
 init (riscos-support 1.0.0049-1 or later) starts rol-3d at start-up; with
 an earlier one, this package starts it when installed, and it has to be

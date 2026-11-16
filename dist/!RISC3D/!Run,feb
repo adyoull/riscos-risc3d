@@ -1,4 +1,6 @@
 | !RISC3D: RISC OS's 3D driver interface (see !Help). Seen at start-up
-| from !Boot.Resources: RISC3D: is where programs find it.
+| from !Boot.Resources: sets RISC3D: and loads RISC3D, which loads the
+| GPU driver from GPU itself. Programs need nothing in their !Run.
 Set RISC3D$Dir <Obey$Dir>
 Set RISC3D$Path <RISC3D$Dir>.
+RMEnsure RISC3D 0.04 RMLoad <RISC3D$Dir>.RISC3D

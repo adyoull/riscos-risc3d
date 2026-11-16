@@ -51,6 +51,39 @@ software.
   `RMEnsure RISC3D 0.04 Error This program needs !RISC3D`. Never name a
   driver.
 
+### How riscos-mesa uses it
+
+These are riscos-mesa's parts; its EGL-GUIDE has the details.
+
+- **EGL:** `eglCreateContext` gives OpenGL (up to 3.1, compatibility
+  profile) and OpenGL ES 1.1 to 3.1 contexts to RISC3D where it has a
+  driver. OpenGL 3 and ES 3 contexts exist only through RISC3D.
+  - `EGL_VERSION` says so: "1.4 riscos-mesa (OSMesa; RISC3D for OpenGL and
+    OpenGL ES)".
+  - `GL_VERSION` says "... RISC3D (Mesa x)" on RISC OS on Linux.
+  - A program can ask for software with the context attribute
+    `EGL_CONTEXT_SOFTWARE_RISCOS` (extension `EGL_RISCOS_renderer`).
+- **Window frames:**
+  - **On RISC OS on Linux:** frames can go straight onto the screen
+    through one of rol-fb's display planes (zero copy), in 16 million
+    colour modes, with the window painted in a key colour. Otherwise they
+    are copied back into the window.
+  - **On native RISC OS:** the GPU draws straight into the window's
+    sprite or into screen memory.
+  - `EGL$SwapInterval` (0–4) overrides a program's vsync setting.
+- **OSMesa:** programs that call OSMesa directly are routed to RISC3D too,
+  drawing into their own buffer (`OSMESA_SOFTWARE_RISCOS` keeps one in
+  software).
+- **SDL:** SDL's OpenGL windows use EGL, and so RISC3D, where RISC3D has a
+  driver. The hint `SDL_RISCOS_GL_EGL` set to 0 keeps SDL's own sprite path
+  (software).
+- **Variables:**
+  - `RISC3D$Disable`: software for programs started afterwards.
+  - `LIBGL_ALWAYS_SOFTWARE`: the same, Mesa's usual way.
+  - `RISC3D$Force`: use the driver even where it draws in software (such
+    as Linux's llvmpipe).
+  - `V3DM$Stats 1`: on native RISC OS, the GPU work every 5 seconds.
+
 RISC3D's client library (`lib/`, `proto/`) is released as
 `RISC3D-client-<version>.tgz` for riscos-mesa to build in.
 

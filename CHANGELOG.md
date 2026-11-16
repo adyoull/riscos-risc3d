@@ -1,5 +1,14 @@
 # Changelog
 
+## !RISC3D's icon and the RISC3D logo (16 Nov 2026)
+
+- `art/`: draw.py draws the icon (an isometric cube with a triangle mesh,
+  blues) and the logo; mksprites.py writes RISC OS sprite files: 32bpp
+  sprites with 8-bit alpha masks (RISC OS 5.21 on). `dist/!RISC3D/!Sprites`
+  (!risc3d 34x34 and sm!risc3d 18x18 at 90 dpi) and `!Sprites11` (68x68 and
+  36x36 at 180 dpi). Logo: art/RISC3D-logo.png (1200x400), icon at 512 px.
+  Not yet in a release: the next !RISC3D zip and riscos-risc3d carry them.
+
 ## !RISC3D loads RISC3D at start-up (riscos-risc3d 0.21-1, !RISC3D 0.04-2, kit 37; 16 Nov 2026)
 
 - Kit 36 worked. The owner asked for programs not to need a path to load

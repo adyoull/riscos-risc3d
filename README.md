@@ -1,3 +1,5 @@
+<img src="art/RISC3D-logo.png" alt="RISC3D" width="480">
+
 # RISC3D (prototype)
 
 A 3D driver interface for RISC OS: Mesa's front end (EGL, GLES, OpenGL)
@@ -10,6 +12,21 @@ are provisional and the wire format will change. OpenGL 1.x/2.1, GLES 1.1
 and GLES 2 (with riscos-mesa's extensions) have been drawn on a Raspberry
 Pi 4's GPU (V3D 4.2); OpenGL 3.0/3.1 and GLES 3.0/3.1 (0.5) too;
 GL_EXT_direct_state_access (0.6) so far on the build machine.
+
+## Installing
+
+RISC3D is the PackMan package **RISC3D** on every system: `!RISC3D` in
+`!Boot.Resources`, holding the RISC3D module and a folder `GPU` with the
+drivers (each starts only on the machine it is for: Linux3D on RISC OS on
+Linux; V3DRender on the Raspberry Pi 4 to come). Its `!Boot` loads RISC3D
+at start-up and RISC3D loads the first driver in `GPU` that starts, so
+programs need nothing in their `!Run`. `*RISC3D` says which driver is in
+use. On RISC OS on Linux, the Debian package `riscos-risc3d` adds Linux's
+side (`rol-3d` and a newer Mesa); the images install both.
+
+Programs reach it through [riscos-mesa](https://github.com/adyoull/riscos-mesa)'s
+EGL and OSMesa. Its client library (`lib/`, `proto/`) is released as
+`RISC3D-client-<version>.tgz` for riscos-mesa to build in.
 
 ## The parts
 
@@ -84,3 +101,10 @@ starts it), `RMLoad RISC3D`, `RMLoad Linux3D`, then `r3dtest` or
 
 Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE). The Khronos
 headers in `include/` carry their own licences.
+
+## Licence
+
+MIT (see LICENSE), Copyright (c) 2026 Andrew Youll. Included from others:
+Khronos's registry `proto/khronos/gl.xml` (Apache-2.0) and the Khronos
+headers in `include/` (MIT-style, as in each file); `linux/es1_conversion.c`
+is ported from Mesa 20.3.5 (MIT, the Mesa authors).

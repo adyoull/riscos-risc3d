@@ -1,17 +1,19 @@
 <img src="art/RISC3D-logo.png" alt="RISC3D" width="480">
 
-# RISC3D (prototype)
+# RISC3D
 
 A 3D driver interface for RISC OS: Mesa's front end (EGL, GLES, OpenGL)
 above it, 3D drivers below it. Programs use Mesa as they do now; where a
 driver is registered the drawing is done by the machine's GPU driver, and
 where none is, Mesa draws in software as before.
 
-**Release 0.10, 16 November 2026.** It draws on the GPU on native RISC OS
-on a Raspberry Pi 4 (through V3DRender) and on RISC OS on Linux (through
-Linux3D). ClassiCube, Warzone 2100, YSFlight and TORCS have run on the Pi 4's
-GPU. It covers OpenGL 1.x to 3.1 and OpenGL ES 1.1 to 3.1, with
-riscos-mesa's extensions. The SWI chunk (&C3D00) and error numbers are still
+**Release 0.10, 16 November 2026.** It draws on the GPU:
+- on native RISC OS on a Raspberry Pi 4, through V3DRender;
+- on RISC OS on Linux, through Linux3D, on whatever GPU Linux drives. So
+  far that's the Pi 4 and the Windows Dev Kit 2023.
+
+It covers OpenGL 1.x to 3.1 and OpenGL ES 1.1 to 3.1, with riscos-mesa's
+extensions. The SWI chunk (&C3D00) and error numbers are still
 provisional.
 
 ## Installing
@@ -91,42 +93,70 @@ RISC3D's client library (`lib/`, `proto/`) is released as
 
 ### Where it runs
 
-| System | Driver | GPU | Tested |
+| System | Driver | GPU (drivers) | Tested |
 |---|---|---|---|
 | Native RISC OS, Raspberry Pi 4 / 400 / CM4 | V3DRender | V3D 4.2 (Mesa's v3d in riscos-mesa) | Yes |
-| RISC OS on Linux, Raspberry Pi 4 | Linux3D | V3D 4.2 (Linux's v3d, Mesa 26.1) | Yes |
-| RISC OS on Linux, Pinebook Pro | Linux3D | Mali-T860 (Linux's panfrost) | No: drivers are in ROL's kernel and Debian's Mesa |
-| RISC OS on Linux, Pinebook | Linux3D | Mali-400 (Linux's lima) | No: as above; an OpenGL ES 2.0-class GPU |
-| RISC OS on Linux, Windows Dev Kit 2023 | Linux3D | Adreno 690 (Linux's msm, Mesa's freedreno) | Yes (Chris Gransden: Quakespasm's timedemo 5 fps at 640x480 in software, 98 fps at 1920x1080 on the GPU). The GPU's firmware comes with ROL's riscos-support 1.0.0069 and kernel 7.2.0-7.1 |
+| RISC OS on Linux, Raspberry Pi 4 | Linux3D | V3D 4.2 (Linux's v3d, Mesa's v3d) | Yes |
+| RISC OS on Linux, Windows Dev Kit 2023 | Linux3D | Adreno 690 (Linux's msm, Mesa's freedreno) | Yes (Chris Gransden) |
+| RISC OS on Linux, Pinebook Pro | Linux3D | Mali-T860 (Linux's panfrost, Mesa's panfrost) | Not yet |
+| RISC OS on Linux, Pinebook | Linux3D | Mali-400 (Linux's lima, Mesa's lima): OpenGL ES 2.0 class | Not yet |
 | Anything else | none | Mesa draws in software, as before | |
 
-On RISC OS on Linux, Linux3D hands the drawing to Linux, which uses whatever
-GPU it has, so any machine whose GPU Linux and Mesa drive should work.
+- **RISC OS on Linux** uses Debian's Mesa 26.1.6 from trixie-backports,
+  which riscos-risc3d installs.
+- **Other machines under ROL:** Linux3D hands the drawing to Linux, which
+  uses whatever GPU it has. So any machine whose GPU Linux and Mesa drive
+  should work.
+- **The Dev Kit's GPU firmware** comes with ROL's riscos-support 1.0.0069
+  and kernel 7.2.0-7.1.
+
+### Programs seen on the GPU
+
+| Program | Where | Notes |
+|---|---|---|
+| ClassiCube | Pi 4 native and ROL | about 31 fps native, 50 or more on ROL (early figures) |
+| Warzone 2100 | Pi 4 native | about 28 fps (early figure) |
+| YSFlight (YSCE) riscos2 | Pi 4 native | the mixed build |
+| TORCS 1.3.7-riscos6 | Pi 4 native and ROL | the mixed build; on ROL it needs Mesa 26.1 (Debian's 25.0.7 loses its textures) |
+| Quakespasm | Windows Dev Kit 2023, ROL | Chris Gransden's build: `timedemo demo1` 5 fps at 640x480 in software, 98 fps at 1920x1080 on the GPU |
+| OpenLara | Pi 4, ROL | 50 fps, against 12 to 16 in software |
 
 ## The parts
 
 | Part | What it is |
 |---|---|
-| `modules/RISC3D` | The interface module. Drivers register; a program's GL library opens a context and gets memory shared with the driver. RISC3D never looks at the commands: it keeps the drivers and contexts, closes a task's contexts when the task goes, and passes on "wake" and "wait". |
+| `modules/RISC3D` | The interface module. At start-up it loads the first driver in `!RISC3D.GPU` that starts. Drivers register; a program's GL library opens a context through it. RISC3D never looks at the drawing: it keeps the drivers and contexts, closes a task's contexts when the task goes, and passes on "wake" and "wait" for command-stream drivers. |
 | `modules/Linux3D` | The driver for RISC OS on Linux. Each context is a connection to the `rol-3d` helper; it maps the shared memory into RISC OS. |
 | `linux/rol-3d.c` | The Linux helper: one process per context, with an EGL context on Linux's graphics driver (the GPU through its render node; Mesa's software renderer otherwise): OpenGL's compatibility profile (or, where that is older than the program asks for, the version asked for without it), GLES 2/3, or GLES 1.1 on desktop OpenGL (Debian's Mesa has none; `linux/es1*.c`). |
 | `proto/` | The command stream. `gen.py` writes both ends from Khronos's registry (`khronos/gl.xml`: OpenGL 1.0 to 3.1, GLES 1.1 to 3.1, and every extension riscos-mesa has; 1189 functions, 218 of them by hand, 484 other names), and `r3d_gl.h`. `r3d_shared.h` is the shared memory's layout. |
 | `lib/` | The GL functions for RISC OS programs, as commands: `r3d_glXxx`, listed by GL name (and the usual ARB/EXT names) in `r3d_gl_functions[]` so that Mesa's EGL (riscos-mesa) can build a dispatch table from them. Contexts: `r3d_create` (GLES 2 and on), `r3d_create_gl` (OpenGL), `r3d_create_es1` (GLES 1.1), `r3d_create_version` (a version at least), `r3d_target` (the program's own buffer as framebuffer 0, as OSMesa's), `r3d_driver_flags` (R3D_DRIVER_SOFTWARE: Linux draws in software), `r3d_make_current`, `r3d_destroy`; `r3d_swap` finishes a frame into a buffer. It keeps the matrix stacks and other state queried often, so those queries need no wait. `r3d_open`/`r3d_open_gl`/`r3d_close` and `R3D_DIRECT` are for the test programs. |
 | `demo/test`, `demo/cube`, `demo/gl1`, `demo/es`, `demo/gl3` | `r3dtest` (GLES 2, command line, checks the pixels), `r3dcube` (the same cube in a desktop window), `gl1test` (OpenGL 1.x/2.1; built with DIRECT, the same drawn by Linux's Mesa directly, to compare; `gl1test bench`), `estest` (GLES 1.1 and GLES 2's extensions), `gl3test` (GLES 3.0/3.1, OpenGL 3.0/3.1 and EXT_direct_state_access), `targettest` (drawing into the program's buffer in OSMesa's formats; -DOSMESA: riscos-mesa's OSMesa itself). |
 | `test/host` | Stand-ins so that the library and helper can be tested on the build machine without RISC OS. |
+| `dist/!RISC3D` | The application in `!Boot.Resources`: !Boot, !Run, !Help, the icons, and `GPU` for the drivers. |
+| `third/V3DRender` | V3DRender's released module, shipped in `!RISC3D.GPU` (GPL-2.0-or-later; source in its own repository). |
+| `packaging/riscos-risc3d` | The Debian package for RISC OS on Linux: rol-3d and the Mesa pin. |
+| `kit/` | The test kits' Obey files and scripts. |
+| `art/`, `docs/` | The icon, logo and diagram (and the scripts that draw them); the driver guide, release notes and pictures. |
 
 ## How a frame goes
 
+**On RISC OS on Linux (Linux3D, a command stream):**
 1. The GL library writes each call as a few words into a ring in the
    shared memory. No SWI, no system call.
-2. The renderer (another process, usually another core) reads them. It is
-   shown them in batches, and only needs waking if it has gone to sleep
-   (`RISC3D_Sync` 0: one byte down a socket).
-3. When the program needs an answer (a query, the end of the frame) it
-   calls `RISC3D_Sync` 1 and waits; the answer is in the shared reply area.
-4. PROTOTYPE: the finished frame is read back and copied into the
-   program's sprite. Zero-copy presentation (a hardware plane through
-   rol-fb, as video already does) is not done.
+2. The renderer, rol-3d (another process, usually on another core), reads
+   them. It's shown them in batches, and only needs waking if it has gone
+   to sleep (`RISC3D_Sync` 0: one byte down a socket).
+3. When the program needs an answer (a query, the end of the frame), it
+   calls `RISC3D_Sync` 1 and waits. The answer is in the shared reply
+   area.
+4. The finished frame goes straight onto the screen through one of rol-fb's
+   display planes where it can (zero copy). Otherwise it's read back and
+   copied into the program's window.
+
+**On native RISC OS (V3DRender, a DRM device):** there's no command stream.
+The program's own Mesa runs its v3d driver and sends its requests to
+V3DRender's ioctl SWI, as Mesa does through a DRM device on Linux. The GPU
+draws straight into the window's sprite or into screen memory.
 
 ## SWIs (provisional)
 
@@ -138,8 +168,9 @@ GPU it has, so any machine whose GPU Linux and Mesa drive should work.
 | `RISC3D_Close` (&C3D03) | r0 = context | |
 | `RISC3D_Sync` (&C3D04) | r0 = context, r1 = 0 wake / 1 wait | |
 
-A driver's entry is called with r0 = 0 open, 1 close, 2 sync (see
-`modules/RISC3D/risc3d.c`).
+A driver's entry is called with r0 = 0 open, 1 close, 2 sync, or 3
+describe. Register flags: bit 0 a DRM device; bit 1 may draw in software.
+[docs/DRIVER-GUIDE.md](docs/DRIVER-GUIDE.md) has the details.
 
 Two kinds of driver (RISC3D 0.02): a command-stream driver (Linux3D, on
 RISC OS on Linux) reads the commands `lib/` writes into the shared
@@ -170,15 +201,16 @@ Linux3D), then `r3dtest` or `r3dcube`.
   direct call (the command read back); a pixel pack buffer isn't
   followed by glGetTextureSubImage, glGetCompressedTextureSubImage and
   the imaging gets (glGetnColorTable and the like).
-- Allocated SWI and error numbers. (The native driver, V3DRender, is
-  in its own repository.)
-
-Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE). The Khronos
-headers in `include/` carry their own licences.
+- Allocated SWI and error numbers.
+- Speed: TORCS through Linux3D on a Pi 4 is about 24 to 30 fps. Drawing
+  each object's strips in one call is TORCS's side.
 
 ## Licence
 
 MIT (see LICENSE), Copyright (c) 2026 Andrew Youll. Included from others:
 Khronos's registry `proto/khronos/gl.xml` (Apache-2.0) and the Khronos
 headers in `include/` (MIT-style, as in each file); `linux/es1_conversion.c`
-is ported from Mesa 20.3.5 (MIT, the Mesa authors).
+is ported from Mesa 20.3.5 (MIT, the Mesa authors). V3DRender, shipped in
+`!RISC3D.GPU`, is GPL-2.0-or-later: its licence and notice are in
+`dist/!RISC3D/GPU`, and its source is at
+[riscos-v3drender](https://github.com/adyoull/riscos-v3drender).

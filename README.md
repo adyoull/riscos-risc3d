@@ -97,7 +97,7 @@ RISC3D's client library (`lib/`, `proto/`) is released as
 | RISC OS on Linux, Raspberry Pi 4 | Linux3D | V3D 4.2 (Linux's v3d, Mesa 26.1) | Yes |
 | RISC OS on Linux, Pinebook Pro | Linux3D | Mali-T860 (Linux's panfrost) | No: drivers are in ROL's kernel and Debian's Mesa |
 | RISC OS on Linux, Pinebook | Linux3D | Mali-400 (Linux's lima) | No: as above; an OpenGL ES 2.0-class GPU |
-| RISC OS on Linux, Windows Dev Kit 2023 | Linux3D | Adreno 690 (Linux's msm, Mesa's freedreno) | No: the GPU's firmware comes with ROL's riscos-support 1.0.0069 and kernel 7.2.0-7.1 |
+| RISC OS on Linux, Windows Dev Kit 2023 | Linux3D | Adreno 690 (Linux's msm, Mesa's freedreno) | Yes (Chris Gransden: Quakespasm's timedemo 5 fps at 640x480 in software, 98 fps at 1920x1080 on the GPU). The GPU's firmware comes with ROL's riscos-support 1.0.0069 and kernel 7.2.0-7.1 |
 | Anything else | none | Mesa draws in software, as before | |
 
 On RISC OS on Linux, Linux3D hands the drawing to Linux, which uses whatever

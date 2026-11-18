@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.11: the allocated SWI chunk and error blocks (18 Nov 2026)
+
+RISC OS Allocations allocated (18 November 2026):
+- **RISC3D:** SWI chunk &5AF80, error block &823D00.
+- **Linux3D:** error block &823C00.
+- **V3DRender:** SWI chunk &5AFC0, error block &823E00.
+- **Names:** RISC3D, Linux3D and V3DRender (module and *command), the
+  application !RISC3D, and V3DRender's *V3DClock, *V3DDump, *V3DPower and
+  *V3DReset.
+
+The owner chose a clean break: no answering the old numbers. Only riscos-mesa's
+!MesaLibs needs rebuilding (pin 0.11).
+
+- **RISC3D module 0.05:**
+  - RISC3D_Info &5AF80, _Register &5AF81, _Open &5AF82, _Close &5AF83,
+    _Sync &5AF84 (were &C3D00-&C3D04);
+  - errors &823D00-&823D02 (were &81D300-&81D302);
+  - Info r0 = 5.
+- **Linux3D 0.05:** registers at &5AF81; errors &823C00-&823C06 (were
+  &81D310-&81D316, in the same order).
+- **Client library 0.11** (`RISC3D-client-0.11.tgz`): lib/r3d.h's SWI
+  numbers. Nothing else changed.
+- **!RISC3D's !Boot and !Run** RMEnsure RISC3D 0.05. A program that checks
+  should use `RMEnsure RISC3D 0.05`.
+- **Docs:** README, the driver guide (section 7 lists the allocations) and
+  !Help.
+- **V3DRender** must move to &5AFC0 / &823E00 and register at &5AF81
+  before the next !RISC3D package (asked of V3DRender).
+
 ## Release 0.10 (16 Nov 2026): !RISC3D 0.04-7 with V3DRender 0.15
 
 - The owner: V3DRender should be the latest: 0.15 (md5 229b10e6…; cache

@@ -17,7 +17,7 @@
 #include "cmodule.h"
 
 #define IXSupport_LinuxSyscall	0x59EC0
-#define RISC3D_Register		0xC3D01		/* provisional */
+#define RISC3D_Register		0x5AF81		/* RISC3D_Register (allocated) */
 #define NR_read		3
 #define NR_write	4
 #define NR_close	6
@@ -36,13 +36,13 @@ void driver_entry (void);
 static struct { int used, sock; unsigned area, bytes, wakes, waits; } ctx[MAXCTX];
 static int registered;
 
-ERROR_BLOCK (err_nohelper, 0x81D310, "Linux's 3D helper isn't running (rol-3d)");
-ERROR_BLOCK (err_gone, 0x81D311, "Linux's 3D renderer for this context has gone");
-ERROR_BLOCK (err_full, 0x81D312, "Too many Linux3D contexts");
-ERROR_BLOCK (err_map, 0x81D313, "Linux3D couldn't map the renderer's memory");
-ERROR_BLOCK (err_notrol, 0x81D315, "Linux3D is the 3D driver for RISC OS on Linux only");
-ERROR_BLOCK (err_norol3d, 0x81D316, "Linux3D needs Linux's riscos-risc3d package (rol-3d), which isn't installed");
-static struct { int errnum; char errmess[240]; } err_helper = { 0x81D314, "" };
+ERROR_BLOCK (err_nohelper, 0x823C00, "Linux's 3D helper isn't running (rol-3d)");
+ERROR_BLOCK (err_gone, 0x823C01, "Linux's 3D renderer for this context has gone");
+ERROR_BLOCK (err_full, 0x823C02, "Too many Linux3D contexts");
+ERROR_BLOCK (err_map, 0x823C03, "Linux3D couldn't map the renderer's memory");
+ERROR_BLOCK (err_notrol, 0x823C05, "Linux3D is the 3D driver for RISC OS on Linux only");
+ERROR_BLOCK (err_norol3d, 0x823C06, "Linux3D needs Linux's riscos-risc3d package (rol-3d), which isn't installed");
+static struct { int errnum; char errmess[240]; } err_helper = { 0x823C04, "" };
 
 static int
 lsys (int nr, unsigned a, unsigned b, unsigned c, unsigned d, unsigned e, unsigned f)

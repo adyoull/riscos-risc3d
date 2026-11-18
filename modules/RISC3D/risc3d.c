@@ -12,7 +12,7 @@
    On other machines, a driver for the machine's GPU. With none, Mesa
    draws in software as before.
 
-   SWIs (chunk &C3D00, PROVISIONAL):
+   SWIs (chunk &5AF80, allocated; errors &823D00 on):
      RISC3D_Info      -> r0 = version * 100, r1 = drivers registered,
 			 r2 = contexts open, r3 -> the name of the driver a
 			 new context would get (0: none), r4 = its flags,
@@ -55,7 +55,7 @@
    holds this module and a folder GPU with the driver module for that
    machine (Linux3D on RISC OS on Linux; V3DRender on a Pi 4; ...). A
    program's !Run then only needs
-     RMEnsure RISC3D 0.04 RMLoad RISC3D:RISC3D
+     RMEnsure RISC3D 0.05 RMLoad RISC3D:RISC3D
    and RISC3D loads the driver itself, just after it starts (a callback),
    or at the first Info, Open or *RISC3D if that comes first. It tries each
    module in GPU, in the order the filing system gives them, until one
@@ -92,9 +92,9 @@ static struct { unsigned entry, r12, flags, ioctl, drm_name; char name[48]; } dr
 static struct { int used, driver; unsigned handle, task, area, bytes, syncs; } ctx[MAXCTX];
 
 ERROR_BLOCK (err_swi, 0x1E6, "SWI value out of range for module RISC3D");
-ERROR_BLOCK (err_nodriver, 0x81D300, "There is no 3D driver (RISC3D has none registered)");
-ERROR_BLOCK (err_full, 0x81D301, "Too many 3D contexts or drivers");
-ERROR_BLOCK (err_handle, 0x81D302, "Not a RISC3D context");
+ERROR_BLOCK (err_nodriver, 0x823D00, "There is no 3D driver (RISC3D has none registered)");
+ERROR_BLOCK (err_full, 0x823D01, "Too many 3D contexts or drivers");
+ERROR_BLOCK (err_handle, 0x823D02, "Not a RISC3D context");
 
 static unsigned
 this_task (void)
@@ -228,7 +228,7 @@ mod_swi (unsigned number, regs *r)
 	  n += drv[i].entry != 0;
 	for (int i = 0; i < MAXCTX; i++)
 	  c += ctx[i].used;
-	r->r[0] = 4;
+	r->r[0] = 5;
 	r->r[1] = (unsigned) n;
 	r->r[2] = (unsigned) c;
 	r->r[3] = b < 0 ? 0 : (unsigned) drv[b].name;

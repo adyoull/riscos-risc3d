@@ -22,7 +22,7 @@ _swix (int swi, int flags, ...)
   va_list ap;
   (void) flags;
   va_start (ap, flags);
-  if (swi == 0xC3D02)
+  if (swi == 0x5AF82)
     {
       (void) va_arg (ap, int);
       int *h = va_arg (ap, int *);
@@ -49,7 +49,7 @@ _swix (int swi, int flags, ...)
       *area = mmap (0, *bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
       *h = 1;
     }
-  else if (swi == 0xC3D03)
+  else if (swi == 0x5AF83)
     close (host_sock);
   else if (swi == 0x23)
     {
@@ -60,7 +60,7 @@ _swix (int swi, int flags, ...)
       const char *v = getenv (name);
       *len = v ? ~(int) strlen (v) : 0;
     }
-  else if (swi == 0xC3D00)
+  else if (swi == 0x5AF80)
     {
       /* RISC3D_Info, as RISC3D 0.03 with Linux3D 0.02: r3, r4 (software
 	 from the helper's "rol-3d-info") */
@@ -78,7 +78,7 @@ _swix (int swi, int flags, ...)
       if (q >= 0)
 	close (q);
     }
-  else if (swi == 0xC3D04)
+  else if (swi == 0x5AF84)
     {
       (void) va_arg (ap, int);
       int wait = va_arg (ap, int);

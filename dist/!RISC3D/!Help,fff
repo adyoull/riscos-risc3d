@@ -24,7 +24,7 @@ driver from GPU itself (it tries each module there until one starts; a
 driver refuses to start where its GPU isn't there). *RISC3D says which
 driver is in use, and what was tried. A program that must have RISC3D
 can check in its !Run:
-  RMEnsure RISC3D 0.04 Error This program needs !RISC3D
+  RMEnsure RISC3D 0.05 Error This program needs !RISC3D
 
 For testing, *Set RISC3D$Drivers to another folder to load drivers from
 there instead of GPU.

@@ -4,9 +4,8 @@ This guide is for anyone adding a new GPU to RISC3D. RISC3D is the
 interface between Mesa (riscos-mesa's !MesaLibs) and a machine's GPU driver.
 It says what a driver is, how RISC3D finds and calls it, and what it has to do.
 
-The interface is as in RISC3D module 0.04 (release 0.10). The SWI chunk
-(&C3D00) and error numbers are **provisional** and may change before they
-are allocated.
+The interface is as in RISC3D module 0.05 (release 0.11). Its SWI chunk
+(&5AF80) and error blocks are allocated by RISC OS Allocations.
 
 There are two drivers to learn from:
 
@@ -90,7 +89,7 @@ ask them to.
 Register at the end of a successful initialisation, and remove yourself in
 your finalisation.
 
-**`RISC3D_Register` (&C3D01)**, to add a driver:
+**`RISC3D_Register` (&5AF81)**, to add a driver:
 
 | In | |
 |---|---|
@@ -106,7 +105,7 @@ To remove one: r0 = 1, with the same r1 and r2. RISC3D first closes every
 context that's open on you, through your entry. Its programs get errors
 from then on.
 
-Errors: "Too many 3D contexts or drivers" (&81D301) if four drivers are
+Errors: "Too many 3D contexts or drivers" (&823D01) if four drivers are
 already registered. If RISC3D isn't loaded, the SWI doesn't exist.
 
 - **If RISC3D isn't there:** either refuse to start, as Linux3D does, or
@@ -116,12 +115,12 @@ already registered. If RISC3D isn't loaded, the SWI doesn't exist.
   reloaded. (A reloaded RISC3D also reloads its drivers from GPU, which
   restarts yours.)
 
-**`RISC3D_Info` (&C3D00)** is what Mesa asks. It's useful for checking your
+**`RISC3D_Info` (&5AF80)** is what Mesa asks. It's useful for checking your
 registration:
 
 | Out | |
 |---|---|
-| r0 | RISC3D's version × 100 (4 for 0.04) |
+| r0 | RISC3D's version × 100 (5 for 0.05) |
 | r1 | drivers registered |
 | r2 | contexts open |
 | r3 | → the name of the driver a new context gets (the last registered), or 0 |
@@ -253,18 +252,23 @@ back to llvmpipe. RISC3D then asks reason 3 at each `RISC3D_Info`.
 
 ## 7. Errors and numbers
 
-The current blocks are all provisional:
-- RISC3D: &81D300–&81D30F;
-- Linux3D: &81D310–&81D31F;
-- V3DRender: &81D340–&81D34A, with SWI chunk &C3D40.
+Allocated by RISC OS Allocations (18 November 2026):
 
-A new driver needs its own SWI chunk and error block. Ask in an issue here
-until real ones are allocated, so that drivers don't clash.
+| | SWI chunk | Error block |
+|---|---|---|
+| RISC3D | &5AF80 | &823D00 |
+| Linux3D | (none) | &823C00 |
+| V3DRender | &5AFC0 | &823E00 |
+
+**A new driver needs its own SWI chunk and error block.** Ask RISC OS
+Allocations for them before you release, and register your module's name
+and *commands there too. Until they're allocated, use provisional numbers
+that clash with nothing allocated, and say so.
 
 RISC3D's own errors are:
-- &81D300: there is no 3D driver;
-- &81D301: too many contexts or drivers;
-- &81D302: not a RISC3D context.
+- &823D00: there is no 3D driver;
+- &823D01: too many contexts or drivers;
+- &823D02: not a RISC3D context.
 
 ## 8. Checklist
 

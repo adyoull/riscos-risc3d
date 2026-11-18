@@ -13,8 +13,9 @@ where none is, Mesa draws in software as before.
   far that's the Pi 4 and the Windows Dev Kit 2023.
 
 It covers OpenGL 1.x to 3.1 and OpenGL ES 1.1 to 3.1, with riscos-mesa's
-extensions. The SWI chunk (&C3D00) and error numbers are still
-provisional.
+extensions. Its SWI chunk (&5AF80) and error blocks (RISC3D &823D00,
+Linux3D &823C00) are allocated by RISC OS Allocations, from release
+0.11.
 
 ## Installing
 
@@ -50,7 +51,7 @@ software.
   riscos-mesa (20.3.5-19 on) uses the GPU. No libMesaGPU is needed.
 - **In a program's !Run:** nothing is needed, since !RISC3D loads RISC3D at
   start-up. A program that must have it can check with
-  `RMEnsure RISC3D 0.04 Error This program needs !RISC3D`. Never name a
+  `RMEnsure RISC3D 0.05 Error This program needs !RISC3D`. Never name a
   driver.
 
 ### How riscos-mesa uses it
@@ -159,15 +160,15 @@ The program's own Mesa runs its v3d driver and sends its requests to
 V3DRender's ioctl SWI, as Mesa does through a DRM device on Linux. The GPU
 draws straight into the window's sprite or into screen memory.
 
-## SWIs (provisional)
+## SWIs (chunk &5AF80, allocated)
 
 | SWI | In | Out |
 |---|---|---|
-| `RISC3D_Info` (&C3D00) | | r0 = version * 100, r1 = drivers, r2 = contexts, r3 -> the name of the driver a new context gets (0: none), r4 = its flags, r5 = its ioctl SWI and r6 -> its DRM driver name (DRM devices) |
-| `RISC3D_Register` (&C3D01) | r0 = 0 add / 1 remove, r1 = entry, r2 = its r12, r3 -> name, r4 = flags (bit 0: a DRM device), r5 = ioctl SWI, r6 -> DRM driver name | |
-| `RISC3D_Open` (&C3D02) | r0 = flags (0) | r0 = context, r1 -> shared memory, r2 = size (a DRM device: r1 = the driver's file, r2 = 0) |
-| `RISC3D_Close` (&C3D03) | r0 = context | |
-| `RISC3D_Sync` (&C3D04) | r0 = context, r1 = 0 wake / 1 wait | |
+| `RISC3D_Info` (&5AF80) | | r0 = version * 100, r1 = drivers, r2 = contexts, r3 -> the name of the driver a new context gets (0: none), r4 = its flags, r5 = its ioctl SWI and r6 -> its DRM driver name (DRM devices) |
+| `RISC3D_Register` (&5AF81) | r0 = 0 add / 1 remove, r1 = entry, r2 = its r12, r3 -> name, r4 = flags (bit 0: a DRM device), r5 = ioctl SWI, r6 -> DRM driver name | |
+| `RISC3D_Open` (&5AF82) | r0 = flags (0) | r0 = context, r1 -> shared memory, r2 = size (a DRM device: r1 = the driver's file, r2 = 0) |
+| `RISC3D_Close` (&5AF83) | r0 = context | |
+| `RISC3D_Sync` (&5AF84) | r0 = context, r1 = 0 wake / 1 wait | |
 
 A driver's entry is called with r0 = 0 open, 1 close, 2 sync, or 3
 describe. Register flags: bit 0 a DRM device; bit 1 may draw in software.
@@ -202,7 +203,6 @@ Linux3D), then `r3dtest` or `r3dcube`.
   direct call (the command read back); a pixel pack buffer isn't
   followed by glGetTextureSubImage, glGetCompressedTextureSubImage and
   the imaging gets (glGetnColorTable and the like).
-- Allocated SWI and error numbers.
 - Speed: TORCS through Linux3D on a Pi 4 is about 24 to 30 fps. Drawing
   each object's strips in one call is TORCS's side.
 

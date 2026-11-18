@@ -2,7 +2,7 @@
 @ one side, 3D drivers on the other; this module only joins them.
 @ See risc3d.c.
 @
-@ PROTOTYPE: the SWI chunk (&C3D00) and error numbers are provisional.
+@ SWI chunk &5AF80 and errors &823D00 (allocated 18 Nov 2026).
 @
 @ Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE).
 
@@ -18,7 +18,7 @@ module_start:
 	.word	title - module_start
 	.word	help - module_start
 	.word	commands - module_start
-	.word	0xC3D00				@ SWI chunk (provisional)
+	.word	0x5AF80				@ SWI chunk (allocated)
 	.word	cm_swi - module_start
 	.word	swi_names - module_start
 	.word	0				@ SWI decoding code
@@ -26,7 +26,7 @@ module_start:
 	.word	flags - module_start
 
 title:	.asciz	"RISC3D"
-help:	.asciz	"RISC3D\t0.04 (15 Nov 2026) 3D driver interface (prototype)"
+help:	.asciz	"RISC3D\t0.05 (18 Nov 2026) 3D driver interface"
 swi_names:
 	.asciz	"RISC3D\0Info\0Register\0Open\0Close\0Sync\0"
 	.align	2

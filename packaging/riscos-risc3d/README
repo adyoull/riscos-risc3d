@@ -22,4 +22,4 @@ off for programs started after.
 Zero-copy frames (straight onto the screen) need rol-fb's overlays
 (riscos-support 1.0.0048-1 or later) and a 16 million colour mode.
 
-The SWI chunk (&C3D00) and error numbers (&81D3xx) are provisional.
+RISC3D's SWI chunk (&5AF80) and error blocks are allocated.

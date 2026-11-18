@@ -181,3 +181,10 @@ python3 tools/mkkit.py out/RISC3D-0.04-7.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" 
   "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa" \
   "third/V3DRender/V3DRender,ffa=GPU/V3DRender,ffa" "dist/!RISC3D/GPU/Licences,fff=GPU/Licences,fff" \
   "dist/!RISC3D/GPU/GPL-2,fff=GPU/GPL-2,fff"
+
+# !RISC3D 0.05-1 (release 0.11): RISC3D 0.05, Linux3D 0.05, V3DRender 0.16 (allocated numbers)
+python3 tools/mkkit.py out/RISC3D-0.05-1.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+  "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" \
+  "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa" \
+  "third/V3DRender/V3DRender,ffa=GPU/V3DRender,ffa" "dist/!RISC3D/GPU/Licences,fff=GPU/Licences,fff" \
+  "dist/!RISC3D/GPU/GPL-2,fff=GPU/GPL-2,fff"

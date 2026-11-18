@@ -2,6 +2,11 @@
 
 ## 0.11: the allocated SWI chunk and error blocks (18 Nov 2026)
 
+- **Released as !RISC3D 0.05-1** (`out/RISC3D-0.05-1.zip`): RISC3D 0.05,
+  Linux3D 0.05, and V3DRender 0.16 (md5 1fb093ae…, at &5AFC0/&823E00; it
+  registers by looking up RISC3D_Register by name), with GPU.Licences naming
+  0.16. riscos-mesa pinned 0.11 in 20.3.5-22. Notes: docs/releases/0.11.md.
+
 RISC OS Allocations allocated (18 November 2026):
 - **RISC3D:** SWI chunk &5AF80, error block &823D00.
 - **Linux3D:** error block &823C00.

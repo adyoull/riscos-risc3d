@@ -14,6 +14,7 @@ There are two drivers to learn from:
 |---|---|---|---|
 | **V3DRender** | DRM device | native RISC OS, Raspberry Pi 4/400/CM4 | [riscos-v3drender](https://github.com/adyoull/riscos-v3drender) (`docs/INTERFACE.md`) |
 | **Linux3D** | command stream | RISC OS on Linux | this repository (`modules/Linux3D`, `linux/rol-3d.c`) |
+| **EtnaRender** | DRM device | native RISC OS, i.MX6 (Vivante GC) | its own project (not yet released or tested on hardware) |
 
 ## 1. The two kinds of driver
 

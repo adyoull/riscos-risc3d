@@ -100,6 +100,7 @@ RISC3D's client library (`lib/`, `proto/`) is released as
 | RISC OS on Linux, Windows Dev Kit 2023 | Linux3D | Adreno 690 (Linux's msm, Mesa's freedreno) | Yes (Chris Gransden) |
 | RISC OS on Linux, Pinebook Pro | Linux3D | Mali-T860 (Linux's panfrost, Mesa's panfrost) | Not yet |
 | RISC OS on Linux, Pinebook | Linux3D | Mali-400 (Linux's lima, Mesa's lima): OpenGL ES 2.0 class | Not yet |
+| Native RISC OS, i.MX6 (Wandboard, ARMX6) | EtnaRender (not yet in `GPU`) | Vivante GC2000/GC880 (Mesa's etnaviv, not yet in riscos-mesa) | Not yet: built and simulated only |
 | Anything else | none | Mesa draws in software, as before | |
 
 - **RISC OS on Linux** uses Debian's Mesa 26.1.6 from trixie-backports,

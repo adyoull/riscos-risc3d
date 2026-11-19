@@ -12,6 +12,13 @@
    abstract socket "rol-3d-info" with "GPU ..." or "software ...". An
    older rol-3d has no such socket: then it says GPU, as before.
 
+   0.06: shared contexts (RISC3D 0.06's Open flag bit 0; registered with
+   flags bit 2). rol-3d 0.20 on sends its context process's pid with the
+   memory ("OK bytes pid"); a context sharing another's objects is opened
+   on that process's own socket, "rol-3d-<pid>", and is a thread there
+   with an EGL context in the other's share group. Whether rol-3d can (its
+   "rol-3d-info" answer ends ";share") is reason 3's r1 bit 0.
+
    Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE). */
 
 #include "cmodule.h"
@@ -33,7 +40,7 @@
 
 void driver_entry (void);
 
-static struct { int used, sock; unsigned area, bytes, wakes, waits; } ctx[MAXCTX];
+static struct { int used, sock, pid, shares; unsigned area, bytes, wakes, waits; } ctx[MAXCTX];
 static int registered;
 
 ERROR_BLOCK (err_nohelper, 0x823C00, "Linux's 3D helper isn't running (rol-3d)");
@@ -42,6 +49,7 @@ ERROR_BLOCK (err_full, 0x823C02, "Too many Linux3D contexts");
 ERROR_BLOCK (err_map, 0x823C03, "Linux3D couldn't map the renderer's memory");
 ERROR_BLOCK (err_notrol, 0x823C05, "Linux3D is the 3D driver for RISC OS on Linux only");
 ERROR_BLOCK (err_norol3d, 0x823C06, "Linux3D needs Linux's riscos-risc3d package (rol-3d), which isn't installed");
+ERROR_BLOCK (err_oldhelper, 0x823C07, "Linux's rol-3d is too old to share objects between contexts (riscos-risc3d 0.23 on is needed)");
 static struct { int errnum; char errmess[240]; } err_helper = { 0x823C04, "" };
 
 static int
@@ -89,13 +97,31 @@ ctx_open (regs *r)
     ;
   if (i == MAXCTX)
     return ERR (err_full);
+  /* the abstract name: "rol-3d", or (sharing context r2's objects, 0.06)
+     its process's "rol-3d-<pid>" */
+  char addr[32] = "\1\0\0rol-3d";
+  unsigned alen = 2 + 7;
+  unsigned sh = r->r[2] - 1;
+  if (r->r[1] & 1)
+    {
+      if (sh >= MAXCTX || !ctx[sh].used)
+	return ERR (err_gone);
+      if (!ctx[sh].pid)
+	return ERR (err_oldhelper);
+      char dig[12];
+      int nd = 0;
+      for (unsigned p = (unsigned) ctx[sh].pid; p && nd < 11; p /= 10)
+	dig[nd++] = (char) ('0' + p % 10);
+      addr[alen++] = '-';
+      while (nd)
+	addr[alen++] = dig[--nd];
+    }
   int s = lsys (NR_socket, 1 /* AF_UNIX */, 1 /* SOCK_STREAM */ | O_CLOEXEC, 0, 0, 0, 0);
-  static const char addr[] = "\1\0\0rol-3d";		/* abstract name */
-  if (s < 0 || lsys (NR_connect, (unsigned) s, (unsigned) addr, 2 + 7, 0, 0, 0) != 0)
+  if (s < 0 || lsys (NR_connect, (unsigned) s, (unsigned) addr, alen, 0, 0, 0) != 0)
     {
       if (s >= 0)
 	lsys (NR_close, (unsigned) s, 0, 0, 0, 0, 0);
-      return ERR (err_nohelper);
+      return r->r[1] & 1 ? ERR (err_gone) : ERR (err_nohelper);
     }
   /* "OK bytes" with the memory's file, or "ERR why" */
   char rep[240];
@@ -121,9 +147,14 @@ ctx_open (regs *r)
 	}
       return ERR (err_gone);
     }
-  unsigned bytes = 0;
-  for (const char *p = rep + 3; *p >= '0' && *p <= '9'; p++)
+  unsigned bytes = 0, pid = 0;
+  const char *p = rep + 3;
+  for (; *p >= '0' && *p <= '9'; p++)
     bytes = bytes * 10 + (unsigned) (*p - '0');
+  /* (rol-3d 0.20 on: " pid") */
+  if (*p == ' ')
+    for (p++; *p >= '0' && *p <= '9'; p++)
+      pid = pid * 10 + (unsigned) (*p - '0');
   int a = lsys (NR_mmap2, 0, bytes, 3 /* read, write */, 1 /* MAP_SHARED */, (unsigned) fd, 0);
   lsys (NR_close, (unsigned) fd, 0, 0, 0, 0, 0);
   if ((unsigned) a >= 0xfffff000u || !bytes)
@@ -136,6 +167,8 @@ ctx_open (regs *r)
   ctx[i].area = (unsigned) a;
   ctx[i].bytes = bytes;
   ctx[i].wakes = ctx[i].waits = 0;
+  ctx[i].pid = (int) pid;
+  ctx[i].shares = r->r[1] & 1 ? (int) sh + 1 : 0;
   r->r[0] = (unsigned) i + 1;
   r->r[1] = (unsigned) a;
   r->r[2] = bytes;
@@ -151,23 +184,39 @@ ctx_close (int i)
 }
 
 /* reason 3: does Linux draw in software? r0 = 1 if so, 0 on a GPU, 2 not
-   known (no helper, or one older than 0.7) */
+   known (no helper, or one older than 0.7); r1 bit 0: contexts can share
+   objects (rol-3d 0.20 on) */
 static oserror *
 describe (regs *r)
 {
   r->r[0] = 2;
+  r->r[1] = 0;
   int s = lsys (NR_socket, 1 /* AF_UNIX */, 1 /* SOCK_STREAM */ | O_CLOEXEC, 0, 0, 0, 0);
   static const char addr[] = "\1\0\0rol-3d-info";	/* abstract name */
   if (s < 0)
     return 0;
   if (lsys (NR_connect, (unsigned) s, (unsigned) addr, 2 + 12, 0, 0, 0) == 0)
     {
-      char c = 0;
-      int n;
-      do
-	n = lsys (NR_read, (unsigned) s, (unsigned) &c, 1, 0, 0, 0);
-      while (n == -4 || n == -11);
-      r->r[0] = n != 1 ? 2 : c == 's' ? 1 : c == 'G' ? 0 : 2;
+      /* "GPU ..." or "software ..."; ";share" at the end (0.20 on) */
+      char b[240];
+      unsigned got = 0;
+      for (;;)
+	{
+	  int n = lsys (NR_read, (unsigned) s, (unsigned) (b + got), sizeof b - 1 - got, 0, 0, 0);
+	  if (n == -4 || n == -11)
+	    continue;
+	  if (n <= 0)
+	    break;
+	  got += (unsigned) n;
+	  if (got >= sizeof b - 1 || !b[got - 1])
+	    break;
+	}
+      b[got] = 0;
+      char c = b[0];
+      r->r[0] = !got ? 2 : c == 's' ? 1 : c == 'G' ? 0 : 2;
+      for (unsigned k = 0; k + 6 <= got; k++)
+	if (b[k] == ';' && b[k + 1] == 's' && b[k + 2] == 'h' && b[k + 3] == 'a' && b[k + 4] == 'r' && b[k + 5] == 'e')
+	  r->r[1] = 1;
     }
   lsys (NR_close, (unsigned) s, 0, 0, 0, 0, 0);
   return 0;
@@ -220,7 +269,8 @@ mod_init (const char *tail, int instance, void *pw)
   if (lsys (NR_access, (unsigned) "/opt/riscos/rol-3d", 1 /* X_OK */, 0, 0, 0, 0) == -2)
     return ERR (err_norol3d);
   /* (flags bit 1: may draw in software, ask: reason 3) */
-  regs r = {{ 0, (unsigned) driver_entry, 0, (unsigned) "Linux3D (Linux's graphics driver)", 2 }};
+  /* (flags bit 2, 0.06: contexts may share objects: ask, reason 3) */
+  regs r = {{ 0, (unsigned) driver_entry, 0, (unsigned) "Linux3D (Linux's graphics driver)", 2 | 4 }};
   oserror *e = swix_regs (RISC3D_Register, &r);
   if (e)
     return e;				/* RISC3D isn't loaded */
@@ -255,6 +305,17 @@ mod_command (int index, const char *tail, int argc)
 	write_dec ((unsigned) i + 1);
 	write0 (": memory at &");
 	write_hex8 (ctx[i].area);
+	if (ctx[i].pid)
+	  {
+	    write0 (", Linux process ");
+	    write_dec ((unsigned) ctx[i].pid);
+	  }
+	if (ctx[i].shares)
+	  {
+	    write0 (", sharing context ");
+	    write_dec ((unsigned) ctx[i].shares);
+	    write0 ("'s objects");
+	  }
 	write0 (", ");
 	write_dec (ctx[i].waits);
 	write0 (" waits, ");

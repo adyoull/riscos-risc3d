@@ -6,6 +6,8 @@ set -e
 cd "$(dirname "$0")/.."
 s=packaging/riscos-risc3d
 v=$(sed -n 's/^Version: //p' $s/control)
+# (a delivered version is kept, never built again: bump it)
+if [ -e "out/riscos-risc3d_${v}_arm64.deb" ]; then echo "kept out/riscos-risc3d_${v}_arm64.deb"; exit 0; fi
 P=out/pkg/riscos-risc3d
 rm -rf out/pkg
 mkdir -p $P/DEBIAN $P/opt/riscos $P/usr/share/doc/riscos-risc3d

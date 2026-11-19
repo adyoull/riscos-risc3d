@@ -1,0 +1,13 @@
+| RISC3D test kit 38: contexts that share objects, drawing in two
+| threads at once (sharetest), as WebKit's Skia will. Writes
+| ShareResults in this folder.
+RMEnsure RISC3D 0.06 Error Copy this kit's !RISC3D into !Boot.Resources and restart first (see !ReadMe)
+Echo RISC3D shared contexts { > <Obey$Dir>.ShareResults }
+Run <Obey$Dir>.sharetest { >> <Obey$Dir>.ShareResults }
+RISC3D { >> <Obey$Dir>.ShareResults }
+Unset Share$NoLinux
+RMEnsure Linux3D 0.00 Set Share$NoLinux 1
+If "<Share$NoLinux>"="" Then Linux3D { >> <Obey$Dir>.ShareResults }
+Unset Share$NoLinux
+SetType <Obey$Dir>.ShareResults Text
+Filer_Run <Obey$Dir>.ShareResults

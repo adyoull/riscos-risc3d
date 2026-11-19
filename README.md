@@ -7,7 +7,8 @@ above it, 3D drivers below it. Programs use Mesa as they do now; where a
 driver is registered the drawing is done by the machine's GPU driver, and
 where none is, Mesa draws in software as before.
 
-**Release 0.10, 16 November 2026.** It draws on the GPU:
+**Release 0.12, 19 November 2026** (0.11 moved to the allocated numbers;
+0.12 adds contexts that share objects, for WebKit). It draws on the GPU:
 - on native RISC OS on a Raspberry Pi 4, through V3DRender;
 - on RISC OS on Linux, through Linux3D, on whatever GPU Linux drives. So
   far that's the Pi 4 and the Windows Dev Kit 2023.
@@ -53,6 +54,12 @@ software.
   start-up. A program that must have it can check with
   `RMEnsure RISC3D 0.05 Error This program needs !RISC3D`. Never name a
   driver.
+- **Contexts that share objects, in several threads** (EGL's
+  `share_context`, as WebKit's Skia draws): RISC3D 0.06 and client 0.12
+  on. On RISC OS on Linux this needs Linux3D 0.06 (!RISC3D 0.06-1) and
+  riscos-risc3d 0.23-1 (rol-3d 0.20). On native RISC OS, sharing is done by
+  riscos-mesa's own GPU driver (libMesaGPU): in test in !MesaLibs
+  20.3.5-23test1.
 
 ### How riscos-mesa uses it
 
@@ -66,6 +73,9 @@ These are riscos-mesa's parts; its EGL-GUIDE has the details.
   - `GL_VERSION` says "... RISC3D (Mesa x)" on RISC OS on Linux.
   - A program can ask for software with the context attribute
     `EGL_CONTEXT_SOFTWARE_RISCOS` (extension `EGL_RISCOS_renderer`).
+  - Shared contexts and a current context per thread: through the client's
+    `r3d_create_shared` and `r3d_can_share` (0.12) on RISC OS on Linux.
+    riscos-mesa routes them there once it pins 0.12.
 - **Window frames:**
   - **On RISC OS on Linux:** frames can go straight onto the screen
     through one of rol-fb's display planes (zero copy), in 16 million
@@ -164,14 +174,16 @@ draws straight into the window's sprite or into screen memory.
 
 | SWI | In | Out |
 |---|---|---|
-| `RISC3D_Info` (&5AF80) | | r0 = version * 100, r1 = drivers, r2 = contexts, r3 -> the name of the driver a new context gets (0: none), r4 = its flags, r5 = its ioctl SWI and r6 -> its DRM driver name (DRM devices) |
-| `RISC3D_Register` (&5AF81) | r0 = 0 add / 1 remove, r1 = entry, r2 = its r12, r3 -> name, r4 = flags (bit 0: a DRM device), r5 = ioctl SWI, r6 -> DRM driver name | |
-| `RISC3D_Open` (&5AF82) | r0 = flags (0) | r0 = context, r1 -> shared memory, r2 = size (a DRM device: r1 = the driver's file, r2 = 0) |
+| `RISC3D_Info` (&5AF80) | | r0 = version * 100, r1 = drivers, r2 = contexts, r3 -> the name of the driver a new context gets (0: none), r4 = its flags (bit 2: contexts can share objects now), r5 = its ioctl SWI and r6 -> its DRM driver name (DRM devices) |
+| `RISC3D_Register` (&5AF81) | r0 = 0 add / 1 remove, r1 = entry, r2 = its r12, r3 -> name, r4 = flags (bit 0: a DRM device; bit 1: may draw in software; bit 2: can share objects), r5 = ioctl SWI, r6 -> DRM driver name | |
+| `RISC3D_Open` (&5AF82) | r0 = flags (bit 0: share the objects of context r1, 0.06 on), r1 = that context | r0 = context, r1 -> shared memory, r2 = size (a DRM device: r1 = the driver's file, r2 = 0) |
 | `RISC3D_Close` (&5AF83) | r0 = context | |
 | `RISC3D_Sync` (&5AF84) | r0 = context, r1 = 0 wake / 1 wait | |
 
 A driver's entry is called with r0 = 0 open, 1 close, 2 sync, or 3
-describe. Register flags: bit 0 a DRM device; bit 1 may draw in software.
+describe. Register flags: bit 0 a DRM device; bit 1 may draw in software;
+bit 2 contexts can share objects (open's r1 bit 0, with r2 the handle to
+share with).
 [docs/DRIVER-GUIDE.md](docs/DRIVER-GUIDE.md) has the details.
 
 Two kinds of driver (RISC3D 0.02): a command-stream driver (Linux3D, on
@@ -187,7 +199,8 @@ file RISC3D_Open returned, as Mesa does through a DRM device on Linux.
 
 `RISCOS_TOOLCHAIN=.../toolchain/env ./build.sh` builds everything into
 `out/`. On the build machine: `out/rol-3d-host &` then
-`out/r3dtest-host 100`. On RISC OS on Linux: `/opt/riscos/rol-3d` (init
+`out/r3dtest-host 100`; `out/sharetest-host` checks contexts sharing
+objects in two threads. On RISC OS on Linux: `/opt/riscos/rol-3d` (init
 starts it) and !RISC3D in `!Boot.Resources` (it loads RISC3D, which loads
 Linux3D), then `r3dtest` or `r3dcube`.
 

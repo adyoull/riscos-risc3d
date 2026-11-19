@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.12: contexts that share objects, a current context per thread (19 Nov 2026)
+
+For WebKit 2.52 (riscos-mesa's handoff of 19 November): Skia draws with
+OpenGL ES in several threads at once, a context each, all sharing one set
+of textures and buffers. riscos-mesa does that natively through its own
+GPU driver; on RISC OS on Linux it needs RISC3D.
+
+- **!RISC3D 0.06-1** (`out/RISC3D-0.06-1.zip`, md5 b393a9e6…): RISC3D 0.06,
+  Linux3D 0.06; V3DRender 0.16 unchanged. !Boot and !Run RMEnsure 0.06.
+- **RISC3D module 0.06:**
+  - `RISC3D_Open` r0 bit 0: share the objects of context r1. Sent to that
+    context's driver (open's r1 bit 0, r2 = its handle), which must have
+    registered with flags bit 2; else error &823D03.
+  - Register flags bit 2: the driver can share. Info's r4 bit 2: it can
+    now (for drivers with bit 1 too, reason 3's r1 bit 0 says). Info r0 = 6.
+  - `*RISC3D` says "contexts can share objects", and which contexts share.
+- **Linux3D 0.06:** registers with flags 2 | 4. Takes the pid from rol-3d's
+  "OK bytes pid" and opens a sharing context on "rol-3d-<pid>". Reason 3
+  reads the whole "rol-3d-info" answer (";share" = r1 bit 0). New error
+  &823C07 (rol-3d too old). `*Linux3D` shows each context's Linux process
+  and what it shares.
+- **rol-3d 0.20** (riscos-risc3d 0.23-1, md5 17867493…):
+  - Everything a context keeps is thread-local; what a share group has in
+    common (EGL, the function table, sync objects) is not.
+  - Each context process listens on "rol-3d-<pid>"; a context opened there
+    is a thread with an EGL context in the group's share group, made as the
+    first one was (its API, config and version). A different API is refused.
+  - The helper's own textures and buffers: 128 names per context of a
+    group (by slot).
+  - Sync objects: one table per group, under a lock. A wait for a fence not
+    yet made (its context's thread hasn't reached it) waits up to 2 s.
+  - A context of a group that others outlive deletes its own objects and
+    EGL context and ends its thread; the process ends with its last.
+  - "rol-3d-info" answers end ";share". ROL3D_LEVEL 8.
+- **Client 0.12** (`RISC3D-client-0.12.tgz`, md5 3a6ec013…, from
+  `tools/mkclient.sh`):
+  - `r3d_create_shared (api, major, minor, share)` and `r3d_can_share ()`;
+    `R3D_DRIVER_SHARE` (4).
+  - A current context per thread: a plain variable while one thread has
+    made contexts current (no cost to one thread), a pthread key for every
+    other thread once a second one does.
+  - Names (textures, buffers, lists) and sync numbers are one set for a
+    share group, taken atomically; display lists' records are the group's,
+    under its lock.
+  - New C library imports: UnixLib's pthread functions (nine).
+- **Tests:** `demo/share/sharetest.c` (sharetest, sharetest-host): two
+  threads, viewports per thread, 4000 names at once, a texture and a fence
+  from one context used in the other (the fence wait path hit every run),
+  200 frames each at once, the first context destroyed while the second
+  draws, a third sharing the second, an unshared context, an API mismatch
+  refused, an OpenGL display list across contexts. Passed on the build
+  machine (llvmpipe) ten times; every earlier host test gives the same
+  output and pictures as 0.11, with old and new helpers mixed both ways.
+  Not yet run on the Pi: kit 38 (`RISC3DTest-38.zip`, md5 35e2ba56…).
+- **build.sh** keeps every delivered zip, kit, package and client tarball
+  instead of making them again (it used to remake older kits with the
+  newest modules).
+
 ## 0.11: the allocated SWI chunk and error blocks (18 Nov 2026)
 
 - **Released as !RISC3D 0.05-1** (`out/RISC3D-0.05-1.zip`): RISC3D 0.05,

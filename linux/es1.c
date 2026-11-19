@@ -17,7 +17,7 @@
 #define GL_POINT_SIZE_ARRAY_STRIDE_OES 0x898B
 #define GL_POINT_SIZE_ARRAY_BUFFER_BINDING_OES 0x8B9F
 
-static struct es1_array
+static TLS struct es1_array
 {
   int fixed;				/* GL_FIXED in a buffer object */
   GLint size;
@@ -26,7 +26,7 @@ static struct es1_array
   uintptr_t offset;
 } es1_arr[16];				/* vertex 0, normal 1, colour 2, texture coordinates 8 + unit */
 
-static struct
+static TLS struct
 {
   int on;
   GLenum type;
@@ -35,7 +35,7 @@ static struct
   uintptr_t offset;
 } ps = { 0, GL_FLOAT, 0, 0, 0 };
 
-static int es1_unit;			/* the client's active texture unit */
+static TLS int es1_unit;			/* the client's active texture unit */
 
 static struct
 {

@@ -1,3 +1,21 @@
+riscos-risc3d (0.23-1) rol; urgency=medium
+
+  * rol-3d 0.20: contexts that share objects (textures, buffers, programs,
+    sync objects), for WebKit's Skia, which draws in several threads with
+    a context each. Each context's process also listens on its own
+    abstract socket, "rol-3d-<pid>" (the pid goes to Linux3D with the
+    memory); a context opened there is a thread in that process, with an
+    EGL context in the first one's share group. A context's state is now
+    thread-local; the process ends with its last context.
+  * A fence made in one context and waited for in another is waited for
+    until it reaches its renderer (up to 2 s).
+  * "rol-3d-info" answers end ";share" (Linux3D 0.06 asks).
+  * Needs RISC OS's side 0.06-1 (RISC3D 0.06, Linux3D 0.06: the PackMan
+    package RISC3D) for programs to share; with 0.05-1 everything works as
+    before, without sharing.
+
+ -- Andrew Youll <adyoull@users.noreply.github.com>  Thu, 19 Nov 2026 13:00:00 +0000
+
 riscos-risc3d (0.22-1) rol; urgency=medium
 
   * RISC OS's side moves to PackMan, as on every system: the package RISC3D

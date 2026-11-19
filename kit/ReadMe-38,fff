@@ -1,0 +1,38 @@
+RISC3D test kit 38 (19 November 2026): contexts that share objects
+=================================================================
+
+For WebKit: its drawing library, Skia, draws in several threads at once,
+each with its own context, all sharing one set of textures and buffers.
+RISC3D 0.12 does that on RISC OS on Linux: a context can share another's
+objects (r3d_create_shared), and each thread has its own current context.
+
+In this kit:
+  !RISC3D      0.06-1: RISC3D 0.06 and Linux3D 0.06 (V3DRender 0.16, as
+               in 0.05-1)
+  riscos-risc3d_0.23-1_arm64.deb   Linux's side: rol-3d 0.20
+  Share        sharetest: two threads, two contexts sharing a texture,
+               a fence, 200 frames each at once; writes ShareResults
+  Test, Info   the usual checks, to see nothing else changed
+
+On RISC OS on Linux (the Pi 4)
+------------------------------
+ 1. Unzip RISC3DTest into HardDisc4, replacing the last kit.
+ 2. In RiSH's Root shell:
+      apt-get install /riscos/HardDisc4/RISC3DTest/riscos-risc3d_0.23-1_arm64.deb
+    (it restarts rol-3d).
+ 3. Copy this kit's !RISC3D over HardDisc4.!Boot.Resources.!RISC3D
+    (replace it). PackMan will update it from the RISC3D package later.
+ 4. Restart.
+ 5. Double-click Share, then Test and Info.
+
+ShareResults should end "sharetest ok", and *RISC3D should say
+"contexts can share objects". Please send ShareResults, Results and
+InfoResults, and /riscos/3d/log.txt.
+
+On native RISC OS on the Pi 4 (optional)
+----------------------------------------
+Copy !RISC3D into !Boot.Resources (V3DRender is the same 0.16), restart,
+and type RISC3D at the command line: it should still list V3DRender.
+Share will say contexts can't share there: that's expected, as native
+programs share through Mesa's own V3D driver (riscos-mesa's 20.3.5-23),
+not RISC3D's commands. (Test and Info are for RISC OS on Linux.)

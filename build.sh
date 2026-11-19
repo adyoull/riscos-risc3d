@@ -68,14 +68,19 @@ ${T}strip out/obj/targettest.elf
 ${T}gcc $AC $I -static -o out/obj/gl3test.elf demo/gl3/gl3test.c out/libRISC3D.a -lm
 ${T}strip out/obj/gl3test.elf
 "${RISCOS_TOOLCHAIN}/bin/elf2aif" -e out/obj/gl3test.elf "out/gl3test,ff8" >/dev/null
+${T}gcc $AC $I -static -o out/obj/sharetest.elf demo/share/sharetest.c out/libRISC3D.a -lm
+${T}strip out/obj/sharetest.elf
+"${RISCOS_TOOLCHAIN}/bin/elf2aif" -e out/obj/sharetest.elf "out/sharetest,ff8" >/dev/null
 
-aarch64-linux-gnu-gcc -O2 -Wall -Wextra $I -o out/rol-3d linux/rol-3d.c -ldl
-gcc -O2 -Wall -Wextra $I -o out/rol-3d-host linux/rol-3d.c -ldl
-gcc -O2 -Wall -DR3D_HOST -Itest/host $I -Idemo/test -o out/r3dtest-host demo/test/r3dtest.c lib/r3d_gl.c -lm
-gcc -O2 -Wall -DR3D_HOST -Itest/host $I -o out/gl1test-host demo/gl1/gl1test.c lib/r3d_gl.c -lm
-gcc -O2 -Wall -DR3D_HOST -Itest/host $I -o out/estest-host demo/es/estest.c lib/r3d_gl.c -lm
-gcc -O2 -Wall -DR3D_HOST -Itest/host $I -o out/gl3test-host demo/gl3/gl3test.c lib/r3d_gl.c -lm
-gcc -O2 -Wall -DR3D_HOST -Itest/host $I -o out/targettest-host demo/target/targettest.c lib/r3d_gl.c -lm
+# (0.20: threads, for contexts that share objects)
+aarch64-linux-gnu-gcc -O2 -Wall -Wextra $I -o out/rol-3d linux/rol-3d.c -ldl -lpthread
+gcc -O2 -Wall -Wextra $I -o out/rol-3d-host linux/rol-3d.c -ldl -lpthread
+gcc -O2 -Wall -DR3D_HOST -Itest/host $I -Idemo/test -o out/r3dtest-host demo/test/r3dtest.c lib/r3d_gl.c -lm -lpthread
+gcc -O2 -Wall -DR3D_HOST -Itest/host $I -o out/gl1test-host demo/gl1/gl1test.c lib/r3d_gl.c -lm -lpthread
+gcc -O2 -Wall -DR3D_HOST -Itest/host $I -o out/estest-host demo/es/estest.c lib/r3d_gl.c -lm -lpthread
+gcc -O2 -Wall -DR3D_HOST -Itest/host $I -o out/gl3test-host demo/gl3/gl3test.c lib/r3d_gl.c -lm -lpthread
+gcc -O2 -Wall -DR3D_HOST -Itest/host $I -o out/targettest-host demo/target/targettest.c lib/r3d_gl.c -lm -lpthread
+gcc -O2 -Wall -Wextra -DR3D_HOST -Itest/host $I -o out/sharetest-host demo/share/sharetest.c lib/r3d_gl.c -lm -lpthread
 # the direct builds: Linux's libGL and libEGL, linked through stand-ins
 # with their names (no -dev packages, nor 64-bit ARM libraries, needed)
 direct () {				# compiler, output
@@ -103,12 +108,16 @@ direct_es gcc out/gl3test-direct demo/gl3/gl3test.c
 direct_es aarch64-linux-gnu-gcc out/gl3test-linux demo/gl3/gl3test.c
 ls -la out/modules out/libRISC3D.a "out/r3dtest,ff8" "out/gl1test,ff8" out/rol-3d
 
-# the package (the kit carries it)
+# the package (the kit carries it; a delivered version is kept)
 tools/mkdeb.sh >/dev/null
+
+# kits and releases: one already made is delivered and kept, never made
+# again (a change gets a new version)
+kit () { if [ -e "$1" ]; then echo "kept $1"; else python3 tools/mkkit.py "$@"; fi; }
 
 # the Pi test kit: a zip for RISC OS, with file types
 # (the package as delivered, if there is a copy: KIT_DEB)
-python3 tools/mkkit.py out/RISC3DTest-34.zip RISC3DTest "kit/!ReadMe,fff" kit/Cube,feb kit/Test,feb \
+kit out/RISC3DTest-34.zip RISC3DTest "kit/!ReadMe,fff" kit/Cube,feb kit/Test,feb \
   kit/GL,feb kit/ES,feb kit/GL3,feb kit/Target,feb kit/TargetExpected,fff kit/Info,feb kit/Overlay,feb \
   kit/linux-tests,fff kit/Track,feb kit/Textures,feb kit/uploads,fff kit/check,fff kit/record,fff kit/replay,fff kit/Lit,feb kit/litlinux,fff kit/litx,fff kit/litx2,fff kit/newmesa,fff kit/verify,fff "out/gl1test08,ff8" "out/r3dcube,ff8" "out/r3dtest,ff8" "out/gl1test,ff8" "out/estest,ff8" \
   "out/gl3test,ff8" "out/targettest,ff8" "out/r3dinfo,ff8" out/gl1test-linux out/estest-linux \
@@ -118,7 +127,7 @@ python3 tools/mkkit.py out/RISC3DTest-34.zip RISC3DTest "kit/!ReadMe,fff" kit/Cu
 # WDK2023-GPU-test1, which has 0.19-1 and Mesa 26.1.6 installed): its own
 # !ReadMe and the devkit script; no Pi-only scripts (newmesa, verify)
 mkdir -p out/kit35 && cp "kit/ReadMe-devkit,fff" "out/kit35/!ReadMe,fff"
-python3 tools/mkkit.py out/RISC3DTest-35.zip RISC3DTest "out/kit35/!ReadMe,fff" kit/devkit,fff kit/Info,feb \
+kit out/RISC3DTest-35.zip RISC3DTest "out/kit35/!ReadMe,fff" kit/devkit,fff kit/Info,feb \
   kit/Test,feb kit/Cube,feb kit/Overlay,feb kit/GL,feb kit/ES,feb kit/GL3,feb kit/Lit,feb kit/Target,feb \
   kit/TargetExpected,fff kit/Track,feb kit/Textures,feb kit/linux-tests,fff kit/litlinux,fff kit/litx2,fff \
   kit/check,fff kit/record,fff kit/replay,fff kit/uploads,fff "out/gl1test08,ff8" "out/r3dcube,ff8" \
@@ -130,61 +139,84 @@ python3 tools/mkkit.py out/RISC3DTest-35.zip RISC3DTest "out/kit35/!ReadMe,fff" 
 # 0.20-1 installs !RISC3D in !Boot.Resources. The kit also carries a bare
 # !RISC3D (GPU empty) for native RISC OS.
 mkdir -p out/kit36 && cp "kit/ReadMe-36,fff" "out/kit36/!ReadMe,fff"
-python3 tools/mkkit.py out/RISC3DTest-36.zip RISC3DTest "out/kit36/!ReadMe,fff" kit/Auto,feb kit/Test,feb \
+kit out/RISC3DTest-36.zip RISC3DTest "out/kit36/!ReadMe,fff" kit/Auto,feb kit/Test,feb \
   kit/Cube,feb kit/Info,feb kit/Lit,feb "out/r3dtest,ff8" "out/r3dcube,ff8" "out/r3dinfo,ff8" "out/gl1test,ff8" \
   out/riscos-risc3d_0.20-1_arm64.deb \
   "dist/!RISC3D/!Boot,feb=!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb=!RISC3D/!Run,feb" \
   "dist/!RISC3D/!Help,fff=!RISC3D/!Help,fff" "out/modules/RISC3D,ffa=!RISC3D/RISC3D,ffa" \
   "dist/!RISC3D/GPU/ReadMe,fff=!RISC3D/GPU/ReadMe,fff"
 # the !RISC3D release (for PackMan: the Packages project builds the package)
-python3 tools/mkkit.py out/RISC3D-0.04.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+kit out/RISC3D-0.04.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
   "dist/!RISC3D/!Help,fff" "out/modules/RISC3D,ffa" "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff"
 
 # kit 37 and !RISC3D 0.04-2: !RISC3D's !Boot loads RISC3D itself
 mkdir -p out/kit37 && cp "kit/ReadMe-37,fff" "out/kit37/!ReadMe,fff"
-python3 tools/mkkit.py out/RISC3DTest-37.zip RISC3DTest "out/kit37/!ReadMe,fff" kit/Test,feb \
+kit out/RISC3DTest-37.zip RISC3DTest "out/kit37/!ReadMe,fff" kit/Test,feb \
   "out/r3dtest,ff8" out/riscos-risc3d_0.21-1_arm64.deb \
   "dist/!RISC3D/!Boot,feb=!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb=!RISC3D/!Run,feb" \
   "dist/!RISC3D/!Help,fff=!RISC3D/!Help,fff" "out/modules/RISC3D,ffa=!RISC3D/RISC3D,ffa" \
   "dist/!RISC3D/GPU/ReadMe,fff=!RISC3D/GPU/ReadMe,fff"
-python3 tools/mkkit.py out/RISC3D-0.04-2.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+kit out/RISC3D-0.04-2.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
   "dist/!RISC3D/!Help,fff" "out/modules/RISC3D,ffa" "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff"
 
 # !RISC3D 0.04-3: one package for every system: RISC3D 0.04, the icon, and
 # every driver RISC3D has (each refuses to start where it doesn't belong):
 # GPU.Linux3D 0.03 (RISC OS on Linux only). V3DRender to follow.
-python3 tools/mkkit.py out/RISC3D-0.04-3.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+kit out/RISC3D-0.04-3.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
   "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" \
   "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa"
 
 # !RISC3D 0.04-4: Linux3D 0.04 (starts only where rol-3d is installed)
-python3 tools/mkkit.py out/RISC3D-0.04-4.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+kit out/RISC3D-0.04-4.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
   "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" \
   "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa"
 
 # !RISC3D 0.04-5: !Boot and !Run give the Filer its icon (IconSprites)
-python3 tools/mkkit.py out/RISC3D-0.04-5.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+kit out/RISC3D-0.04-5.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
   "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" \
   "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa"
 
 # !RISC3D 0.04-6: V3DRender 0.13 (from V3DRender's release; refuses to start
 # but on a Pi 4/400/CM4) joins Linux3D in GPU, with its licence
-python3 tools/mkkit.py out/RISC3D-0.04-6.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+kit out/RISC3D-0.04-6.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
   "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" \
   "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa" \
   "third/V3DRender/V3DRender,ffa=GPU/V3DRender,ffa" "dist/!RISC3D/GPU/Licences,fff=GPU/Licences,fff" \
   "dist/!RISC3D/GPU/GPL-2,fff=GPU/GPL-2,fff"
 
 # !RISC3D 0.04-7: V3DRender 0.15 (the latest) in GPU
-python3 tools/mkkit.py out/RISC3D-0.04-7.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+kit out/RISC3D-0.04-7.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
   "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" \
   "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa" \
   "third/V3DRender/V3DRender,ffa=GPU/V3DRender,ffa" "dist/!RISC3D/GPU/Licences,fff=GPU/Licences,fff" \
   "dist/!RISC3D/GPU/GPL-2,fff=GPU/GPL-2,fff"
 
 # !RISC3D 0.05-1 (release 0.11): RISC3D 0.05, Linux3D 0.05, V3DRender 0.16 (allocated numbers)
-python3 tools/mkkit.py out/RISC3D-0.05-1.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+kit out/RISC3D-0.05-1.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
   "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" \
   "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa" \
   "third/V3DRender/V3DRender,ffa=GPU/V3DRender,ffa" "dist/!RISC3D/GPU/Licences,fff=GPU/Licences,fff" \
   "dist/!RISC3D/GPU/GPL-2,fff=GPU/GPL-2,fff"
+
+# !RISC3D 0.06-1 (release 0.12): RISC3D 0.06 and Linux3D 0.06, contexts that
+# share objects; V3DRender 0.16 as in 0.05-1
+kit out/RISC3D-0.06-1.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+  "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" \
+  "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa" \
+  "third/V3DRender/V3DRender,ffa=GPU/V3DRender,ffa" "dist/!RISC3D/GPU/Licences,fff=GPU/Licences,fff" \
+  "dist/!RISC3D/GPU/GPL-2,fff=GPU/GPL-2,fff"
+
+# kit 38: shared contexts in two threads (sharetest), with !RISC3D 0.06-1
+# and riscos-risc3d 0.23-1
+mkdir -p out/kit38 && cp "kit/ReadMe-38,fff" "out/kit38/!ReadMe,fff"
+kit out/RISC3DTest-38.zip RISC3DTest "out/kit38/!ReadMe,fff" kit/Share,feb kit/Test,feb kit/Info,feb \
+  "out/sharetest,ff8" "out/r3dtest,ff8" "out/r3dinfo,ff8" out/riscos-risc3d_0.23-1_arm64.deb \
+  "dist/!RISC3D/!Boot,feb=!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb=!RISC3D/!Run,feb" \
+  "dist/!RISC3D/!Help,fff=!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9=!RISC3D/!Sprites,ff9" \
+  "dist/!RISC3D/!Sprites11,ff9=!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa=!RISC3D/RISC3D,ffa" \
+  "dist/!RISC3D/GPU/ReadMe,fff=!RISC3D/GPU/ReadMe,fff" "out/modules/Linux3D,ffa=!RISC3D/GPU/Linux3D,ffa" \
+  "third/V3DRender/V3DRender,ffa=!RISC3D/GPU/V3DRender,ffa" "dist/!RISC3D/GPU/Licences,fff=!RISC3D/GPU/Licences,fff" \
+  "dist/!RISC3D/GPU/GPL-2,fff=!RISC3D/GPU/GPL-2,fff"
+
+# the client release for riscos-mesa (kept if made)
+tools/mkclient.sh 0.12

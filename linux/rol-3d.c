@@ -15,6 +15,18 @@
  * asks it to finish everything and answer ('S': a query, or the end of a
  * frame). Answers and finished frames go back in the shared reply area.
  *
+ * Shared contexts (0.20): a context made to share another's objects
+ * (RISC3D_Open's flag bit 0, for WebKit's Skia: a context per thread, one
+ * set of textures and buffers) must be in the same process as the one it
+ * shares with, since only contexts of one process can share. So each
+ * context's process also listens on its own abstract socket,
+ * "rol-3d-<pid>" (the pid comes back to Linux3D in the "OK" message), and
+ * a context opened there is a thread in that process, with its own ring
+ * and an EGL context in the first one's share group. Everything a context
+ * keeps is thread-local (TLS); what a share group has in common (EGL, the
+ * function table, sync objects) is not. The process ends with its last
+ * context.
+ *
  * Frames are read back into the reply area, or (zero-copy) copied by the
  * GPU into buffers that rol-fb shows on a display plane under the
  * desktop. The main process stays root to open the display's card for
@@ -30,6 +42,7 @@
 #include <fcntl.h>
 #include <grp.h>
 #include <poll.h>
+#include <pthread.h>
 #include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -42,6 +55,7 @@
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/un.h>
 #include <time.h>
 #include <unistd.h>
@@ -59,11 +73,13 @@
 #endif
 #define RO_UID 1000
 #define RO_GID 1000
-#define ROL3D_VERSION "0.19"
+#define ROL3D_VERSION "0.20"
+/* a context's own state: one thread each (shared contexts, 0.20) */
+#define TLS __thread
 /* what the library may send (OP_CONTEXT's reply, word 3): 6 = 0.6's
    commands (GL_EXT_direct_state_access, OP_TEMP_BIND); 7 = OP_UPLOADS
-   (0.8); none: 0.5 */
-#define ROL3D_LEVEL 7
+   (0.8); 8 = shared contexts may be opened (0.20); none: 0.5 */
+#define ROL3D_LEVEL 8
 #define GLDIR "/opt/riscos/gl"		/* a private Mesa, if the image has one */
 
 /* The helper's own textures and buffers have names the program's never
@@ -76,10 +92,10 @@
 #define PRIV_IMMEDIATE priv_name (64)
 static GLuint priv_name (unsigned k);
 
-static struct r3d_area *area;
-static uint32_t *ring;
-static char *reply_area;
-static int sock = -1;
+static TLS struct r3d_area *area;
+static TLS uint32_t *ring;
+static TLS char *reply_area;
+static TLS int sock = -1;
 
 static void
 logmsg (const char *fmt, ...)
@@ -100,7 +116,7 @@ logmsg (const char *fmt, ...)
 
 /* where the time goes (OP_STATS): working through commands, of that the
    frames' read-back, times asleep, commands */
-static uint64_t st_busy, st_present, st_sleeps, st_commands;
+static TLS uint64_t st_busy, st_present, st_sleeps, st_commands;
 
 static uint64_t
 now_ns (void)
@@ -122,8 +138,8 @@ reply (const void *data, size_t n)
 static void *
 scratch (size_t n)
 {
-  static void *p;
-  static size_t have;
+  static TLS void *p;
+  static TLS size_t have;
   if (n > have)
     {
       free (p);
@@ -202,21 +218,24 @@ sentinel_count (const uint32_t *r, size_t n, int size)
 
 /* OpenGL 3.1 without the compatibility profile: names it gave only (ours
    from it too, and the program's: lib/r3d_gl.c, gen_core) */
-static int strict_ctx;
+static TLS int strict_ctx;
+/* (0.20) a share group has one set of names: each of its contexts has
+   its own 128 of ours, from its slot */
+static TLS unsigned priv_base;
+static TLS GLuint priv_have[128];		/* (strict contexts: the ones made) */
 static GLuint
 priv_name (unsigned k)
 {
-  static GLuint have[128];
   if (!strict_ctx || k >= 128)
-    return PRIV + k;
-  if (!have[k])
+    return PRIV + priv_base + k;
+  if (!priv_have[k])
     {
       if (k == 0)
-	gl.GenTextures (1, &have[k]);
+	gl.GenTextures (1, &priv_have[k]);
       else
-	gl.GenBuffers (1, &have[k]);
+	gl.GenBuffers (1, &priv_have[k]);
     }
-  return have[k];
+  return priv_have[k];
 }
 #include "es1_conversion.c"
 #include "es1.c"
@@ -267,7 +286,7 @@ lib (const char *name)
   return h ? h : dlopen (name, RTLD_NOW | RTLD_GLOBAL);
 }
 
-static char gl_error[200];
+static TLS char gl_error[200];
 static int hardware;
 static EGLDisplay display;
 
@@ -276,7 +295,7 @@ static EGLDisplay display;
    which has the same functions (ARB_ES2_compatibility) and takes GLES
    shaders marked "#version 100" (OP_glShaderSource adds the mark); or
    desktop OpenGL's compatibility profile, for OpenGL 1.x and 2.x. */
-static int have_context, desktop_gl, es_on_desktop, pack_ext, es1;
+static TLS int have_context, desktop_gl, es_on_desktop, pack_ext, es1;
 
 /* Linux's EGL, and a display on the GPU's render node, or Mesa's
    software renderer: 1, or 0 with gl_error */
@@ -337,7 +356,10 @@ software_display (void)
 
 /* OpenGL above its compatibility profile's version: (0.5 on) a context
    of that version, for a program that asks for it */
-static int want_version;
+static TLS int want_version;
+/* (0.20) and whether that took EGL's version attributes (shared contexts
+   are made the same way) */
+static TLS int made_vv;
 
 static EGLContext
 make_on (EGLDisplay d, int desktop)
@@ -369,6 +391,7 @@ make_on (EGLDisplay d, int desktop)
 	    egl.DestroyContext (d, c);
 	  const EGLint vv[] = { 0x3098, want_version / 10, 0x30FB, want_version % 10, EGL_NONE };
 	  c = egl.CreateContext (d, cfg, 0, vv);
+	  made_vv = want_version;
 	}
       else
 	c = egl.CreateContext (d, cfg, 0, desktop ? 0 : ver);
@@ -406,13 +429,122 @@ load_table (int desktop)
   return 1;
 }
 
+/* --- share groups (0.20) -------------------------------------------------
+
+   The contexts of this process: the first, and those opened on its own
+   socket to share its objects (one thread each). A share group has one
+   API (the first context's), one function table (gl, loaded by the
+   first), one set of sync objects; any live context of it is the one a
+   new context shares with. */
+#define GROUP_MAX 32
+static pthread_mutex_t group_lock = PTHREAD_MUTEX_INITIALIZER;
+static int group_live;				/* contexts open */
+static uint32_t group_slots;			/* the slots in use: bit each */
+static EGLContext group_ctx[GROUP_MAX];		/* by slot: made ones */
+static int group_api = -1;			/* OP_CONTEXT's API, -1 none yet */
+static int group_vv, group_desktop_gl, group_es_on_desktop, group_es1, group_strict, group_pack_ext;
+static TLS int my_slot, shared_thread;
+static TLS EGLContext my_ctx;
+
+/* (the first context's, once made) */
+static void
+group_made (int api, EGLContext c)
+{
+  pthread_mutex_lock (&group_lock);
+  group_ctx[my_slot] = c;
+  if (group_api < 0)
+    {
+      group_api = api;
+      group_vv = made_vv;
+      group_desktop_gl = desktop_gl;
+      group_es_on_desktop = es_on_desktop;
+      group_es1 = es1;
+      group_strict = strict_ctx;
+      group_pack_ext = pack_ext;
+    }
+  pthread_mutex_unlock (&group_lock);
+}
+
+/* a context sharing the group's objects, current: 1, or 0 with gl_error.
+   Made as the first was (its API, its EGL config, its version), with its
+   function table */
+static int
+make_shared (int api)
+{
+  EGLContext share = 0;
+  pthread_mutex_lock (&group_lock);
+  for (int i = 0; i < GROUP_MAX && !share; i++)
+    if (i != my_slot)
+      share = group_ctx[i];
+  int gapi = group_api;
+  int vv = group_vv;
+  desktop_gl = group_desktop_gl;
+  es_on_desktop = group_es_on_desktop;
+  es1 = group_es1;
+  strict_ctx = group_strict;
+  pack_ext = group_pack_ext;
+  pthread_mutex_unlock (&group_lock);
+  if (!share)
+    {
+      snprintf (gl_error, sizeof gl_error, "the context to share with has gone, or has no renderer yet");
+      return 0;
+    }
+  if (api != gapi)
+    {
+      snprintf (gl_error, sizeof gl_error, "a shared context must have the API of the one it shares with");
+      return 0;
+    }
+  static const EGLint want_es[] = { EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT, EGL_SURFACE_TYPE, 0, EGL_NONE };
+  static const EGLint want_gl[] = { EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT, EGL_SURFACE_TYPE, 0, EGL_NONE };
+  static const EGLint ver[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
+  const EGLint vva[] = { 0x3098, vv / 10, 0x30FB, vv % 10, EGL_NONE };
+  EGLConfig cfg = 0;
+  EGLint n = 0;
+  EGLContext c = 0;
+  egl.BindAPI (desktop_gl ? EGL_OPENGL_API : EGL_OPENGL_ES_API);
+  if (egl.ChooseConfig (display, desktop_gl ? want_gl : want_es, &cfg, 1, &n) && n >= 1)
+    c = egl.CreateContext (display, cfg, share, !desktop_gl ? ver : vv ? vva : 0);
+  if (c && !egl.MakeCurrent (display, 0, 0, c))
+    {
+      egl.DestroyContext (display, c);
+      c = 0;
+    }
+  if (!c)
+    {
+      snprintf (gl_error, sizeof gl_error, "no shared context (EGL error &%X)", egl.GetError ());
+      return 0;
+    }
+  my_ctx = c;
+  group_made (api, c);
+  have_context = 1;
+  return 1;
+}
+
+/* this context is done: its thread ends, or (the last) the process */
+static void __attribute__ ((noreturn)) thread_end (void);
+static void __attribute__ ((noreturn))
+end_context (int code)
+{
+  pthread_mutex_lock (&group_lock);
+  int last = --group_live == 0;
+  if (!last)
+    {
+      group_ctx[my_slot] = 0;
+      group_slots &= ~(1u << my_slot);
+    }
+  pthread_mutex_unlock (&group_lock);
+  if (last)
+    _exit (code);
+  thread_end ();
+}
+
 /* a context of the API asked for (desktop: OpenGL's compatibility
    profile), current: 1, or 0 with gl_error */
 static int
 make_context (int desktop)
 {
   EGLContext c = 0;
-  int es_desk = 0;
+  int es_desk = 0, api = desktop;
   /* GLES 1.1: on desktop OpenGL (Debian's Mesa has no GLES 1: es1.c) */
   es1 = desktop == 2;
   if (es1)
@@ -446,6 +578,8 @@ make_context (int desktop)
   /* the pack and unpack settings past alignment: OpenGL, and GLES 3 */
   const char *v = (const char *) gl.GetString (GL_VERSION);
   pack_ext = desktop_gl || (v && strstr (v, "OpenGL ES ") && v[10] >= '3');
+  my_ctx = c;
+  group_made (api, c);
   have_context = 1;
   return 1;
 }
@@ -453,8 +587,8 @@ make_context (int desktop)
 /* --- the surface: a framebuffer object of ours that is the program's
    framebuffer 0 ---------------------------------------------------------- */
 
-static GLuint fbo, fb_depth, app_fb;
-static int fb_w, fb_h;
+static TLS GLuint fbo, fb_depth, app_fb;
+static TLS int fb_w, fb_h;
 
 static void
 surface (int w, int h)
@@ -501,7 +635,7 @@ surface (int w, int h)
 
 /* pack settings: tight (alignment 1, no row length or skips) while the
    helper reads pixels for the program, which lays them out itself */
-static GLint saved_pack[4];
+static TLS GLint saved_pack[4];
 static const GLenum pack_names[4] = { GL_PACK_ALIGNMENT, GL_PACK_ROW_LENGTH, GL_PACK_SKIP_PIXELS, GL_PACK_SKIP_ROWS };
 
 static void
@@ -588,9 +722,9 @@ present_frame (char *dst, size_t room)
    the overlay (area->overlay_error); the program goes back to read-back. */
 
 static int card_fd = -1;
-static int ov_sock = -1, ov_on, ov_failed, ov_formats, ov_under, ov_shown = -1;
-static int ov_x, ov_y, ov_w, ov_h, ov_visible;
-static struct ovbuf
+static TLS int ov_sock = -1, ov_on, ov_failed, ov_formats, ov_under, ov_shown = -1;
+static TLS int ov_x, ov_y, ov_w, ov_h, ov_visible;
+static TLS struct ovbuf
 {
   int fd;
   uint32_t handle, pitch;
@@ -885,25 +1019,25 @@ pixels_at (const uint32_t *f)
   return f[2] ? (const void *) (f + 3) : 0;
 }
 
-static GLfloat *feedback_buf, *select_buf;	/* (select's are GLuint) */
-static GLsizei feedback_size, select_size;
+static TLS GLfloat *feedback_buf, *select_buf;	/* (select's are GLuint) */
+static TLS GLsizei feedback_size, select_size;
 
 /* 0.9: arrays and indices from the program's memory given to Mesa as
    memory (as a program on Linux gives them), where it takes them: it
    streams them into one buffer of its own. 0.8 put each into a buffer of
    ours with glBufferData, a fresh buffer for every array of every draw.
    OP_UPLOADS 0 goes back to that (for comparison) */
-static int as_memory = 1;
-static GLuint vao_bound;			/* (glBindVertexArray's) */
-static char *slot_mem[16];
-static size_t slot_cap[16];
+static TLS int as_memory = 1;
+static TLS GLuint vao_bound;			/* (glBindVertexArray's) */
+static TLS char *slot_mem[16];
+static TLS size_t slot_cap[16];
 
 static int
 memory_ok (void)
 {
   /* 0.9: /riscos/3d/uploads saying "buffers" goes back to 0.7's way, for
      comparing with a real program (read once, by each context) */
-  static int checked;
+  static TLS int checked;
   if (!checked)
     {
       checked = 1;
@@ -1006,7 +1140,7 @@ immediate (const uint32_t *a)
   gl.GetIntegerv (GL_CLIENT_ACTIVE_TEXTURE, &cat);
   if (!fast)
     {
-      static GLint attribs;
+      static TLS GLint attribs;
       if (!attribs)
 	gl.GetIntegerv (GL_MAX_VERTEX_ATTRIBS, &attribs);
       gl.PushClientAttrib (GL_CLIENT_VERTEX_ARRAY_BIT);
@@ -1129,8 +1263,8 @@ draw_elements_ex (const uint32_t *a)
 /* debug messages kept for the program's callback (it can't be called from
    here): the driver calls ours, which keeps them until the library asks */
 #define DEBUG_KEEP 256
-static struct dmsg { GLenum source, type, severity; GLuint id; char *text; } dq[DEBUG_KEEP];
-static int dq_head, dq_n, debug_kept;
+static TLS struct dmsg { GLenum source, type, severity; GLuint id; char *text; } dq[DEBUG_KEEP];
+static TLS int dq_head, dq_n, debug_kept;
 
 static void
 #ifdef __GNUC__
@@ -1199,7 +1333,7 @@ debug_log (uint32_t count, uint32_t bufsize)
   else if (gl.GetDebugMessageLog)
     {
       /* the driver's own log, one message at a time */
-      static GLchar t[65536];
+      static TLS GLchar t[65536];
       while (n < count)
 	{
 	  GLenum src, type, sev;
@@ -1256,7 +1390,7 @@ fb0_buffer (GLenum b)
 
 /* GL_EXT_direct_state_access done as the bound object's functions: an
    object bound for the commands between OP_TEMP_BIND and OP_TEMP_END */
-static struct { int on; uint32_t kind; GLenum target; GLint was; } temp;
+static TLS struct { int on; uint32_t kind; GLenum target; GLint was; } temp;
 
 static GLenum
 binding_of (uint32_t kind, GLenum target)
@@ -1330,59 +1464,108 @@ context_version (void)
   return (uint32_t) (major * 10 + minor);
 }
 
-/* sync objects: the program's numbers for Linux's pointers */
+/* sync objects: the program's numbers for Linux's pointers. (0.20) One
+   table for a share group, as its sync objects are one set: a fence made
+   in one context can be waited for in another (the library numbers them
+   for the group) */
 static GLsync *syncs;
+static unsigned char *sync_made;		/* (made yet: 1) */
 static uint32_t nsyncs;
+static pthread_mutex_t sync_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t sync_cond = PTHREAD_COND_INITIALIZER;
 
 static GLsync
 sync_of (uint32_t id)
 {
-  return id < nsyncs ? syncs[id] : 0;
+  pthread_mutex_lock (&sync_lock);
+  GLsync s = id < nsyncs ? syncs[id] : 0;
+  pthread_mutex_unlock (&sync_lock);
+  return s;
+}
+
+/* (0.20) for a wait: a fence made in another context of the group may not
+   have reached its thread yet (the program flushed it, as GL asks, but
+   that thread hasn't drained its ring): wait for it, up to 2 s */
+static GLsync
+sync_of_made (uint32_t id)
+{
+  pthread_mutex_lock (&sync_lock);
+  if (group_live > 1 && (id >= nsyncs || !sync_made[id]))
+    {
+      struct timespec until;
+      clock_gettime (CLOCK_REALTIME, &until);
+      until.tv_sec += 2;
+      if (getenv ("ROL3D_DEBUG"))
+	logmsg ("rol-3d: waiting for fence %u, made in another context\n", id);
+      while ((id >= nsyncs || !sync_made[id])
+	     && pthread_cond_timedwait (&sync_cond, &sync_lock, &until) == 0)
+	;
+    }
+  GLsync s = id < nsyncs ? syncs[id] : 0;
+  pthread_mutex_unlock (&sync_lock);
+  return s;
 }
 
 static void
 sync_ops (uint32_t op, const uint32_t *a)
 {
   uint32_t r = 0;
+  GLsync s = 0;
   switch (op)
     {
     case OP_glFenceSync:
+      s = gl.FenceSync ? gl.FenceSync (a[1], a[2]) : 0;
+      pthread_mutex_lock (&sync_lock);
       if (a[0] >= nsyncs)
 	{
 	  uint32_t n = a[0] + 64;
-	  GLsync *s = realloc (syncs, n * sizeof *s);
-	  if (!s)
-	    return;
-	  memset (s + nsyncs, 0, (n - nsyncs) * sizeof *s);
-	  syncs = s;
+	  GLsync *t = realloc (syncs, n * sizeof *t);
+	  unsigned char *m = t ? realloc (sync_made, n) : 0;
+	  if (t)
+	    syncs = t;
+	  if (!m)
+	    {
+	      pthread_mutex_unlock (&sync_lock);
+	      return;
+	    }
+	  sync_made = m;
+	  memset (t + nsyncs, 0, (n - nsyncs) * sizeof *t);
+	  memset (m + nsyncs, 0, n - nsyncs);
 	  nsyncs = n;
 	}
-      if (gl.FenceSync)
-	syncs[a[0]] = gl.FenceSync (a[1], a[2]);
+      syncs[a[0]] = s;
+      sync_made[a[0]] = 1;
+      pthread_cond_broadcast (&sync_cond);
+      pthread_mutex_unlock (&sync_lock);
       return;
     case OP_glDeleteSync:
-      if (sync_of (a[0]) && gl.DeleteSync)
-	gl.DeleteSync (syncs[a[0]]);
+      pthread_mutex_lock (&sync_lock);
       if (a[0] < nsyncs)
-	syncs[a[0]] = 0;
+	{
+	  s = syncs[a[0]];
+	  syncs[a[0]] = 0;
+	}
+      pthread_mutex_unlock (&sync_lock);
+      if (s && gl.DeleteSync)
+	gl.DeleteSync (s);
       return;
     case OP_glWaitSync:
-      if (sync_of (a[0]) && gl.WaitSync)
-	gl.WaitSync (syncs[a[0]], a[1], r3d_w2_64 (a + 2));
+      if ((s = sync_of_made (a[0])) && gl.WaitSync)
+	gl.WaitSync (s, a[1], r3d_w2_64 (a + 2));
       return;
     case OP_glIsSync:
-      r = sync_of (a[0]) && gl.IsSync ? gl.IsSync (syncs[a[0]]) : 0;
+      r = (s = sync_of (a[0])) && gl.IsSync ? gl.IsSync (s) : 0;
       break;
     case OP_glClientWaitSync:
-      r = sync_of (a[0]) && gl.ClientWaitSync ? gl.ClientWaitSync (syncs[a[0]], a[1], r3d_w2_64 (a + 2)) : GL_WAIT_FAILED;
+      r = (s = sync_of_made (a[0])) && gl.ClientWaitSync ? gl.ClientWaitSync (s, a[1], r3d_w2_64 (a + 2)) : GL_WAIT_FAILED;
       break;
     case OP_glGetSynciv:
       {
 	uint32_t w[65];
 	GLsizei l = 0;
 	memset (w, 0, sizeof w);
-	if (sync_of (a[0]) && gl.GetSynciv)
-	  gl.GetSynciv (syncs[a[0]], a[1], (GLsizei) (a[2] > 64 ? 64 : a[2]), &l, (GLint *) (w + 1));
+	if ((s = sync_of (a[0])) && gl.GetSynciv)
+	  gl.GetSynciv (s, a[1], (GLsizei) (a[2] > 64 ? 64 : a[2]), &l, (GLint *) (w + 1));
 	w[0] = (uint32_t) l;
 	reply (w, sizeof w);
 	return;
@@ -1403,8 +1586,8 @@ sync_ops (uint32_t op, const uint32_t *a)
    and r changed by one part in 8 million for 3D and cube ones. The
    library keeps the program's own matrices, so programs reading them
    back see the identity. ROL3D_TEXMAT=0 turns it off, =1 on anywhere. */
-static int texmat_fix;
-static GLint texmat_units;
+static TLS int texmat_fix;
+static TLS GLint texmat_units;
 static const GLfloat texmat_near[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1.00000012f, 0, 0, 0, 0, 1 };
 
 static void
@@ -1519,7 +1702,7 @@ dispatch_main (uint32_t op, const uint32_t *a, uint32_t n)
       int desktop = op == OP_CONTEXT ? (int) a[0] : 0;
       /* (0.5 on: the version asked for, major * 10 + minor) */
       want_version = op == OP_CONTEXT && n >= 2 ? (int) a[1] : 0;
-      int ok = make_context (desktop);
+      int ok = shared_thread ? make_shared (desktop) : make_context (desktop);
       if (op == OP_CONTEXT)
 	{
 	  if (ok)
@@ -1534,14 +1717,16 @@ dispatch_main (uint32_t op, const uint32_t *a, uint32_t n)
 	  memcpy (r, w, 8);
 	  strcpy (r + 8, gl_error);
 	  reply (r, 8 + strlen (r + 8) + 1);
-	  _exit (1);
+	  logmsg ("rol-3d: %s\n", gl_error);
+	  end_context (1);
 	}
       if (!ok)
 	{
 	  logmsg ("rol-3d: %s\n", gl_error);
-	  _exit (1);
+	  end_context (1);
 	}
-      logmsg ("rol-3d: a context: %s, %s\n", (const char *) gl.GetString (GL_RENDERER), (const char *) gl.GetString (GL_VERSION));
+      logmsg ("rol-3d: a %scontext: %s, %s\n", shared_thread ? "shared " : "", (const char *) gl.GetString (GL_RENDERER),
+	      (const char *) gl.GetString (GL_VERSION));
     }
   else if (op == OP_CONTEXT)
     {
@@ -2140,8 +2325,9 @@ dispatch_main (uint32_t op, const uint32_t *a, uint32_t n)
     case OP_glObjectLabel:
       if (a[0] == R3D_SYNC_LABEL)
 	{
-	  if (sync_of (a[1]) && gl.ObjectPtrLabel)
-	    gl.ObjectPtrLabel (syncs[a[1]], a[2] == 0xFFFFFFFF ? 0 : (GLsizei) a[2], a[2] == 0xFFFFFFFF ? 0 : (const GLchar *) (a + 3));
+	  GLsync sy = sync_of (a[1]);
+	  if (sy && gl.ObjectPtrLabel)
+	    gl.ObjectPtrLabel (sy, a[2] == 0xFFFFFFFF ? 0 : (GLsizei) a[2], a[2] == 0xFFFFFFFF ? 0 : (const GLchar *) (a + 3));
 	  break;
 	}
       if (gl.ObjectLabel)
@@ -2154,8 +2340,9 @@ dispatch_main (uint32_t op, const uint32_t *a, uint32_t n)
 	GLsizei l = 0;
 	if (a[0] == R3D_SYNC_LABEL)
 	  {
-	    if (sync_of (a[1]) && gl.GetObjectPtrLabel)
-	      gl.GetObjectPtrLabel (syncs[a[1]], (GLsizei) max, &l, (GLchar *) (r + 1));
+	    GLsync sy = sync_of (a[1]);
+	    if (sy && gl.GetObjectPtrLabel)
+	      gl.GetObjectPtrLabel (sy, (GLsizei) max, &l, (GLchar *) (r + 1));
 	  }
 	else if (gl.GetObjectLabel)
 	  gl.GetObjectLabel (a[0], a[1], (GLsizei) max, &l, (GLchar *) (r + 1));
@@ -2258,7 +2445,7 @@ dispatch_main (uint32_t op, const uint32_t *a, uint32_t n)
    program needs that doesn't come through. The program's own glGetError
    then sees no errors. --------------------------------------------------- */
 
-static int checking = -1;
+static TLS int checking = -1;
 
 /* (to the log only, not the kernel's) */
 static void
@@ -2271,9 +2458,9 @@ chklog (const char *fmt, ...)
   va_end (ap);
   if (write (2, b, strlen (b)) < 0) { }
 }
-static unsigned *op_count;
-static int in_begin, errors_logged;
-static unsigned frames_seen;
+static TLS unsigned *op_count;
+static TLS int in_begin, errors_logged;
+static TLS unsigned frames_seen;
 
 static void
 check_start (void)
@@ -2289,7 +2476,7 @@ check_start (void)
       chklog ("rol-3d: check: Linux's GL has no %s\n", gl_names[i]);
 }
 
-static int tex_logged;
+static TLS int tex_logged;
 
 static void
 check_op (uint32_t op, const uint32_t *a)
@@ -2358,10 +2545,10 @@ check_op (uint32_t op, const uint32_t *a)
    `rol-3d --replay file prefix [frames]` draws a recording again on any
    machine and writes chosen frames as PPM pictures. --------------------- */
 
-static FILE *rec_f;
-static int rec_state = -1;		/* -1 not looked, 0 off, 1 on */
-static unsigned rec_frames, rec_limit = 200;
-static uint64_t rec_bytes;
+static TLS FILE *rec_f;
+static TLS int rec_state = -1;		/* -1 not looked, 0 off, 1 on */
+static TLS unsigned rec_frames, rec_limit = 200;
+static TLS uint64_t rec_bytes;
 
 static void
 rec_op (uint32_t op, const uint32_t *a, uint32_t n)
@@ -2381,7 +2568,7 @@ rec_op (uint32_t op, const uint32_t *a, uint32_t n)
 	      fclose (l);
 	    }
 	  char name[64];
-	  snprintf (name, sizeof name, "/riscos/3d/rec/ctx-%d.r3d", (int) getpid ());
+	  snprintf (name, sizeof name, "/riscos/3d/rec/ctx-%d.r3d", (int) syscall (SYS_gettid));
 	  rec_f = fopen (name, "wb");
 	  rec_state = rec_f != 0;
 	  logmsg ("rol-3d: recording to %s: %s\n", name, rec_f ? "yes" : "can't");
@@ -2410,8 +2597,8 @@ rec_op (uint32_t op, const uint32_t *a, uint32_t n)
 
 /* --- the ring ----------------------------------------------------------- */
 
-static char *blob;
-static size_t blob_len, blob_cap;
+static TLS char *blob;
+static TLS size_t blob_len, blob_cap;
 
 static void drain_ring (void);
 
@@ -2432,6 +2619,7 @@ drain (void)
 static void
 drain_ring (void)
 {
+  const uint32_t *rg = ring;		/* (thread-local: kept in a register) */
   uint32_t words = area->ring_words, mask = words - 1;
   uint32_t tail = area->tail, shown = tail;
   uint32_t head = __atomic_load_n (&area->head, __ATOMIC_ACQUIRE);
@@ -2444,19 +2632,19 @@ drain_ring (void)
 	    break;
 	}
       uint32_t at = tail & mask;
-      uint32_t op = ring[at];
+      uint32_t op = rg[at];
       if (op == OP_WRAP)
 	{
 	  tail += words - at;
 	  continue;
 	}
-      uint32_t n = ring[at + 1];
+      uint32_t n = rg[at + 1];
       if (n < 2 || at + n > words)
 	{
 	  logmsg ("rol-3d: a bad command (&%X, %u words): the context ends\n", op, n);
 	  _exit (1);
 	}
-      const uint32_t *a = ring + at + 2;
+      const uint32_t *a = rg + at + 2;
       if (__builtin_expect (op < OP_BLOB, 1))
 	{
 	  if (__builtin_expect (rec_state != 0, 0))
@@ -2499,16 +2687,66 @@ drain_ring (void)
   __atomic_store_n (&area->tail, tail, __ATOMIC_SEQ_CST);
 }
 
+/* (0.20) a context of a share group that others outlive: what it made
+   goes (its framebuffer's texture and its own buffers are the group's
+   objects), then its EGL context, memory and thread */
 static void
-serve (int c)
+thread_end (void)
+{
+  if (have_context)
+    {
+      if (ov_sock >= 0 && gl.DeleteFramebuffers)
+	ov_free_bufs ();
+      if (fbo)
+	gl.DeleteFramebuffers (1, &fbo);
+      if (fb_depth)
+	gl.DeleteRenderbuffers (1, &fb_depth);
+      for (unsigned k = 0; k < 128; k++)
+	{
+	  GLuint name = strict_ctx ? priv_have[k] : PRIV + priv_base + k;
+	  if (!name)
+	    continue;
+	  if (k == 0)
+	    gl.DeleteTextures (1, &name);
+	  else
+	    gl.DeleteBuffers (1, &name);
+	}
+      gl.Finish ();
+    }
+  if (ov_sock >= 0)
+    close (ov_sock);
+  if (my_ctx)
+    {
+      egl.MakeCurrent (display, 0, 0, 0);
+      egl.DestroyContext (display, my_ctx);
+    }
+  for (int i = 0; i < 16; i++)
+    free (slot_mem[i]);
+  free (blob);
+  free (op_count);
+  if (rec_f)
+    fclose (rec_f);
+  munmap (area, R3D_AREA_BYTES);
+  close (sock);
+  logmsg ("rol-3d: a context of a share group (slot %d) closed, others still open\n", my_slot);
+  pthread_exit (0);
+}
+
+static void *group_listen (void *arg);
+
+/* one context: its memory, then its commands until it is closed. The
+   first of a process (shared 0) also starts the process's EGL and the
+   socket a context sharing its objects is opened on, "rol-3d-<pid>" */
+static void
+serve (int c, int shared)
 {
   sock = c;
   int fd = memfd_create ("risc3d", MFD_CLOEXEC);
   if (fd < 0 || ftruncate (fd, R3D_AREA_BYTES))
-    _exit (1);
+    end_context (1);
   area = mmap (0, R3D_AREA_BYTES, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   if (area == MAP_FAILED)
-    _exit (1);
+    end_context (1);
   area->magic = R3D_MAGIC;
   area->ring_words = R3D_RING_WORDS;
   area->ring_offset = 4096;
@@ -2518,14 +2756,34 @@ serve (int c)
   reply_area = (char *) area + area->reply_offset;
 
   char msg[240];
-  if (!gl_start () && !software_display ())
+  if (!shared && !gl_start () && !software_display ())
     {
       snprintf (msg, sizeof msg, "ERR %s", gl_error);
       logmsg ("rol-3d: %s\n", gl_error);
       if (send (c, msg, strlen (msg) + 1, MSG_NOSIGNAL) < 0) { }
       _exit (1);
     }
-  snprintf (msg, sizeof msg, "OK %u", R3D_AREA_BYTES);
+  if (!shared)
+    {
+      /* (0.20) the socket for shared contexts; none, and there are none */
+      int l = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+      struct sockaddr_un a = { .sun_family = AF_UNIX };
+      int len = snprintf (a.sun_path + 1, sizeof a.sun_path - 1, "rol-3d-%d", (int) getpid ());
+      pthread_t t;
+      pthread_attr_t at;
+      pthread_attr_init (&at);
+      pthread_attr_setdetachstate (&at, PTHREAD_CREATE_DETACHED);
+      if (l < 0 || bind (l, (struct sockaddr *) &a, (socklen_t) (offsetof (struct sockaddr_un, sun_path) + 1 + len))
+	  || listen (l, 8) || pthread_create (&t, &at, group_listen, (void *) (intptr_t) l))
+	{
+	  logmsg ("rol-3d: no socket for shared contexts (%s)\n", strerror (errno));
+	  if (l >= 0)
+	    close (l);
+	}
+      pthread_attr_destroy (&at);
+    }
+  /* "OK bytes pid" (0.20: the pid, for opening contexts that share) */
+  snprintf (msg, sizeof msg, "OK %u %d", R3D_AREA_BYTES, (int) getpid ());
   union { char buf[CMSG_SPACE (sizeof (int))]; struct cmsghdr align; } ctl;
   struct iovec iov = { msg, strlen (msg) + 1 };
   struct msghdr m = { .msg_iov = &iov, .msg_iovlen = 1, .msg_control = ctl.buf, .msg_controllen = sizeof ctl.buf };
@@ -2535,7 +2793,7 @@ serve (int c)
   cm->cmsg_len = CMSG_LEN (sizeof (int));
   memcpy (CMSG_DATA (cm), &fd, sizeof (int));
   if (sendmsg (c, &m, MSG_NOSIGNAL) < 0)
-    _exit (1);
+    end_context (1);
   close (fd);
 
   for (;;)
@@ -2563,16 +2821,83 @@ serve (int c)
       ssize_t n = read (c, b, sizeof b);
       __atomic_store_n (&area->sleeping, 0, __ATOMIC_SEQ_CST);
       if (n == 0 || (n < 0 && errno != EINTR))
-	_exit (0);			/* the context was closed */
+	end_context (0);		/* the context was closed */
       for (ssize_t i = 0; i < n; i++)
 	if (b[i] == R3D_WAIT)
 	  {
 	    drain ();
 	    char ack = 'A';
 	    if (send (c, &ack, 1, MSG_NOSIGNAL) != 1)
-	      _exit (0);
+	      end_context (0);
 	  }
     }
+}
+
+/* (0.20) a context sharing this process's objects: a thread */
+struct share_start { int c, slot; };
+
+static void *
+share_thread (void *arg)
+{
+  struct share_start st = *(struct share_start *) arg;
+  free (arg);
+  my_slot = st.slot;
+  priv_base = (unsigned) st.slot * 128;
+  shared_thread = 1;
+  serve (st.c, 1);
+  return 0;
+}
+
+static void *
+group_listen (void *arg)
+{
+  int l = (int) (intptr_t) arg;
+  pthread_attr_t at;
+  pthread_attr_init (&at);
+  pthread_attr_setdetachstate (&at, PTHREAD_CREATE_DETACHED);
+  for (;;)
+    {
+      int c = accept4 (l, 0, 0, SOCK_CLOEXEC);
+      if (c < 0)
+	{
+	  if (errno != EINTR && errno != ECONNABORTED)
+	    usleep (100000);
+	  continue;
+	}
+      int slot = -1;
+      pthread_mutex_lock (&group_lock);
+      for (int i = 1; i < GROUP_MAX && slot < 0 && group_live > 0; i++)
+	if (!(group_slots & (1u << i)))
+	  slot = i;
+      if (slot > 0)
+	{
+	  group_slots |= 1u << slot;
+	  group_live++;
+	}
+      pthread_mutex_unlock (&group_lock);
+      struct share_start *st = slot > 0 ? malloc (sizeof *st) : 0;
+      pthread_t t;
+      if (st)
+	{
+	  st->c = c;
+	  st->slot = slot;
+	}
+      if (!st || pthread_create (&t, &at, share_thread, st))
+	{
+	  static const char full[] = "ERR too many contexts share these objects";
+	  if (send (c, full, sizeof full, MSG_NOSIGNAL) < 0) { }
+	  close (c);
+	  free (st);
+	  if (slot > 0)
+	    {
+	      pthread_mutex_lock (&group_lock);
+	      group_slots &= ~(1u << slot);
+	      group_live--;
+	      pthread_mutex_unlock (&group_lock);
+	    }
+	}
+    }
+  return 0;
 }
 
 /* the display's card: the one that makes dumb buffers (needs root), into
@@ -3327,7 +3652,9 @@ main (int argc, char **argv)
 	    {
 	      if (!kind[0])
 		probe_kind (g);
-	      const char *k = kind[0] ? kind : "none";
+	      /* (0.20: and ";share": contexts can share objects) */
+	      char k[sizeof kind + 8];
+	      snprintf (k, sizeof k, "%s;share", kind[0] ? kind : "none");
 	      if (send (q, k, strlen (k) + 1, MSG_NOSIGNAL) < 0) { }
 	      close (q);
 	    }
@@ -3353,7 +3680,9 @@ main (int argc, char **argv)
 	  if (getuid () == 0 && (setgroups (2, g) || setgid (RO_GID) || setuid (RO_UID)))
 	    _exit (1);
 	  home ();
-	  serve (c);
+	  group_live = 1;
+	  group_slots = 1;		/* (slot 0) */
+	  serve (c, 0);
 	  _exit (0);
 	}
       if (cf >= 0)

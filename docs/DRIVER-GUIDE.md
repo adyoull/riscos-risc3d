@@ -97,7 +97,7 @@ your finalisation.
 | r1 | your entry point (section 4) |
 | r2 | the value for r12 when it's called (your private word, or 0) |
 | r3 | → your name, shown by `*RISC3D` (up to 47 characters) |
-| r4 | flags: bit 0 = a DRM device; bit 1 = you may draw in software (section 6) |
+| r4 | flags: bit 0 = a DRM device; bit 1 = you may draw in software (section 6); bit 2 = your contexts can share objects (section 6, RISC3D 0.06 on) |
 | r5 | DRM device: your ioctl SWI's number |
 | r6 | DRM device: → the name of Mesa's driver for your GPU ("v3d", "etnaviv", ...) |
 
@@ -120,11 +120,11 @@ registration:
 
 | Out | |
 |---|---|
-| r0 | RISC3D's version × 100 (5 for 0.05) |
+| r0 | RISC3D's version × 100 (6 for 0.06) |
 | r1 | drivers registered |
 | r2 | contexts open |
 | r3 | → the name of the driver a new context gets (the last registered), or 0 |
-| r4 | its flags: bit 0 a DRM device; bit 1 drawing in software now |
+| r4 | its flags: bit 0 a DRM device; bit 1 drawing in software now; bit 2 contexts can share objects now (0.06 on) |
 | r5, r6 | a DRM device's ioctl SWI and Mesa driver name, else 0 |
 
 ## 4. Your entry point
@@ -143,10 +143,10 @@ program. You may change r0 to r9. Keep r10, r11 and sp as they were.
 
 | r0 | Reason | In | Out |
 |---|---|---|---|
-| 0 | **open** a context | | command stream: r0 = your handle, r1 → the shared memory, r2 = its size. DRM device: r0 = the file, r1 = r2 = 0 |
+| 0 | **open** a context | r1 = flags: bit 0 = share the objects of the context whose handle is r2 (flags bit 2 only; RISC3D 0.06 on) | command stream: r0 = your handle, r1 → the shared memory, r2 = its size. DRM device: r0 = the file, r1 = r2 = 0 |
 | 1 | **close** it | r1 = your handle (or file) | |
 | 2 | **sync** (command stream only) | r1 = handle, r2 = 0 wake / 1 wait | |
-| 3 | **describe** (flags bit 1 only) | | r0 = 0 on a GPU, 1 in software now, 2 not known yet |
+| 3 | **describe** (flags bit 1 only) | | r0 = 0 on a GPU, 1 in software now, 2 not known yet; r1 bit 0 = contexts can share objects now (flags bit 2 too) |
 
 - **Open:** made for each `RISC3D_Open`. RISC3D keeps your handle and gives
   the program its own context number.
@@ -250,6 +250,29 @@ back to llvmpipe. RISC3D then asks reason 3 at each `RISC3D_Info`.
   software renderer, which beats a software renderer's frames copied back.
   `RISC3D$Force` overrides this.
 
+**Shared contexts (flags bit 2, RISC3D 0.06 on).** A program can ask for
+a context that shares another's objects (textures, buffers, renderbuffers,
+programs, shaders, samplers, sync objects, display lists), as EGL's
+`share_context` does: `RISC3D_Open` with r0 bit 0 and r1 = the program's
+context. WebKit's Skia draws that way, a context per thread. RISC3D sends
+it to the other context's driver, with open's r1 bit 0 set and r2 = your
+handle for that context; without flags bit 2 it refuses with &823D03. Your
+side must then draw both contexts with one set of objects:
+- **Names.** The program's library gives texture, buffer and list names,
+  and sync object numbers, from one set for the group. Yours must not
+  clash: rol-3d gives each context of a group its own range.
+- **Ordering.** The program calls `glFinish` in one context before another
+  uses what it made, or makes a fence, flushes, and waits for it in the
+  other. A wait can reach you before the fence's own context has run the
+  command that makes it, so wait for the fence to exist (rol-3d waits up
+  to 2 s).
+- **Closing.** The group's objects live while any of its contexts does.
+
+Linux3D does this by opening a shared context on the first context's own
+Linux process (`rol-3d-<pid>`), where it is a thread with an EGL context in
+the first one's share group. With flags bit 1 too, say whether you can now
+in reason 3's r1 (Linux3D: whether rol-3d is new enough).
+
 ## 7. Errors and numbers
 
 Allocated by RISC OS Allocations (18 November 2026):
@@ -268,13 +291,18 @@ that clash with nothing allocated, and say so.
 RISC3D's own errors are:
 - &823D00: there is no 3D driver;
 - &823D01: too many contexts or drivers;
-- &823D02: not a RISC3D context.
+- &823D02: not a RISC3D context;
+- &823D03: this driver can't share objects between contexts (0.06 on).
+
+Linux3D's include &823C07: Linux's rol-3d is too old to share objects
+between contexts (Linux3D 0.06 on).
 
 ## 8. Checklist
 
 - [ ] Refuses to start, with a clear error, on any machine it isn't for, before touching hardware.
 - [ ] Registers at the end of initialisation. Removes itself in finalisation. Registers again on `Service_ModulePostInit` for RISC3D.
 - [ ] Entry: reasons 0 and 1, plus 2 for a command stream and 3 if flags bit 1. V and r0 for errors; r10, r11 and sp kept.
+- [ ] Flags bit 2 only if contexts opened with open's r1 bit 0 really share objects, with names that don't clash and fences waited for across contexts.
 - [ ] Frees a context's resources on close, which may come from task closedown.
 - [ ] DRM device: Linux's requests and structures, 0 or a negated errno, the file from open. The few RISC OS differences above. Mesa's driver named in r6, and riscos-mesa asked to carry it.
 - [ ] Command stream: the `r3d_shared.h` layout, wake and wait, every command played back.

@@ -2,5 +2,6 @@
 | and what it offers programs)
 Set RISC3DSetup$Dir <Obey$Dir>
 IconSprites <RISC3DSetup$Dir>.!Sprites
+IconSprites <RISC3DSetup$Dir>.CoSprite
 WimpSlot -min 1024k -max 1024k
 Run <RISC3DSetup$Dir>.!RunImage %*0

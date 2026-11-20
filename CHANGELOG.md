@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.14: turn RISC3D off from Configure; the window laid out afresh (20 Nov 2026)
+
+- **!RISC3D 0.08-1** (`out/RISC3D-0.08-1.zip`): RISC3D 0.08, Linux3D 0.06,
+  V3DRender 0.16, and !RISC3DSetup 1.02.
+- **RISC3D module 0.08:**
+  - **`RISC3D$Off`:** while it is set, RISC3D loads no driver from its
+    folder, so programs draw in software. A driver that registers itself is
+    still taken. `*RISC3D` says when loading is turned off. Info r0 = 8.
+  - **`*RMReInit RISC3D` starts afresh.** Its initialisation now clears what
+    it kept (drivers, contexts, the folder, "looked"), because RMReInit runs
+    it again in the same copy of the module. Before this, a reinitialised
+    RISC3D never loaded a driver again.
+- **!RISC3D's !Boot and !Run** run `Choices:RISC3D.Settings` (if it exists)
+  before loading RISC3D, and RMEnsure 0.08.
+- **!RISC3DSetup 1.02**, Configure's **RISC3D** window (the owner: "the
+  plugin should be RISC3D its name"; "make the UI better looking"; "turn it
+  off"):
+  - Configure's icon and the window's title are now "RISC3D".
+  - The window is laid out in groups: Graphics, Features and Drivers.
+    - At the top are the RISC3D icon, the driver's name in Homerton Bold
+      14pt, and a line saying what draws.
+    - Features (GPU, OpenGL ES 1.1, shared contexts) and each driver in the
+      folder have ticks, from the Wimp's option sprites. A driver that isn't
+      drawing is in grey, with why.
+    - The renderer is shown without " (RISC3D, Linux GPU)", and the largest
+      texture reads "4096 × 4096".
+    - Each icon has its own interactive help.
+  - **Load a 3D driver**, with Set and Cancel:
+    - Set keeps the choice in `Choices:RISC3D.Settings` (`Set` or `Unset`
+      `RISC3D$Off`).
+    - With no 3D context open, it also takes effect at once. Off kills the
+      driver's module; on runs `*RMReInit RISC3D`, which loads the driver
+      again. Otherwise it says the change waits for the next start.
+  - Fixed during this work:
+    - An indirected sprite-only icon takes the sprite's name, its area (1:
+      the Wimp's) and the length, not validation. With validation there, the
+      first build crashed at start with an EMT trap.
+    - `!Run` loads CoSprite too.
+- **Tested on the Pi 4 under ROL, through TestAgent:**
+  - The window was right with the driver loaded and when turned off.
+  - Turning off removed Linux3D, wrote the Settings file and showed "RISC3D
+    is turned off". Turning on again reloaded Linux3D 0.06, sharing
+    included.
+  - `*RMReInit RISC3D` now reloads the driver.
+  - Not yet opened from inside Configure, and not yet tested at start-up
+    with the Settings file.
+- !RISC3D 0.07-1 (release 0.13, delivered earlier today) is superseded.
+
 ## 0.13: Configure's 3D plug-in; RISC3D 0.07 (20 Nov 2026)
 
 - **!RISC3DSetup 1.00**, Configure's plug-in (for `!Boot.Resources.Configure`;

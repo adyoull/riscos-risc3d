@@ -221,7 +221,7 @@ kit out/RISC3DTest-38.zip RISC3DTest "out/kit38/!ReadMe,fff" kit/Share,feb kit/T
 # the client release for riscos-mesa (kept if made)
 tools/mkclient.sh 0.12
 
-# Configure's plug-in, !RISC3DSetup (release 0.13)
+# Configure's plug-in, !RISC3DSetup (release 0.13 on)
 ${T}gcc $AC -Wno-format-truncation $I -static -o out/obj/risc3dsetup.elf config/RISC3DSetup/risc3dsetup.c out/libRISC3D.a -lm
 ${T}strip out/obj/risc3dsetup.elf
 "${RISCOS_TOOLCHAIN}/bin/elf2aif" -e out/obj/risc3dsetup.elf "out/RISC3DSetup-RunImage,ff8" >/dev/null
@@ -230,6 +230,20 @@ ${T}strip out/obj/risc3dsetup.elf
 # !Boot.Resources.Configure
 P=config/RISC3DSetup
 kit out/RISC3D-0.07-1.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+  "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" \
+  "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa" \
+  "third/V3DRender/V3DRender,ffa=GPU/V3DRender,ffa" "dist/!RISC3D/GPU/Licences,fff=GPU/Licences,fff" \
+  "dist/!RISC3D/GPU/GPL-2,fff=GPU/GPL-2,fff" \
+  "$P/!Boot,feb=/!RISC3DSetup/!Boot,feb" "$P/!Run,feb=/!RISC3DSetup/!Run,feb" "$P/!Help,fff=/!RISC3DSetup/!Help,fff" \
+  "$P/Messages,fff=/!RISC3DSetup/Messages,fff" "$P/!Sprites,ff9=/!RISC3DSetup/!Sprites,ff9" \
+  "$P/!Sprites11,ff9=/!RISC3DSetup/!Sprites11,ff9" "$P/CoSprite,ff9=/!RISC3DSetup/CoSprite,ff9" \
+  "$P/CoSprite11,ff9=/!RISC3DSetup/CoSprite11,ff9" "$P/CoSprite22,ff9=/!RISC3DSetup/CoSprite22,ff9" \
+  "out/RISC3DSetup-RunImage,ff8=/!RISC3DSetup/!RunImage,ff8"
+
+# !RISC3D 0.08-1 (release 0.14): RISC3D 0.08 (RISC3D$Off), !Boot runs
+# Choices:RISC3D.Settings; !RISC3DSetup 1.02 (Configure's RISC3D window:
+# laid out in groups, turns driver loading on and off)
+kit out/RISC3D-0.08-1.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
   "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" \
   "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa" \
   "third/V3DRender/V3DRender,ffa=GPU/V3DRender,ffa" "dist/!RISC3D/GPU/Licences,fff=GPU/Licences,fff" \

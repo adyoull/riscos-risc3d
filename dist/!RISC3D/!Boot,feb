@@ -4,4 +4,7 @@
 Set RISC3D$Dir <Obey$Dir>
 IconSprites <RISC3D$Dir>.!Sprites
 Set RISC3D$Path <RISC3D$Dir>.
-RMEnsure RISC3D 0.07 RMLoad <RISC3D$Dir>.RISC3D
+| Configure's RISC3D window keeps its choice here: Set RISC3D$Off 1 when
+| loading a driver is turned off
+IfThere Choices:RISC3D.Settings Then Obey Choices:RISC3D.Settings
+RMEnsure RISC3D 0.08 RMLoad <RISC3D$Dir>.RISC3D

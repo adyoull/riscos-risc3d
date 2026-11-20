@@ -31,6 +31,10 @@ WebKit's Skia draws) needs RISC3D 0.06; on RISC OS on Linux, Linux3D 0.06
 and Linux's riscos-risc3d 0.23-1 or later. *RISC3D says "contexts can
 share objects" when they can.
 
+Configure's RISC3D window shows the driver and what it offers, and can
+turn RISC3D's GPU drawing off (RISC3D 0.08 loads no driver while
+RISC3D$Off is set; the choice is kept in Choices:RISC3D.Settings).
+
 For testing, *Set RISC3D$Drivers to another folder to load drivers from
 there instead of GPU.
 

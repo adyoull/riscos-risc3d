@@ -1,8 +1,8 @@
 /* RISC3DSetup: Configure's plug-in for RISC3D. Shows which 3D driver
    RISC3D loaded, whether it draws on a GPU, and what it offers: the
    renderer, the OpenGL and OpenGL ES versions, the largest texture, the
-   extensions, shared contexts, the contexts open, and what RISC3D found
-   in its drivers folder.
+   extensions, shared contexts, the contexts open, and what each driver in
+   RISC3D's drivers folder did.
 
    For a command-stream driver (Linux3D) the versions come from asking:
    it opens an OpenGL, an OpenGL ES and an OpenGL ES 1.1 context for a
@@ -11,8 +11,18 @@
 
    Started by Configure with "-openat x y" (the window's top left, OS
    units), else centred. Message_OpenConfigWindow brings it to the front.
-   Plain Wimp calls, no Toolbox. Copyright (c) 2026 Andrew Youll. MIT
-   licence (see LICENSE). */
+   Plain Wimp calls, no Toolbox.
+
+   1.02: named RISC3D in Configure; "Load a 3D driver" turns RISC3D's
+   driver loading on or off (RISC3D 0.08's RISC3D$Off), kept in
+   Choices:RISC3D.Settings for the next start and applied at once when no
+   program has a 3D context open. Set and Cancel, as Configure's windows.
+
+   1.01: laid out in groups, with the driver's name large at the top, the
+   RISC3D icon, and ticks (the Wimp's option sprites) for features and for
+   each driver in the folder.
+
+   Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,7 +32,6 @@
 #define R3D_DIRECT
 #include "r3d.h"
 
-#define VERSION "1.00 (20 Nov 2026)"
 #define RISC3D_Info 0x5AF80
 #define Message_Quit 0
 #define Message_HelpRequest 0x502
@@ -31,94 +40,221 @@
 
 /* --- what is shown --------------------------------------------------- */
 
-enum { R_DRIVER, R_DRAWS, R_RENDERER, R_GL, R_GLES, R_TEXTURE, R_EXTS, R_SHARE, R_CONTEXTS, R_RISC3D, R_FOLDER, ROWS };
-static const char *const label[ROWS] = {
-  "Driver", "Draws", "Renderer", "OpenGL", "OpenGL ES", "Largest texture", "Extensions", "Shared contexts",
-  "Contexts open", "RISC3D", "Drivers folder"
-};
-static const char *const help[ROWS] = {
-  "The 3D driver RISC3D loaded from its drivers folder: the first one there that starts on this machine.",
-  "Whether the driver draws on the machine's GPU, or in software. With no driver, Mesa draws in software in each program, as before.",
-  "The GPU and the driver that draw for programs.",
-  "The newest OpenGL a program can have (compatibility profile: OpenGL 1.x calls still work), and its shading language.",
-  "The newest OpenGL ES a program can have, and whether OpenGL ES 1.1 is there too.",
-  "The largest texture the GPU takes.",
-  "How many OpenGL and OpenGL ES extensions the driver offers.",
-  "Whether a program can have contexts that share textures and buffers, one per thread (as web browsers draw).",
-  "How many 3D contexts programs have open now.",
-  "The version of the RISC3D module.",
-  "Where RISC3D looks for drivers (!Boot.Resources.!RISC3D.GPU), and what each one there did. A driver refuses to start on machines it isn't for."
-};
 #define MAXDRV 6
-static char value[ROWS][200];
-static char drv_line[MAXDRV][160];
-static int ndrv;
+static struct
+{
+  char headline[120];			/* the driver, or "No 3D driver" */
+  char subline[160];			/* GPU or software, in a sentence */
+  char renderer[120], gl[100], gles[100], texture[40], exts[60];
+  int on_gpu, es1, share;
+  int off;				/* RISC3D$Off set: loading a driver turned off */
+  int nctx, have_driver;
+  char driver_module[40];		/* the driver's first word: its module */
+  char folder[200];
+  int ndrv;
+  char drv_name[MAXDRV][40], drv_state[MAXDRV][160];
+  int drv_ok[MAXDRV];
+  char version_text[40], contexts_text[16];
+} info;
 
 /* --- the window --------------------------------------------------------- */
 
-#define LABEL_W 300
-#define VALUE_W 1180
-#define ROW_H 56
-#define TOP 24
-#define MARGIN 24
-#define WIN_W (MARGIN + LABEL_W + 16 + VALUE_W + MARGIN)
+#define WIN_W 1240
+#define MARGIN 32
+#define LABEL_X 56
+#define LABEL_W 250
+#define VALUE_X (LABEL_X + LABEL_W + 16)
+#define VALUE_R (WIN_W - 56)
+#define ROW 56
 
-typedef struct { int x0, y0, x1, y1; unsigned flags; const char *text; const char *valid; int len; } icon;
+typedef struct
+{
+  int x0, y0, x1, y1;
+  unsigned flags;
+  const char *text, *valid;
+  int len;
+  const char *help;
+} icon;
 
-#define ICONS (2 * ROWS + MAXDRV + 2)
+#define ICONS 64
 static icon icons[ICONS];
-static int nicons, i_refresh, i_close;
+static int nicons, i_refresh, i_cancel, i_set, i_load;
+static int want_on;			/* the choice shown */
 static int win = -1, win_h;
+static int font = -1;			/* the headline's, or -1: the desktop font */
 static char title[] = "RISC3D";
 
-static void
-add_icon (int x0, int y0, int x1, int y1, unsigned flags, const char *text, const char *valid)
+#define F_TEXT 0x1u
+#define F_SPRITE 0x2u
+#define F_BORDER 0x4u
+#define F_HCENTRE 0x8u
+#define F_VCENTRE 0x10u
+#define F_FILLED 0x20u
+#define F_FONT 0x40u
+#define F_INDIR 0x100u
+#define F_RIGHT 0x200u
+#define F_CLICK (3u << 12)
+#define F_COLOURS(fg, bg) (((unsigned) (fg) << 24) | ((unsigned) (bg) << 28))
+
+static int
+add_icon (int x0, int y0, int x1, int y1, unsigned flags, const char *text, const char *valid, const char *help)
 {
-  icon *i = &icons[nicons++];
+  if (nicons == ICONS)
+    return -1;
+  icon *i = &icons[nicons];
   i->x0 = x0, i->y0 = y0, i->x1 = x1, i->y1 = y1;
   i->flags = flags;
   i->text = text;
   i->valid = valid;
   i->len = (int) strlen (text) + 1;
+  i->help = help;
+  return nicons++;
 }
 
-/* text, vertically centred, indirected; colours fg 7 bg 1 */
-#define F_TEXT 0x1u
-#define F_BORDER 0x4u
-#define F_HCENTRE 0x8u
-#define F_VCENTRE 0x10u
-#define F_FILLED 0x20u
-#define F_RIGHT 0x200u
-#define F_INDIR 0x100u
-#define F_CLICK (3u << 12)
-#define F_COLOURS ((7u << 24) | (1u << 28))
+static void
+label_at (int x0, int x1, int y, const char *text, const char *help)
+{
+  add_icon (x0, y - 48, x1, y, F_TEXT | F_VCENTRE | F_RIGHT | F_INDIR | F_COLOURS (7, 1), text, "", help);
+}
+
+static void
+value_at (int x0, int x1, int y, const char *text, const char *help)
+{
+  add_icon (x0, y - 48, x1, y, F_TEXT | F_BORDER | F_VCENTRE | F_FILLED | F_INDIR | F_COLOURS (7, 0), text, "R2", help);
+}
+
+static void
+row (int *y, const char *lab, const char *val, const char *help)
+{
+  label_at (LABEL_X, LABEL_X + LABEL_W, *y, lab, help);
+  value_at (VALUE_X, VALUE_R, *y, val, help);
+  *y -= ROW;
+}
+
+/* a ticked or empty option sprite, with text after it; never clicked */
+static void
+tick_at (int x0, int x1, int y, int on, const char *text, const char *help)
+{
+  add_icon (x0, y - 44, x1, y, F_TEXT | F_SPRITE | F_VCENTRE | F_INDIR | F_COLOURS (7, 1), text,
+	    on ? "Sopton" : "Soptoff", help);
+}
+
+/* a clickable option: the choice to load a driver */
+static int
+option_at (int x0, int x1, int y, int on, const char *text, const char *help)
+{
+  return add_icon (x0, y - 44, x1, y,
+		   F_TEXT | F_SPRITE | F_VCENTRE | F_INDIR | F_CLICK | F_COLOURS (7, 1) | (on ? 1u << 21 : 0), text,
+		   "Soptoff,opton", help);
+}
+
+/* a group: a channel border, its name over the top edge. Returns the y
+   of the first row inside; close it with group_end */
+static int group_icon;
+static int
+group (int y, const char *name)
+{
+  group_icon = add_icon (MARGIN, y - 40, WIN_W - MARGIN, y - 16, F_BORDER | F_COLOURS (7, 1), "", "R4", 0);
+  add_icon (MARGIN + 24, y - 32, MARGIN + 24 + 16 * (int) strlen (name) + 24, y,
+	    F_TEXT | F_VCENTRE | F_FILLED | F_INDIR | F_HCENTRE | F_COLOURS (7, 1), name, "", 0);
+  return y - 52;
+}
+
+static int
+group_end (int y)
+{
+  icons[group_icon].y0 = y - 12;
+  return y - 12 - 20;
+}
+
+static const char
+  h_driver[] = "The 3D driver RISC3D loaded from its drivers folder (!Boot.Resources.!RISC3D.GPU): the first one there that starts on this machine.",
+  h_renderer[] = "The GPU and the driver that draw for programs.",
+  h_gl[] = "The newest OpenGL a program can have (compatibility profile: OpenGL 1.x calls still work), and its shading language.",
+  h_gles[] = "The newest OpenGL ES a program can have, and its shading language.",
+  h_texture[] = "The largest texture the GPU takes.",
+  h_exts[] = "How many OpenGL and OpenGL ES extensions the driver offers.",
+  h_gpu[] = "Ticked: programs' 3D is drawn on the machine's GPU. Not ticked: in software (with no driver, Mesa draws in each program, as before).",
+  h_es1[] = "Ticked: programs can have OpenGL ES 1.1 contexts too.",
+  h_share[] = "Ticked: a program can have contexts that share textures and buffers, one per thread, as web browsers draw. On RISC OS on Linux this needs RISC3D 0.06, Linux3D 0.06 and riscos-risc3d 0.23 or later.",
+  h_contexts[] = "How many 3D contexts programs have open now.",
+  h_folder[] = "Where RISC3D looks for drivers. Each one there is tried in turn until one starts; a driver refuses to start on machines it isn't for.",
+  h_drv[] = "A driver in RISC3D's drivers folder. Ticked: it started and draws for programs. Otherwise, why it didn't start.",
+  h_version[] = "The version of the RISC3D module.",
+  h_load[] = "Ticked: RISC3D loads a 3D driver, so programs can draw on the GPU. Not ticked: no driver is loaded and programs draw in software, as without RISC3D. Click Set to keep the choice.";
 
 static void
 build (void)
 {
-  int y = -TOP;
   nicons = 0;
-  for (int r = 0; r < ROWS; r++)
+  int y = -24;
+
+  /* the RISC3D icon, the driver large, and what it draws with */
+  /* (an indirected sprite-only icon: name, sprite area (1: the Wimp's),
+     length) */
+  int sp = add_icon (MARGIN, y - 80, MARGIN + 88, y, F_SPRITE | F_HCENTRE | F_VCENTRE | F_INDIR | F_COLOURS (7, 1),
+		     "co_risc3d", (const char *) 1, h_driver);
+  icons[sp].len = (int) sizeof "co_risc3d";
+  if (font >= 0)
+    add_icon (MARGIN + 104, y - 48, WIN_W - MARGIN, y, F_TEXT | F_VCENTRE | F_FONT | F_INDIR | ((unsigned) font << 24),
+	      info.headline, "", h_driver);
+  else
+    add_icon (MARGIN + 104, y - 44, WIN_W - MARGIN, y, F_TEXT | F_VCENTRE | F_INDIR | F_COLOURS (7, 1), info.headline, "",
+	      h_driver);
+  add_icon (MARGIN + 104, y - 88, WIN_W - MARGIN, y - 48, F_TEXT | F_VCENTRE | F_INDIR | F_COLOURS (7, 1),
+	    info.subline, "", h_gpu);
+  y -= 112;
+
+  /* what programs get */
+  y = group (y, "Graphics");
+  row (&y, "Renderer", info.renderer, h_renderer);
+  row (&y, "OpenGL", info.gl, h_gl);
+  row (&y, "OpenGL ES", info.gles, h_gles);
+  label_at (LABEL_X, LABEL_X + LABEL_W, y, "Largest texture", h_texture);
+  value_at (VALUE_X, VALUE_X + 240, y, info.texture, h_texture);
+  label_at (VALUE_X + 240, VALUE_X + 240 + 180, y, "Extensions", h_exts);
+  value_at (VALUE_X + 436, VALUE_R, y, info.exts, h_exts);
+  y -= ROW;
+  y = group_end (y + 8);
+
+  y = group (y, "Features");
+  int third = (VALUE_R - LABEL_X) / 3;
+  tick_at (LABEL_X, LABEL_X + third, y, info.on_gpu, "Drawn on the GPU", h_gpu);
+  tick_at (LABEL_X + third, LABEL_X + 2 * third, y, info.es1, "OpenGL ES 1.1", h_es1);
+  tick_at (LABEL_X + 2 * third, VALUE_R, y, info.share, "Shared contexts", h_share);
+  y -= ROW;
+  label_at (LABEL_X, LABEL_X + LABEL_W, y, "Contexts open", h_contexts);
+  value_at (VALUE_X, VALUE_X + 120, y, info.contexts_text, h_contexts);
+  y -= ROW;
+  y = group_end (y + 8);
+
+  y = group (y, "Drivers");
+  i_load = option_at (LABEL_X, VALUE_R, y, want_on, "Load a 3D driver (untick to turn RISC3D's GPU drawing off)", h_load);
+  y -= ROW;
+  row (&y, "Folder", info.folder[0] ? info.folder : "(none: !RISC3D hasn't been seen)", h_folder);
+  for (int d = 0; d < info.ndrv; d++)
     {
-      add_icon (MARGIN, y - 48, MARGIN + LABEL_W, y, F_TEXT | F_VCENTRE | F_RIGHT | F_INDIR | F_COLOURS, label[r], "");
-      add_icon (MARGIN + LABEL_W + 16, y - 48, MARGIN + LABEL_W + 16 + VALUE_W, y,
-		F_TEXT | F_BORDER | F_VCENTRE | F_FILLED | F_INDIR | F_COLOURS, value[r], "R2");
-      y -= ROW_H;
-    }
-  for (int d = 0; d < ndrv; d++)
-    {
-      add_icon (MARGIN + LABEL_W + 16, y - 44, MARGIN + LABEL_W + 16 + VALUE_W, y,
-		F_TEXT | F_VCENTRE | F_INDIR | F_COLOURS, drv_line[d], "");
+      tick_at (VALUE_X, VALUE_X + 300, y, info.drv_ok[d], info.drv_name[d], h_drv);
+      add_icon (VALUE_X + 300, y - 44, VALUE_R, y, F_TEXT | F_VCENTRE | F_INDIR | F_COLOURS (info.drv_ok[d] ? 7 : 5, 1),
+		info.drv_state[d], "", h_drv);
       y -= 48;
     }
-  y -= 24;
-  i_refresh = nicons;
-  add_icon (WIN_W - MARGIN - 2 * 200 - 24, y - 68, WIN_W - MARGIN - 200 - 24, y,
-	    F_TEXT | F_BORDER | F_HCENTRE | F_VCENTRE | F_FILLED | F_INDIR | F_CLICK | F_COLOURS, "Refresh", "R5,3");
-  i_close = nicons;
-  add_icon (WIN_W - MARGIN - 200, y - 68, WIN_W - MARGIN, y,
-	    F_TEXT | F_BORDER | F_HCENTRE | F_VCENTRE | F_FILLED | F_INDIR | F_CLICK | F_COLOURS, "Close", "R6,3");
-  win_h = -(y - 68 - MARGIN);
+  y = group_end (y + 4);
+
+  /* RISC3D's version, and the buttons */
+  y -= 8;
+  add_icon (MARGIN, y - 68, MARGIN + 400, y, F_TEXT | F_VCENTRE | F_INDIR | F_COLOURS (5, 1), info.version_text, "",
+	    h_version);
+  i_refresh = add_icon (WIN_W - MARGIN - 3 * 200 - 2 * 24, y - 68, WIN_W - MARGIN - 2 * 200 - 2 * 24, y,
+			F_TEXT | F_BORDER | F_HCENTRE | F_VCENTRE | F_FILLED | F_INDIR | F_CLICK | F_COLOURS (7, 1),
+			"Refresh", "R5,3", "Click SELECT to look again (for a driver loaded or changed since).");
+  i_cancel = add_icon (WIN_W - MARGIN - 2 * 200 - 24, y - 68, WIN_W - MARGIN - 200 - 24, y,
+		       F_TEXT | F_BORDER | F_HCENTRE | F_VCENTRE | F_FILLED | F_INDIR | F_CLICK | F_COLOURS (7, 1),
+		       "Cancel", "R5,3", "Click SELECT to close this window without changing anything.");
+  i_set = add_icon (WIN_W - MARGIN - 200, y - 68, WIN_W - MARGIN, y,
+		    F_TEXT | F_BORDER | F_HCENTRE | F_VCENTRE | F_FILLED | F_INDIR | F_CLICK | F_COLOURS (7, 1),
+		    "Set", "R6,3", "Click SELECT to use the choice now (when no program has a 3D context open) and keep it for the next start.");
+  win_h = -(y - 68 - 24);
 }
 
 static int
@@ -208,37 +344,44 @@ ask_gl (int api, char *ver, size_t vn, char *sl, size_t sn, int *tex, int *exts,
   if (tex)
     glGetIntegerv (GL_MAX_TEXTURE_SIZE, tex);
   if (exts)
-    {
-      const char *e = (const char *) glGetString (GL_EXTENSIONS);
-      *exts = count_words (e);
-    }
+    *exts = count_words ((const char *) glGetString (GL_EXTENSIONS));
   r3d_make_current (0);
   r3d_destroy (c);
   return 1;
 }
 
-/* "OpenGL ES 3.1 RISC3D (Mesa x)" -> "3.1"; "3.1 RISC3D (Mesa x)" -> "3.1" */
-static const char *
-version_number (const char *v)
+/* "OpenGL ES 3.1 RISC3D (Mesa x)" -> "3.1"; "1.40" -> "1.40" */
+static void
+version_number (char *out, size_t n, const char *v)
 {
-  static char out[32];
-  const char *p = strstr (v, "OpenGL ES ");
-  p = p ? p + 10 : v;
+  const char *p = v;
+  while (*p && !(*p >= '0' && *p <= '9'))
+    p++;
   size_t i = 0;
-  while (i < sizeof out - 1 && ((p[i] >= '0' && p[i] <= '9') || p[i] == '.'))
+  while (i < n - 1 && ((p[i] >= '0' && p[i] <= '9') || p[i] == '.'))
     {
       out[i] = p[i];
       i++;
     }
   out[i] = 0;
-  return i ? out : v;
+  if (!i)
+    snprintf (out, n, "%s", v);
+}
+
+/* " (RISC3D, Linux GPU)" off the renderer: said elsewhere */
+static void
+plain_renderer (char *r)
+{
+  char *p = strstr (r, " (RISC3D");
+  if (p)
+    *p = 0;
 }
 
 /* *RISC3D's own account, for the drivers folder and what was tried */
 static void
 read_star_risc3d (void)
 {
-  ndrv = 0;
+  info.ndrv = 0;
   if (_swix (OS_CLI, _IN (0), "RISC3D { > <Wimp$ScrapDir>.RISC3DSet }"))
     return;
   int type = 0, len = 0;
@@ -256,98 +399,190 @@ read_star_risc3d (void)
       char t[200];
       trim_to (t, sizeof t, line);
       if (!strncmp (t, "Drivers folder: ", 16))
-	trim_to (value[R_FOLDER], sizeof value[R_FOLDER], t + 16);
-      else if (t[0] == ' ' && t[1] == ' ' && ndrv < MAXDRV)
-	snprintf (drv_line[ndrv++], sizeof drv_line[0], "%s", t + 2);
+	trim_to (info.folder, sizeof info.folder, t + 16);
+      else if (t[0] == ' ' && t[1] == ' ' && info.ndrv < MAXDRV)
+	{
+	  /* "  Linux3D: registered" or "  V3DRender: <why not>" */
+	  char *colon = strchr (t + 2, ':');
+	  int d = info.ndrv++;
+	  if (colon)
+	    {
+	      *colon = 0;
+	      trim_to (info.drv_name[d], sizeof info.drv_name[0], t + 2);
+	      trim_to (info.drv_state[d], sizeof info.drv_state[0], colon[1] == ' ' ? colon + 2 : colon + 1);
+	    }
+	  else
+	    trim_to (info.drv_name[d], sizeof info.drv_name[0], t + 2);
+	  info.drv_ok[d] = !strncmp (info.drv_state[d], "registered", 10);
+	  if (info.drv_ok[d])
+	    snprintf (info.drv_state[d], sizeof info.drv_state[0], "Started: draws for programs");
+	}
     }
   free (buf);
 }
 
 static void
-hourglass (int on)
-{
-  _swix (on ? Hourglass_On : Hourglass_Off, 0);
-}
-
-static void
 find_out (void)
 {
-  for (int r = 0; r < ROWS; r++)
-    value[r][0] = 0;
-  for (int d = 0; d < MAXDRV; d++)
-    drv_line[d][0] = 0;
+  memset (&info, 0, sizeof info);
+  snprintf (info.renderer, sizeof info.renderer, "\x97");
+  snprintf (info.gl, sizeof info.gl, "\x97");
+  snprintf (info.gles, sizeof info.gles, "\x97");
+  snprintf (info.texture, sizeof info.texture, "\x97");
+  snprintf (info.exts, sizeof info.exts, "\x97");
   int version = 0, ndrivers = 0, nctx = 0;
   const char *name = 0, *drm = 0;
   unsigned flags = 0, ioctl = 0;
   if (_swix (RISC3D_Info, _OUTR (0, 6), &version, &ndrivers, &nctx, &name, &flags, &ioctl, &drm))
     {
-      snprintf (value[R_DRIVER], sizeof value[0], "None: RISC3D isn't loaded");
-      snprintf (value[R_DRAWS], sizeof value[0], "In software (Mesa, in each program)");
-      snprintf (value[R_RISC3D], sizeof value[0], "Not loaded (!Boot.Resources.!RISC3D loads it at start-up)");
+      snprintf (info.headline, sizeof info.headline, "RISC3D isn't loaded");
+      snprintf (info.subline, sizeof info.subline, "Programs draw in software. !Boot.Resources.!RISC3D loads RISC3D at start-up.");
+      snprintf (info.version_text, sizeof info.version_text, "RISC3D: not loaded");
+      snprintf (info.contexts_text, sizeof info.contexts_text, "0");
       return;
     }
-  snprintf (value[R_RISC3D], sizeof value[0], "%d.%02d", version / 100, version % 100);	/* (version x 100) */
-  snprintf (value[R_CONTEXTS], sizeof value[0], "%d", nctx);
+  snprintf (info.version_text, sizeof info.version_text, "RISC3D %d.%02d", version / 100, version % 100);
+  snprintf (info.contexts_text, sizeof info.contexts_text, "%d", nctx);
+  info.nctx = nctx;
+  {
+    char o[8];
+    int n = 0;
+    info.off = !_swix (OS_ReadVarVal, _INR (0, 4) | _OUT (2), "RISC3D$Off", o, sizeof o - 1, 0, 0, &n) && n > 0;
+  }
   read_star_risc3d ();
+  /* (*RISC3D's list is of what was tried when it last looked: a driver
+     since removed, as when turned off, isn't drawing now) */
+  for (int d = 0; d < info.ndrv && !name; d++)
+    if (info.drv_ok[d])
+      {
+	info.drv_ok[d] = 0;
+	snprintf (info.drv_state[d], sizeof info.drv_state[0], "%s", info.off ? "Not loaded: RISC3D is turned off" : "Not loaded");
+      }
+  if (!name && info.off)
+    {
+      snprintf (info.headline, sizeof info.headline, "RISC3D is turned off");
+      snprintf (info.subline, sizeof info.subline, "No 3D driver is loaded: programs draw in software.");
+      return;
+    }
   if (!name)
     {
-      snprintf (value[R_DRIVER], sizeof value[0], "None: no driver in the folder starts on this machine");
-      snprintf (value[R_DRAWS], sizeof value[0], "In software (Mesa, in each program)");
-      snprintf (value[R_SHARE], sizeof value[0], "Yes, in software");
+      snprintf (info.headline, sizeof info.headline, "No 3D driver");
+      snprintf (info.subline, sizeof info.subline, "No driver in the folder starts on this machine: programs draw in software.");
       return;
     }
-  trim_to (value[R_DRIVER], sizeof value[0], name);
-  snprintf (value[R_SHARE], sizeof value[0], "%s",
-	    flags & 4 ? "Yes" : flags & 1 ? "Through Mesa's own driver in each program"
-	    : "No (RISC OS on Linux: RISC3D 0.06, Linux3D 0.06 and riscos-risc3d 0.23 are needed)");
+  trim_to (info.headline, sizeof info.headline, name);
+  info.have_driver = 1;
+  {
+    size_t k = 0;
+    while (name[k] > ' ' && k < sizeof info.driver_module - 1)
+      {
+	info.driver_module[k] = name[k];
+	k++;
+      }
+    info.driver_module[k] = 0;
+  }
+  info.share = (flags & 4) != 0;
   if (flags & 1)
     {
       /* a DRM device: Mesa's own driver draws, in each program */
-      snprintf (value[R_DRAWS], sizeof value[0], "On a GPU, with Mesa's %s driver in each program (libMesaGPU)", drm ? drm : "own");
-      snprintf (value[R_RENDERER], sizeof value[0], "Mesa's %s driver, through %s's SWI &%X", drm ? drm : "", value[R_DRIVER], ioctl);
-      snprintf (value[R_GL], sizeof value[0], "As Mesa's %s driver gives (programs linked with libMesaGPU)", drm ? drm : "");
-      snprintf (value[R_GLES], sizeof value[0], "As Mesa's %s driver gives (programs linked with libMesaGPU)", drm ? drm : "");
-      snprintf (value[R_TEXTURE], sizeof value[0], "As Mesa's driver gives");
-      snprintf (value[R_EXTS], sizeof value[0], "As Mesa's driver gives");
+      info.on_gpu = 1;
+      info.share = 1;
+      snprintf (info.subline, sizeof info.subline, "Drawing on the GPU, with Mesa's %s driver in each program", drm ? drm : "own");
+      snprintf (info.renderer, sizeof info.renderer, "Mesa's %s driver (programs linked with libMesaGPU)", drm ? drm : "");
+      snprintf (info.gl, sizeof info.gl, "As Mesa's %s driver gives", drm ? drm : "");
+      snprintf (info.gles, sizeof info.gles, "As Mesa's %s driver gives", drm ? drm : "");
       return;
     }
-  snprintf (value[R_DRAWS], sizeof value[0], "%s", flags & 2 ? "In software (Linux has no GPU driver for this machine)" : "On a GPU");
+  info.on_gpu = !(flags & 2);
 
   /* a command stream: ask, with a context of each kind */
-  char ver[160], sl[80], ren[160];
+  char ver[160], sl[80], ren[160] = "", v[32], s[32];
   int tex = 0, ext_gl = -1, ext_es = -1;
-  hourglass (1);
+  _swix (Hourglass_On, 0);
   if (ask_gl (R3D_API_GL, ver, sizeof ver, sl, sizeof sl, &tex, &ext_gl, ren, sizeof ren))
     {
-      snprintf (value[R_GL], sizeof value[0], "%s (compatibility profile), GLSL %s", version_number (ver), sl);
-      trim_to (value[R_RENDERER], sizeof value[0], ren);
-      if (tex > 0)
-	snprintf (value[R_TEXTURE], sizeof value[0], "%d x %d", tex, tex);
+      version_number (v, sizeof v, ver);
+      version_number (s, sizeof s, sl);
+      snprintf (info.gl, sizeof info.gl, "%s, compatibility profile \x97 GLSL %s", v, s);
     }
   else
-    snprintf (value[R_GL], sizeof value[0], "None (%s)", ver);
-  if (ask_gl (R3D_API_GLES2, ver, sizeof ver, sl, sizeof sl, value[R_TEXTURE][0] ? 0 : &tex, &ext_es,
-	      value[R_RENDERER][0] ? 0 : ren, sizeof ren))
+    snprintf (info.gl, sizeof info.gl, "None (%s)", ver);
+  if (ask_gl (R3D_API_GLES2, ver, sizeof ver, sl, sizeof sl, tex ? 0 : &tex, &ext_es, ren[0] ? 0 : ren, sizeof ren))
     {
+      version_number (v, sizeof v, ver);
+      const char *g = strstr (sl, "GLSL ES ");
+      version_number (s, sizeof s, g ? g + 8 : sl);
+      snprintf (info.gles, sizeof info.gles, "%s \x97 GLSL ES %s", v, s);
       char es1[160];
-      int one = ask_gl (R3D_API_GLES1, es1, sizeof es1, 0, 0, 0, 0, 0, 0);
-      const char *slv = strstr (sl, "GLSL ES ");
-      char v1[32];
-      snprintf (v1, sizeof v1, "%s", version_number (ver));	/* (one static buffer) */
-      snprintf (value[R_GLES], sizeof value[0], "%s%s, GLSL ES %s", v1, one ? " and 1.1" : "",
-		slv ? version_number (slv + 8) : sl);
-      if (!value[R_RENDERER][0])
-	trim_to (value[R_RENDERER], sizeof value[0], ren);
-      if (!value[R_TEXTURE][0] && tex > 0)
-	snprintf (value[R_TEXTURE], sizeof value[0], "%d x %d", tex, tex);
+      info.es1 = ask_gl (R3D_API_GLES1, es1, sizeof es1, 0, 0, 0, 0, 0, 0);
     }
   else
-    snprintf (value[R_GLES], sizeof value[0], "None (%s)", ver);
-  hourglass (0);
+    snprintf (info.gles, sizeof info.gles, "None (%s)", ver);
+  _swix (Hourglass_Off, 0);
+  if (ren[0])
+    {
+      plain_renderer (ren);
+      trim_to (info.renderer, sizeof info.renderer, ren);
+    }
+  if (tex > 0)
+    snprintf (info.texture, sizeof info.texture, "%d \xD7 %d", tex, tex);
   if (ext_gl >= 0 && ext_es >= 0)
-    snprintf (value[R_EXTS], sizeof value[0], "%d in OpenGL, %d in OpenGL ES", ext_gl, ext_es);
+    snprintf (info.exts, sizeof info.exts, "%d OpenGL, %d OpenGL ES", ext_gl, ext_es);
   else if (ext_gl >= 0 || ext_es >= 0)
-    snprintf (value[R_EXTS], sizeof value[0], "%d", ext_gl >= 0 ? ext_gl : ext_es);
+    snprintf (info.exts, sizeof info.exts, "%d", ext_gl >= 0 ? ext_gl : ext_es);
+  if (info.on_gpu)
+    snprintf (info.subline, sizeof info.subline, "Drawing on the GPU: %s", info.renderer);
+  else
+    snprintf (info.subline, sizeof info.subline, "Drawing in software: Linux has no GPU driver for this machine");
+}
+
+/* --- the choice ------------------------------------------------------- */
+
+static void
+report (const char *text)
+{
+  int e[64];
+  e[0] = 0;
+  snprintf ((char *) &e[1], 240, "%s", text);
+  _swix (Wimp_ReportError, _INR (0, 2), e, 1 | 16, "RISC3D");	/* OK, no "Error from" */
+}
+
+/* keep it for the next start: Choices:RISC3D.Settings, which !RISC3D's
+   !Boot runs before loading RISC3D */
+static int
+save_choice (int on)
+{
+  const char *text = on ? "| RISC3D: written by Configure's RISC3D window\nUnset RISC3D$Off\n"
+		       : "| RISC3D: written by Configure's RISC3D window\nSet RISC3D$Off 1\n";
+  _swix (OS_File, _INR (0, 1) | _IN (4), 8, "<Choices$Write>.RISC3D", 0);
+  return !_swix (OS_File, _INR (0, 2) | _INR (4, 5), 10, "<Choices$Write>.RISC3D.Settings", 0xFEB, text,
+		 text + strlen (text));
+}
+
+/* now, where nothing is drawing: off, the driver module goes; on, RISC3D
+   starts again and loads one */
+static void
+apply_choice (int on)
+{
+  char cmd[80];
+  if (on)
+    _swix (OS_SetVarVal, _INR (0, 4), "RISC3D$Off", 0, -1, 0, 0);
+  else
+    _swix (OS_SetVarVal, _INR (0, 4), "RISC3D$Off", "1", 1, 0, 0);
+  find_out ();
+  if (info.nctx > 0)
+    {
+      report (on ? "RISC3D will load a 3D driver when the machine next starts: programs have 3D contexts open now."
+		 : "RISC3D won't load a 3D driver when the machine next starts. Programs have 3D contexts open now, so the driver stays until then.");
+      return;
+    }
+  if (!on && info.have_driver && info.driver_module[0])
+    {
+      snprintf (cmd, sizeof cmd, "RMKill %s", info.driver_module);
+      _swix (OS_CLI, _IN (0), cmd);
+    }
+  if (on && !info.have_driver)
+    _swix (OS_CLI, _IN (0), "RMReInit RISC3D");
 }
 
 /* --- interactive help -------------------------------------------------- */
@@ -356,16 +591,8 @@ static void
 help_reply (int *m)
 {
   int icn = m[9];			/* (+32 window, +36 icon) */
-  const char *h = 0;
-  if (icn >= 0 && icn < 2 * ROWS)
-    h = help[icn / 2];
-  else if (icn >= 2 * ROWS && icn < 2 * ROWS + ndrv)
-    h = help[R_FOLDER];
-  else if (icn == i_refresh)
-    h = "Click SELECT to look again (for a driver loaded or changed since).";
-  else if (icn == i_close)
-    h = "Click SELECT to close this window.";
-  else
+  const char *h = icn >= 0 && icn < nicons ? icons[icn].help : 0;
+  if (!h)
     h = "This window shows which 3D driver RISC3D loaded and what it offers programs.";
   int r[64];
   memset (r, 0, sizeof r);
@@ -377,6 +604,15 @@ help_reply (int *m)
 }
 
 /* --- main ------------------------------------------------------------ */
+
+static void
+make (void)
+{
+  find_out ();
+  want_on = !info.off;
+  build ();
+  win = create_window ();
+}
 
 int
 main (int argc, char **argv)
@@ -393,14 +629,12 @@ main (int argc, char **argv)
 	at_y = atoi (argv[i + 2]);
 	break;
       }
-  find_out ();
-  build ();
-  win = create_window ();
+  /* the headline in Homerton Bold, 14 point (the desktop font if none) */
+  if (_swix (Font_FindFont, _INR (1, 5) | _OUT (0), "Homerton.Bold", 14 * 16, 14 * 16, 0, 0, &font))
+    font = -1;
+  make ();
   if (win < 0)
-    {
-      _swix (Wimp_CloseDown, _INR (0, 1), task, 0x4B534154);
-      return 1;
-    }
+    goto done;
   if (at_x < 0)
     {
       int xe = 1, ye = 1, xl = 0, yl = 0;
@@ -425,26 +659,35 @@ main (int argc, char **argv)
 	case 3:
 	  goto done;
 	case 6:
-	  if (b[3] == win && b[4] == i_close)
+	  if (b[3] == win && b[4] == i_cancel)
 	    goto done;
+	  if (b[3] == win && b[4] == i_load)
+	    {
+	      want_on = !want_on;
+	      int blk[4] = { win, i_load, want_on ? 1 << 21 : 0, 1 << 21 };	/* (EOR, clear: selected) */
+	      _swix (Wimp_SetIconState, _IN (1), blk);
+	    }
+	  if (b[3] == win && b[4] == i_set)
+	    {
+	      if (want_on == info.off)	/* (changed) */
+		{
+		  if (!save_choice (want_on))
+		    report ("RISC3D couldn't keep the choice in Choices:RISC3D.Settings: it lasts until the machine next starts.");
+		  apply_choice (want_on);
+		}
+	      goto done;
+	    }
 	  if (b[3] == win && b[4] == i_refresh)
 	    {
 	      /* again, with as many driver lines as there now are */
 	      int st[9] = { win };
 	      _swix (Wimp_GetWindowState, _IN (1), st);
 	      _swix (Wimp_DeleteWindow, _IN (1), &win);
-	      find_out ();
-	      build ();
-	      win = create_window ();
+	      make ();
 	      if (win < 0)
 		goto done;
 	      open_at (st[1], st[4]);
 	    }
-	  break;
-	case 8:
-	  if (b[6] == 0x1B)			/* Escape */
-	    goto done;
-	  _swix (Wimp_ProcessKey, _IN (0), b[6]);
 	  break;
 	case 17:
 	case 18:
@@ -458,6 +701,8 @@ main (int argc, char **argv)
 	}
     }
 done:
+  if (font >= 0)
+    _swix (Font_LoseFont, _IN (0), font);
   _swix (Wimp_CloseDown, _INR (0, 1), task, 0x4B534154);
   return 0;
 }

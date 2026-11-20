@@ -7,9 +7,9 @@ above it, 3D drivers below it. Programs use Mesa as they do now; where a
 driver is registered the drawing is done by the machine's GPU driver, and
 where none is, Mesa draws in software as before.
 
-**Release 0.13, 20 November 2026** (0.11 moved to the allocated numbers;
-0.12 added contexts that share objects, for WebKit; 0.13 adds Configure's
-3D window). It draws on the GPU:
+**Release 0.14, 20 November 2026** (0.11 moved to the allocated numbers;
+0.12 added contexts that share objects, for WebKit; 0.13 and 0.14 add
+Configure's RISC3D window). It draws on the GPU:
 - on native RISC OS on a Raspberry Pi 4, through V3DRender;
 - on RISC OS on Linux, through Linux3D, on whatever GPU Linux drives. So
   far that's the Pi 4 and the Windows Dev Kit 2023.
@@ -34,13 +34,20 @@ riscos-harddisc (1.0.0064 on) installs the PackMan package.
 
 ### Configure
 
-`!RISC3DSetup`, in `!Boot.Resources.Configure`, puts **3D** in Configure. It
-shows which driver RISC3D loaded, whether programs draw on the GPU, the
-renderer, the newest OpenGL and OpenGL ES, the largest texture, the
-extensions, whether contexts can share objects, and what each driver in the
-drivers folder did.
+`!RISC3DSetup`, in `!Boot.Resources.Configure`, puts **RISC3D** in
+Configure. It shows:
+- which driver RISC3D loaded, and whether programs draw on the GPU;
+- the renderer;
+- the newest OpenGL and OpenGL ES;
+- the largest texture and the extensions;
+- whether contexts can share objects;
+- what each driver in the drivers folder did.
 
-<img src="docs/images/risc3dsetup.png" alt="Configure's 3D window on a Raspberry Pi 4 under RISC OS on Linux" width="660">
+**Load a 3D driver** turns RISC3D's GPU drawing off or on. While it is off,
+no driver is loaded and programs draw in software. The choice is kept in
+`Choices:RISC3D.Settings` (`RISC3D$Off`, RISC3D 0.08 on).
+
+<img src="docs/images/risc3dsetup.png" alt="Configure's RISC3D window on a Raspberry Pi 4 under RISC OS on Linux" width="660">
 
 ### For programs
 

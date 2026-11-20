@@ -97,6 +97,7 @@ void drivers_callback (void);		/* header.s: saves everything, calls find_driver 
 static void *private_word;
 static int callback_pending, looked;
 static char folder[200];
+static int turned_off;			/* (0.08) RISC3D$Off is set: no driver loaded */
 static struct { char name[32]; char why[80]; } tried[MAXTRIED];
 static int ntried;
 
@@ -154,8 +155,22 @@ find_driver (void)
   looked = 1;
   ntried = 0;
   folder[0] = 0;
+  turned_off = 0;
   if (best_driver () >= 0)
     return;
+  /* (0.08) turned off (Configure's RISC3D window keeps the choice in
+     Choices:RISC3D.Settings, which !RISC3D's !Boot runs): no driver is
+     loaded, so programs draw in software. A driver that registers itself
+     is still taken */
+  {
+    char off[8];
+    regs o = {{ (unsigned) "RISC3D$Off", (unsigned) off, sizeof off - 1, 0, 0 }};
+    if (swix_regs (OS_ReadVarVal, &o) == 0 && o.r[2] > 0)
+      {
+	turned_off = 1;
+	return;
+      }
+  }
   regs v = {{ (unsigned) "RISC3D$Drivers", (unsigned) folder, sizeof folder - 1, 0, 0 }};
   int set = swix_regs (OS_ReadVarVal, &v) == 0 && v.r[2] > 0;
   folder[set ? v.r[2] : 0] = 0;
@@ -257,7 +272,7 @@ mod_swi (unsigned number, regs *r)
 	  n += drv[i].entry != 0;
 	for (int i = 0; i < MAXCTX; i++)
 	  c += ctx[i].used;
-	r->r[0] = 7;
+	r->r[0] = 8;
 	r->r[1] = (unsigned) n;
 	r->r[2] = (unsigned) c;
 	r->r[3] = b < 0 ? 0 : (unsigned) drv[b].name;
@@ -382,6 +397,15 @@ mod_init (const char *tail, int instance, void *pw)
 {
   (void) tail; (void) instance;
   private_word = pw;
+  /* (0.08) *RMReInit runs this again in the same copy of the module, so
+     everything starts afresh: before, a reinitialised RISC3D kept its
+     old drivers and "looked" and never loaded a driver again */
+  looked = 0;
+  ntried = 0;
+  turned_off = 0;
+  folder[0] = 0;
+  memset (drv, 0, sizeof drv);
+  memset (ctx, 0, sizeof ctx);
   /* find the driver once RISC OS has finished starting this module */
   regs r = {{ (unsigned) drivers_callback, (unsigned) pw }};
   if (!swix_regs (OS_AddCallBack, &r))
@@ -433,6 +457,11 @@ mod_command (int index, const char *tail, int argc)
   if (!n)
     {
       write0 ("No 3D driver is registered");
+      newline ();
+    }
+  if (turned_off)
+    {
+      write0 ("Loading a driver is turned off (RISC3D$Off is set: Configure's RISC3D window turns it on)");
       newline ();
     }
   if (folder[0])

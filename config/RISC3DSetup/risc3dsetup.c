@@ -13,6 +13,10 @@
    units), else centred. Message_OpenConfigWindow brings it to the front.
    Plain Wimp calls, no Toolbox.
 
+   1.03: Set applies the choice and the window stays, showing the result.
+   Only the choice has a tick box (at the top, in its own group); what is
+   only shown is in display fields ("Yes", "No"), as the other values.
+
    1.02: named RISC3D in Configure; "Load a 3D driver" turns RISC3D's
    driver loading on or off (RISC3D 0.08's RISC3D$Off), kept in
    Choices:RISC3D.Settings for the next start and applied at once when no
@@ -131,12 +135,12 @@ row (int *y, const char *lab, const char *val, const char *help)
   *y -= ROW;
 }
 
-/* a ticked or empty option sprite, with text after it; never clicked */
+/* a label and a short display field saying Yes or No: shown, not clicked */
 static void
-tick_at (int x0, int x1, int y, int on, const char *text, const char *help)
+yes_no_at (int x0, int x1, int y, int on, const char *text, const char *help)
 {
-  add_icon (x0, y - 44, x1, y, F_TEXT | F_SPRITE | F_VCENTRE | F_INDIR | F_COLOURS (7, 1), text,
-	    on ? "Sopton" : "Soptoff", help);
+  label_at (x0, x1 - 16 - 96, y, text, help);
+  value_at (x1 - 96, x1, y, on ? "Yes" : "No", help);
 }
 
 /* a clickable option: the choice to load a driver */
@@ -174,14 +178,14 @@ static const char
   h_gles[] = "The newest OpenGL ES a program can have, and its shading language.",
   h_texture[] = "The largest texture the GPU takes.",
   h_exts[] = "How many OpenGL and OpenGL ES extensions the driver offers.",
-  h_gpu[] = "Ticked: programs' 3D is drawn on the machine's GPU. Not ticked: in software (with no driver, Mesa draws in each program, as before).",
-  h_es1[] = "Ticked: programs can have OpenGL ES 1.1 contexts too.",
-  h_share[] = "Ticked: a program can have contexts that share textures and buffers, one per thread, as web browsers draw. On RISC OS on Linux this needs RISC3D 0.06, Linux3D 0.06 and riscos-risc3d 0.23 or later.",
+  h_gpu[] = "Yes: programs' 3D is drawn on the machine's GPU. No: in software (with no driver, Mesa draws in each program, as before).",
+  h_es1[] = "Yes: programs can have OpenGL ES 1.1 contexts too.",
+  h_share[] = "Yes: a program can have contexts that share textures and buffers, one per thread, as web browsers draw. On RISC OS on Linux this needs RISC3D 0.06, Linux3D 0.06 and riscos-risc3d 0.23 or later.",
   h_contexts[] = "How many 3D contexts programs have open now.",
   h_folder[] = "Where RISC3D looks for drivers. Each one there is tried in turn until one starts; a driver refuses to start on machines it isn't for.",
-  h_drv[] = "A driver in RISC3D's drivers folder. Ticked: it started and draws for programs. Otherwise, why it didn't start.",
+  h_drv[] = "A driver in RISC3D's drivers folder: whether it started and draws for programs, or why it didn't.",
   h_version[] = "The version of the RISC3D module.",
-  h_load[] = "Ticked: RISC3D loads a 3D driver, so programs can draw on the GPU. Not ticked: no driver is loaded and programs draw in software, as without RISC3D. Click Set to keep the choice.";
+  h_load[] = "Click to tick or untick. Ticked: RISC3D loads a 3D driver, so programs can draw on the GPU. Not ticked: no driver is loaded and programs draw in software, as without RISC3D. Then click Set.";
 
 static void
 build (void)
@@ -205,6 +209,12 @@ build (void)
 	    info.subline, "", h_gpu);
   y -= 112;
 
+  /* the one choice */
+  y = group (y, "Use");
+  i_load = option_at (LABEL_X, VALUE_R, y, want_on, "Load a 3D driver, so programs can draw on the GPU", h_load);
+  y -= ROW;
+  y = group_end (y + 8);
+
   /* what programs get */
   y = group (y, "Graphics");
   row (&y, "Renderer", info.renderer, h_renderer);
@@ -219,9 +229,9 @@ build (void)
 
   y = group (y, "Features");
   int third = (VALUE_R - LABEL_X) / 3;
-  tick_at (LABEL_X, LABEL_X + third, y, info.on_gpu, "Drawn on the GPU", h_gpu);
-  tick_at (LABEL_X + third, LABEL_X + 2 * third, y, info.es1, "OpenGL ES 1.1", h_es1);
-  tick_at (LABEL_X + 2 * third, VALUE_R, y, info.share, "Shared contexts", h_share);
+  yes_no_at (LABEL_X, LABEL_X + third, y, info.on_gpu, "On the GPU", h_gpu);
+  yes_no_at (LABEL_X + third, LABEL_X + 2 * third, y, info.es1, "OpenGL ES 1.1", h_es1);
+  yes_no_at (LABEL_X + 2 * third, VALUE_R, y, info.share, "Shared contexts", h_share);
   y -= ROW;
   label_at (LABEL_X, LABEL_X + LABEL_W, y, "Contexts open", h_contexts);
   value_at (VALUE_X, VALUE_X + 120, y, info.contexts_text, h_contexts);
@@ -229,17 +239,10 @@ build (void)
   y = group_end (y + 8);
 
   y = group (y, "Drivers");
-  i_load = option_at (LABEL_X, VALUE_R, y, want_on, "Load a 3D driver (untick to turn RISC3D's GPU drawing off)", h_load);
-  y -= ROW;
   row (&y, "Folder", info.folder[0] ? info.folder : "(none: !RISC3D hasn't been seen)", h_folder);
   for (int d = 0; d < info.ndrv; d++)
-    {
-      tick_at (VALUE_X, VALUE_X + 300, y, info.drv_ok[d], info.drv_name[d], h_drv);
-      add_icon (VALUE_X + 300, y - 44, VALUE_R, y, F_TEXT | F_VCENTRE | F_INDIR | F_COLOURS (info.drv_ok[d] ? 7 : 5, 1),
-		info.drv_state[d], "", h_drv);
-      y -= 48;
-    }
-  y = group_end (y + 4);
+    row (&y, info.drv_name[d], info.drv_state[d], h_drv);
+  y = group_end (y + 8);
 
   /* RISC3D's version, and the buttons */
   y -= 8;
@@ -250,10 +253,10 @@ build (void)
 			"Refresh", "R5,3", "Click SELECT to look again (for a driver loaded or changed since).");
   i_cancel = add_icon (WIN_W - MARGIN - 2 * 200 - 24, y - 68, WIN_W - MARGIN - 200 - 24, y,
 		       F_TEXT | F_BORDER | F_HCENTRE | F_VCENTRE | F_FILLED | F_INDIR | F_CLICK | F_COLOURS (7, 1),
-		       "Cancel", "R5,3", "Click SELECT to close this window without changing anything.");
+		       "Close", "R5,3", "Click SELECT to close this window (a choice not Set is left as it was).");
   i_set = add_icon (WIN_W - MARGIN - 200, y - 68, WIN_W - MARGIN, y,
 		    F_TEXT | F_BORDER | F_HCENTRE | F_VCENTRE | F_FILLED | F_INDIR | F_CLICK | F_COLOURS (7, 1),
-		    "Set", "R6,3", "Click SELECT to use the choice now (when no program has a 3D context open) and keep it for the next start.");
+		    "Set", "R6,3", "Click SELECT to use the choice now (when no program has a 3D context open) and keep it for the next start. The window stays open and shows the result.");
   win_h = -(y - 68 - 24);
 }
 
@@ -675,9 +678,9 @@ main (int argc, char **argv)
 		    report ("RISC3D couldn't keep the choice in Choices:RISC3D.Settings: it lasts until the machine next starts.");
 		  apply_choice (want_on);
 		}
-	      goto done;
+	      /* (and stay, showing what it did) */
 	    }
-	  if (b[3] == win && b[4] == i_refresh)
+	  if (b[3] == win && (b[4] == i_refresh || b[4] == i_set))
 	    {
 	      /* again, with as many driver lines as there now are */
 	      int st[9] = { win };

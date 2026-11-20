@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.15: Configure's RISC3D window, clearer (20 Nov 2026)
+
+- **!RISC3D 0.08-2** (`out/RISC3D-0.08-2.zip`): as 0.08-1, with !RISC3DSetup 1.03.
+- **!RISC3DSetup 1.03.** The owner asked that the window not close on Set, and that it be clear what is clickable:
+  - **Set** applies the choice and the window stays open, showing the result. Cancel is now **Close**.
+  - **Load a 3D driver** is the only tick box. It is in a group of its own, **Use**, at the top.
+  - **Features** are labelled display fields saying Yes or No (On the GPU, OpenGL ES 1.1, Shared contexts), like the other values. Each driver in the folder is a labelled field with its state.
+  - Tested on the Pi 4 under ROL, opened from inside Configure: Set turned RISC3D off and on again, the window stayed open, and the Settings file was written each time.
+- The owner's ROL Pi has !RISC3DSetup installed in `!Boot.Resources.Configure` (1.03).
+
 ## 0.14: turn RISC3D off from Configure; the window laid out afresh (20 Nov 2026)
 
 - **!RISC3D 0.08-1** (`out/RISC3D-0.08-1.zip`): RISC3D 0.08, Linux3D 0.06,

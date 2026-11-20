@@ -253,3 +253,16 @@ kit out/RISC3D-0.08-1.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,
   "$P/!Sprites11,ff9=/!RISC3DSetup/!Sprites11,ff9" "$P/CoSprite,ff9=/!RISC3DSetup/CoSprite,ff9" \
   "$P/CoSprite11,ff9=/!RISC3DSetup/CoSprite11,ff9" "$P/CoSprite22,ff9=/!RISC3DSetup/CoSprite22,ff9" \
   "out/RISC3DSetup-RunImage,ff8=/!RISC3DSetup/!RunImage,ff8"
+
+# !RISC3D 0.08-2 (release 0.15): as 0.08-1, with !RISC3DSetup 1.03 (Set
+# stays open; only the choice is a tick box)
+kit out/RISC3D-0.08-2.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+  "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" \
+  "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa" \
+  "third/V3DRender/V3DRender,ffa=GPU/V3DRender,ffa" "dist/!RISC3D/GPU/Licences,fff=GPU/Licences,fff" \
+  "dist/!RISC3D/GPU/GPL-2,fff=GPU/GPL-2,fff" \
+  "$P/!Boot,feb=/!RISC3DSetup/!Boot,feb" "$P/!Run,feb=/!RISC3DSetup/!Run,feb" "$P/!Help,fff=/!RISC3DSetup/!Help,fff" \
+  "$P/Messages,fff=/!RISC3DSetup/Messages,fff" "$P/!Sprites,ff9=/!RISC3DSetup/!Sprites,ff9" \
+  "$P/!Sprites11,ff9=/!RISC3DSetup/!Sprites11,ff9" "$P/CoSprite,ff9=/!RISC3DSetup/CoSprite,ff9" \
+  "$P/CoSprite11,ff9=/!RISC3DSetup/CoSprite11,ff9" "$P/CoSprite22,ff9=/!RISC3DSetup/CoSprite22,ff9" \
+  "out/RISC3DSetup-RunImage,ff8=/!RISC3DSetup/!RunImage,ff8"

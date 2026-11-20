@@ -13,6 +13,11 @@
    units), else centred. Message_OpenConfigWindow brings it to the front.
    Plain Wimp calls, no Toolbox.
 
+   1.04: the Drivers group's last row is what draws now: the driver in use
+   (Linux3D on RISC OS on Linux, V3DRender on a Pi 4 natively, ...), or
+   Software3D when none is (turned off, or none starts here): Mesa in each
+   program. Not *RISC3D's list of every driver tried.
+
    1.03: Set applies the choice and the window stays, showing the result.
    Only the choice has a tick box (at the top, in its own group); what is
    only shown is in display fields ("Yes", "No"), as the other values.
@@ -183,7 +188,7 @@ static const char
   h_share[] = "Yes: a program can have contexts that share textures and buffers, one per thread, as web browsers draw. On RISC OS on Linux this needs RISC3D 0.06, Linux3D 0.06 and riscos-risc3d 0.23 or later.",
   h_contexts[] = "How many 3D contexts programs have open now.",
   h_folder[] = "Where RISC3D looks for drivers. Each one there is tried in turn until one starts; a driver refuses to start on machines it isn't for.",
-  h_drv[] = "A driver in RISC3D's drivers folder: whether it started and draws for programs, or why it didn't.",
+  h_drv[] = "What draws for programs now: the 3D driver RISC3D loaded (Linux3D on RISC OS on Linux, V3DRender on a Raspberry Pi 4), or Software3D: Mesa drawing in software in each program, as without RISC3D.",
   h_version[] = "The version of the RISC3D module.",
   h_load[] = "Click to tick or untick. Ticked: RISC3D loads a 3D driver, so programs can draw on the GPU. Not ticked: no driver is loaded and programs draw in software, as without RISC3D. Then click Set.";
 
@@ -240,8 +245,14 @@ build (void)
 
   y = group (y, "Drivers");
   row (&y, "Folder", info.folder[0] ? info.folder : "(none: !RISC3D hasn't been seen)", h_folder);
-  for (int d = 0; d < info.ndrv; d++)
-    row (&y, info.drv_name[d], info.drv_state[d], h_drv);
+  static char in_use[160];
+  if (info.have_driver)
+    snprintf (in_use, sizeof in_use, "In use: draws for programs");
+  else
+    snprintf (in_use, sizeof in_use, "%s",
+	      info.off ? "In use: RISC3D is turned off; Mesa draws in software"
+		       : "In use: no driver starts here; Mesa draws in software");
+  row (&y, info.have_driver ? info.driver_module : "Software3D", in_use, h_drv);
   y = group_end (y + 8);
 
   /* RISC3D's version, and the buttons */

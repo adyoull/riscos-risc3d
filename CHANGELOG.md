@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.16: the Drivers row says what draws (20 Nov 2026)
+
+- **!RISC3D 0.08-3** (`out/RISC3D-0.08-3.zip`): as 0.08-2, with !RISC3DSetup 1.04.
+- **!RISC3DSetup 1.04.** The owner asked for this: "the bottom text box shouldn't say Linux3D when turned off, should be Software3D, and when it's a Native Pi it should be V3DRender".
+  - The Drivers group's last row is now what draws for programs. It names the driver in use (Linux3D on RISC OS on Linux, V3DRender on a native Pi 4), or **Software3D** when none is:
+    - "RISC3D is turned off; Mesa draws in software";
+    - "no driver starts here; Mesa draws in software".
+  - It no longer lists every driver `*RISC3D` tried.
+  - Tested from Configure on the Pi 4 under ROL, turned off and on again.
+
 ## 0.15: Configure's RISC3D window, clearer (20 Nov 2026)
 
 - **!RISC3D 0.08-2** (`out/RISC3D-0.08-2.zip`): as 0.08-1, with !RISC3DSetup 1.03.

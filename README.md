@@ -7,8 +7,8 @@ above it, 3D drivers below it. Programs use Mesa as they do now; where a
 driver is registered the drawing is done by the machine's GPU driver, and
 where none is, Mesa draws in software as before.
 
-**Release 0.15, 20 November 2026** (0.11 moved to the allocated numbers;
-0.12 added contexts that share objects, for WebKit; 0.13 to 0.15 add
+**Release 0.16, 20 November 2026** (0.11 moved to the allocated numbers;
+0.12 added contexts that share objects, for WebKit; 0.13 to 0.16 add
 Configure's RISC3D window). It draws on the GPU:
 - on native RISC OS on a Raspberry Pi 4, through V3DRender;
 - on RISC OS on Linux, through Linux3D, on whatever GPU Linux drives. So

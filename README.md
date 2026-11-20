@@ -7,8 +7,9 @@ above it, 3D drivers below it. Programs use Mesa as they do now; where a
 driver is registered the drawing is done by the machine's GPU driver, and
 where none is, Mesa draws in software as before.
 
-**Release 0.12, 19 November 2026** (0.11 moved to the allocated numbers;
-0.12 adds contexts that share objects, for WebKit). It draws on the GPU:
+**Release 0.13, 20 November 2026** (0.11 moved to the allocated numbers;
+0.12 added contexts that share objects, for WebKit; 0.13 adds Configure's
+3D window). It draws on the GPU:
 - on native RISC OS on a Raspberry Pi 4, through V3DRender;
 - on RISC OS on Linux, through Linux3D, on whatever GPU Linux drives. So
   far that's the Pi 4 and the Windows Dev Kit 2023.
@@ -30,6 +31,16 @@ use. On RISC OS on Linux, Linux's side is the Debian package
 `riscos-risc3d` (`rol-3d` and Mesa 26.1.6 from trixie-backports), which
 ROL's riscos-support (1.0.0068 on) brings in through Configure's Updates;
 riscos-harddisc (1.0.0064 on) installs the PackMan package.
+
+### Configure
+
+`!RISC3DSetup`, in `!Boot.Resources.Configure`, puts **3D** in Configure. It
+shows which driver RISC3D loaded, whether programs draw on the GPU, the
+renderer, the newest OpenGL and OpenGL ES, the largest texture, the
+extensions, whether contexts can share objects, and what each driver in the
+drivers folder did.
+
+<img src="docs/images/risc3dsetup.png" alt="Configure's 3D window on a Raspberry Pi 4 under RISC OS on Linux" width="660">
 
 ### For programs
 

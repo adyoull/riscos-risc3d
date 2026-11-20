@@ -1,0 +1,3 @@
+| RISC3DSetup: Configure's plug-in for RISC3D
+If "<RISC3DSetup$Dir>" = "" then Set RISC3DSetup$Dir <Obey$Dir>
+IconSprites <RISC3DSetup$Dir>.!Sprites

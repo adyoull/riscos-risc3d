@@ -2,7 +2,8 @@
 # mkkit.py ZIP FOLDER NAME,TYPE...: a zip for RISC OS, each file with its
 # file type (the ",xxx" ending, which is dropped from its name) in the
 # Acorn extra field, as SparkFS and InfoZip on RISC OS read it.
-# SRC=SUB/NAME,TYPE puts SRC at FOLDER/SUB/NAME (nested folders).
+# SRC=SUB/NAME,TYPE puts SRC at FOLDER/SUB/NAME (nested folders);
+# SRC=/TOP/NAME,TYPE at TOP/NAME, beside FOLDER.
 # Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE).
 import os, struct, sys, time, zipfile
 
@@ -23,7 +24,7 @@ with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
         load = 0xfff00000 | (ftype << 8) | ((cs >> 32) & 0xff)
         exe = cs & 0xffffffff
         attr = 0x13				# owner read and write, public read
-        info = zipfile.ZipInfo(folder + '/' + name, time.localtime(now)[:6])
+        info = zipfile.ZipInfo(name[1:] if name.startswith('/') else folder + '/' + name, time.localtime(now)[:6])
         info.compress_type = zipfile.ZIP_DEFLATED
         info.extra = struct.pack('<HH4sIIII', 0x4341, 20, b'ARC0', load, exe, attr, 0)
         info.external_attr = 0o644 << 16

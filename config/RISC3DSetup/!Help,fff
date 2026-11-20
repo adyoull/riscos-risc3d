@@ -1,0 +1,27 @@
+3D (RISC3D)
+===========
+Configure's 3D window shows what RISC3D, RISC OS's 3D driver interface,
+is doing:
+
+  Driver           the 3D driver RISC3D loaded from its drivers folder
+                   (!Boot.Resources.!RISC3D.GPU): Linux3D on RISC OS on
+                   Linux, V3DRender on a Raspberry Pi 4, 400 or CM4
+  Draws            on the GPU, or in software
+  Renderer         the GPU and driver doing the drawing
+  OpenGL,
+  OpenGL ES        the newest versions programs can have
+  Largest texture,
+  Extensions       what the GPU offers
+  Shared contexts  whether a program's contexts can share textures and
+                   buffers (web browsers draw this way)
+  Contexts open    3D contexts programs have open now
+  Drivers folder   each driver there, and whether it started (a driver
+                   refuses to start on machines it isn't for)
+
+On RISC OS on Linux it opens an OpenGL, an OpenGL ES and an OpenGL ES 1.1
+context for a moment to ask. With Rob Heaton's V3D driver, a Pi's
+V3DRender doesn't start (the two can't share the GPU yet).
+
+Refresh looks again. *RISC3D at the command line gives the same.
+
+Copyright (c) 2026 Andrew Youll. MIT licence.

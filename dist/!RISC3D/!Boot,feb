@@ -4,4 +4,4 @@
 Set RISC3D$Dir <Obey$Dir>
 IconSprites <RISC3D$Dir>.!Sprites
 Set RISC3D$Path <RISC3D$Dir>.
-RMEnsure RISC3D 0.06 RMLoad <RISC3D$Dir>.RISC3D
+RMEnsure RISC3D 0.07 RMLoad <RISC3D$Dir>.RISC3D

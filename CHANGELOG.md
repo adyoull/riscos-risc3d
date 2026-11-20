@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.13: Configure's 3D plug-in; RISC3D 0.07 (20 Nov 2026)
+
+- **!RISC3DSetup 1.00**, Configure's plug-in (for `!Boot.Resources.Configure`;
+  Configure shows it as "3D"). It shows:
+  - the driver RISC3D loaded, and whether it draws on a GPU or in software;
+  - the renderer;
+  - the newest OpenGL (compatibility profile) and OpenGL ES, with their
+    shading languages, and whether OpenGL ES 1.1 is there;
+  - the largest texture and the extension counts;
+  - whether contexts can share objects, and the contexts open;
+  - RISC3D's version, and the drivers folder with what each driver there did.
+
+  On a command-stream driver (Linux3D) it opens an OpenGL, an OpenGL ES and
+  an OpenGL ES 1.1 context for a moment to ask. On a DRM device (V3DRender)
+  it says Mesa's own driver draws, in each program. It has Refresh,
+  interactive help, `-openat x y` and `Message_OpenConfigWindow` (&50D83).
+  It is plain C with Wimp calls, linked with the client library
+  (`config/RISC3DSetup/`).
+- **RISC3D module 0.07:** the drivers folder from `RISC3D$Drivers` ends at its
+  first space. A value set with a space after it used to be taken whole, so
+  no driver was found (seen through TestAgent's `*Set`). Info r0 = 7.
+- **!RISC3D 0.07-1** (`out/RISC3D-0.07-1.zip`): RISC3D 0.07, Linux3D 0.06,
+  V3DRender 0.16, and `!RISC3DSetup` beside `!RISC3D` at the top of the zip.
+  !Boot and !Run RMEnsure 0.07.
+- `tools/mkkit.py`: `SRC=/TOP/NAME` puts a file beside the zip's folder.
+- **Tested on the Pi 4 under ROL, through TestAgent (20 Nov):**
+  - !RISC3DSetup run from `HardDisc4.Test`: every row right on V3D, with
+    Mesa 26.1.6. It shows OpenGL 3.1 compatibility (GLSL 1.40), OpenGL ES
+    3.1 and 1.1 (GLSL ES 3.10), textures up to 4096, and 186 and 94
+    extensions. Refresh works. Screenshot: `docs/images/risc3dsetup.png`.
+    Not yet opened from Configure itself.
+  - RISC3D 0.07 found the drivers in a folder set with a trailing space.
+  - **Kit 38 passed on the GPU** with riscos-risc3d 0.23-1: `sharetest ok`,
+    with every check right. The fence made in one thread and waited for in
+    the other worked; 200 frames each at once came out with none wrong; the
+    first context was destroyed and a new one shared with the second. r3dtest
+    ran at 140.2 and 147.8 fps, unchanged.
+
 ## 0.12: contexts that share objects, a current context per thread (19 Nov 2026)
 
 For WebKit 2.52 (riscos-mesa's handoff of 19 November): Skia draws with

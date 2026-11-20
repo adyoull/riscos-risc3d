@@ -159,6 +159,16 @@ find_driver (void)
   regs v = {{ (unsigned) "RISC3D$Drivers", (unsigned) folder, sizeof folder - 1, 0, 0 }};
   int set = swix_regs (OS_ReadVarVal, &v) == 0 && v.r[2] > 0;
   folder[set ? v.r[2] : 0] = 0;
+  /* (0.07) a path ends at its first space or control character: a value
+     set with a space after it ("*Set RISC3D$Drivers <path> ") was taken
+     whole, and the folder was never found */
+  for (int i = 0; set && folder[i]; i++)
+    if ((unsigned char) folder[i] <= ' ')
+      {
+	folder[i] = 0;
+	break;
+      }
+  set = set && folder[0];
   if (!set)
     {
       regs d = {{ (unsigned) "RISC3D$Dir", (unsigned) folder, sizeof folder - 5, 0, 0 }};
@@ -247,7 +257,7 @@ mod_swi (unsigned number, regs *r)
 	  n += drv[i].entry != 0;
 	for (int i = 0; i < MAXCTX; i++)
 	  c += ctx[i].used;
-	r->r[0] = 6;
+	r->r[0] = 7;
 	r->r[1] = (unsigned) n;
 	r->r[2] = (unsigned) c;
 	r->r[3] = b < 0 ? 0 : (unsigned) drv[b].name;

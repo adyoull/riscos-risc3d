@@ -120,7 +120,7 @@ registration:
 
 | Out | |
 |---|---|
-| r0 | RISC3D's version × 100 (6 for 0.06) |
+| r0 | RISC3D's version × 100 (7 for 0.07) |
 | r1 | drivers registered |
 | r2 | contexts open |
 | r3 | → the name of the driver a new context gets (the last registered), or 0 |

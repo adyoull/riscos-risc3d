@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased: Linux2D, a prototype of 2D acceleration on ROL (20 Nov 2026)
+
+- **Not in a kit yet.** The owner asked whether GraphicsV could be accelerated through Linux for 2D, then "Let's prototype it".
+- **Linux2D 0.01** (`modules/Linux2D`, MIT) and its helper **rol-2d 0.01** (`linux/rol-2d.c`, MIT). Both are written fresh: nothing comes from V3DRender's GPL code.
+  - RISC OS's kernel offers the screen's rectangle copies and solid fills to the display driver as GraphicsV 13, ops 1 and 2. On ROL, SocketKVM doesn't take them, so the kernel's own ARM code does the work, which under QEMU is emulated.
+  - Linux2D claims GraphicsV and sends copies and solid fills of 64 KB or more to rol-2d. It leaves everything else to RISC OS.
+  - The screen is dynamic area 2, which ROL keeps in a file. OS_DynamicArea 29 gives Linux2D the file's descriptor, and Linux2D passes it to rol-2d (SCM_RIGHTS on the abstract socket `rol-2d`). rol-2d maps the same file and does the copy or fill natively while Linux2D waits for its answer.
+  - Mode and bank changes (GraphicsV 2 and 6) make Linux2D read the screen's geometry again. Without rol-2d, Linux2D passes everything on and looks for it again every 5 seconds.
+  - `*Linux2D` shows counts. It also takes `on`, `off`, and `limits <copy bytes> <fill bytes>`.
+- **Tested in the Mac's VM** (ROL 5.31 under qemu-user, headless) with `test/rol/t2d.bas`, in 1920x1080 at 32, 16 and 8 bits a pixel:
+  - The test does overlapping copies in every direction, odd sizes and positions, and fills.
+  - The screen checksums are the same with and without Linux2D. They also match with `*Linux2D limits 1 1`, which sends all 9,603 fills and 324 copies to rol-2d.
+  - Copy of 1900x1000 (ms, RISC OS → Linux2D): 1.0 → 0.2 at 32 bpp, 0.6 → 0.1 at 16 bpp, 0.3 → 0.1 at 8 bpp.
+  - Fill of 1900x1050: 0.7 → 0.5–0.6, 0.3 → 0.2, 0.2 → 0.1. Fills are bound by memory, so they gain less.
+  - Sending small operations too made the test's mixed drawing slower (3 cs → 9 cs), hence the 64 KB threshold.
+- **Not tried yet:**
+  - the desktop (the Wimp's own redraws), and patterned (ECF) fills;
+  - ROL running natively on AArch32, where RISC OS's code isn't emulated and the gain will be smaller;
+  - folding Linux2D into Linux3D and rol-2d into rol-3d, so there is one module and one helper.
+
 ## 0.16: the Drivers row says what draws (20 Nov 2026)
 
 - **!RISC3D 0.08-3** (`out/RISC3D-0.08-3.zip`): as 0.08-2, with !RISC3DSetup 1.04.

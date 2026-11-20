@@ -10,6 +10,7 @@
 #                       to compare with
 #   out/rol-3d          the Linux helper (64-bit ARM)
 #   out/rol-3d-host, out/r3dtest-host   the same two for the build machine
+#   out/rol-2d          Linux2D's helper (prototype; 64-bit ARM)
 # RISCOS_TOOLCHAIN: riscos-crossdev's toolchain/env.
 #
 # Copyright (c) 2026 Andrew Youll. MIT licence (see LICENSE).
@@ -23,7 +24,7 @@ I="-Iinclude -Ilib -Iout/gen -Iproto"
 MC="-O2 -marm -march=armv7-a -mno-unaligned-access -fpie -fvisibility=hidden -mgeneral-regs-only -ffreestanding -fno-common -fno-stack-protector -fno-asynchronous-unwind-tables -fno-unwind-tables -nostdinc -isystem $(${T}gcc -print-file-name=include) -Wall -Wextra -Werror -Icommon"
 ML="-nostdlib -static -Wl,--no-dynamic-linker -Wl,-T,common/module.ld -Wl,--build-id=none -Wl,-z,norelro"
 ${T}gcc $MC -c -o out/obj/cmodule.o common/cmodule.c
-for m in RISC3D:risc3d Linux3D:linux3d; do
+for m in RISC3D:risc3d Linux3D:linux3d Linux2D:linux2d; do
   n=${m%%:*}; c=${m##*:}
   ${T}as -I common -o out/obj/$n-header.o modules/$n/header.s
   ${T}gcc $MC -c -o out/obj/$n.o modules/$n/$c.c
@@ -75,6 +76,8 @@ ${T}strip out/obj/sharetest.elf
 # (0.20: threads, for contexts that share objects)
 aarch64-linux-gnu-gcc -O2 -Wall -Wextra $I -o out/rol-3d linux/rol-3d.c -ldl -lpthread
 gcc -O2 -Wall -Wextra $I -o out/rol-3d-host linux/rol-3d.c -ldl -lpthread
+aarch64-linux-gnu-gcc -O2 -Wall -Wextra -Werror -o out/rol-2d linux/rol-2d.c
+gcc -O2 -Wall -Wextra -Werror -o out/rol-2d-host linux/rol-2d.c
 gcc -O2 -Wall -DR3D_HOST -Itest/host $I -Idemo/test -o out/r3dtest-host demo/test/r3dtest.c lib/r3d_gl.c -lm -lpthread
 gcc -O2 -Wall -DR3D_HOST -Itest/host $I -o out/gl1test-host demo/gl1/gl1test.c lib/r3d_gl.c -lm -lpthread
 gcc -O2 -Wall -DR3D_HOST -Itest/host $I -o out/estest-host demo/es/estest.c lib/r3d_gl.c -lm -lpthread

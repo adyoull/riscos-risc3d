@@ -44,6 +44,8 @@
    (RISC3D_Open's flag bit 0). If it also has bit 1, RISC3D asks it at
    each RISC3D_Info whether it can now (reason 3's r1 bit 0: Linux3D needs
    a rol-3d of 0.20 on); Info's r4 bit 2 is set if it can.
+   Bit 3 (0.09 on) = the driver describes its hardware (reason 4), for
+   RISC3D_Describe.
    Bit 0 = a DRM device. Such a driver (V3DRender, for the
    Pi 4's GPU) takes no command stream: the program's own Mesa drives the
    GPU through the driver's ioctl SWI (r5), with the file from
@@ -67,6 +69,22 @@
 			      objects between contexts now (drivers
 			      registered with flags bit 1 only; r1 from
 			      0.06, for those with bit 2 too)
+     r0 = 4 hardware       r1 -> buffer, r2 = its size -> r2 = the size
+			      the text needs, with its terminator (0.09 on,
+			      drivers registered with flags bit 3). The text:
+			      lines of "label TAB value", each ended by LF,
+			      then a 0, as RISC3D_Describe gives it. What the
+			      hardware is, as only the driver knows (the GPU
+			      and its revision, clock, memory, limits); not
+			      what Mesa offers on it. The driver fills as much
+			      as fits, always ending it with a 0 when r2 > 0.
+
+   RISC3D_Describe (0.09 on) r0 = flags (0), r1 -> buffer, r2 = its size
+			 -> r2 = the size needed (1: the driver has nothing
+			 to say; the buffer holds ""), r3 -> the driver's
+			 name or 0 if none. The best driver's reason 4 text
+			 (above). Configure's RISC3D window shows it under
+			 Hardware.
 
    Finding the driver (0.04 on). RISC3D is installed as !RISC3D in
    !Boot.Resources: its !Boot sets RISC3D$Dir and RISC3D$Path, and it
@@ -272,7 +290,7 @@ mod_swi (unsigned number, regs *r)
 	  n += drv[i].entry != 0;
 	for (int i = 0; i < MAXCTX; i++)
 	  c += ctx[i].used;
-	r->r[0] = 8;
+	r->r[0] = 9;
 	r->r[1] = (unsigned) n;
 	r->r[2] = (unsigned) c;
 	r->r[3] = b < 0 ? 0 : (unsigned) drv[b].name;
@@ -307,7 +325,7 @@ mod_swi (unsigned number, regs *r)
 		memset (drv[i].name, 0, sizeof drv[i].name);
 		memcpy (drv[i].name, s, l);
 		drv[i].r12 = r->r[2];
-		drv[i].flags = r->r[4] & 7;
+		drv[i].flags = r->r[4] & 15;	/* (0.09: bit 3) */
 		drv[i].ioctl = drv[i].flags & 1 ? r->r[5] : 0;
 		drv[i].drm_name = drv[i].flags & 1 ? r->r[6] : 0;
 		drv[i].entry = r->r[1];
@@ -378,6 +396,29 @@ mod_swi (unsigned number, regs *r)
 	regs c = {{ 2, ctx[i].handle, r->r[1] }};
 	ctx[i].syncs++;
 	return call_driver (drv[ctx[i].driver].entry, drv[ctx[i].driver].r12, &c);
+      }
+    case 5:
+      {
+	look_now ();
+	int b = best_driver ();
+	char *buf = (char *) r->r[1];
+	unsigned size = r->r[2];
+	if (r->r[0])
+	  return ERR (err_swi);
+	if (size)
+	  buf[0] = 0;
+	r->r[3] = b < 0 ? 0 : (unsigned) drv[b].name;
+	r->r[2] = 1;
+	if (b < 0 || !(drv[b].flags & 8))
+	  return 0;
+	regs q = {{ 4, (unsigned) buf, size }};
+	oserror *e = call_driver (drv[b].entry, drv[b].r12, &q);
+	if (e)
+	  return e;
+	if (size)
+	  buf[size - 1] = 0;		/* (a driver that forgot) */
+	r->r[2] = q.r[2] ? q.r[2] : 1;
+	return 0;
       }
     }
   return ERR (err_swi);

@@ -97,7 +97,7 @@ your finalisation.
 | r1 | your entry point (section 4) |
 | r2 | the value for r12 when it's called (your private word, or 0) |
 | r3 | → your name, shown by `*RISC3D` (up to 47 characters) |
-| r4 | flags: bit 0 = a DRM device; bit 1 = you may draw in software (section 6); bit 2 = your contexts can share objects (section 6, RISC3D 0.06 on) |
+| r4 | flags: bit 0 = a DRM device; bit 1 = you may draw in software (section 6); bit 2 = your contexts can share objects (section 6, RISC3D 0.06 on); bit 3 = you describe your hardware (reason 4, RISC3D 0.09 on) |
 | r5 | DRM device: your ioctl SWI's number |
 | r6 | DRM device: → the name of Mesa's driver for your GPU ("v3d", "etnaviv", ...) |
 
@@ -120,7 +120,7 @@ registration:
 
 | Out | |
 |---|---|
-| r0 | RISC3D's version × 100 (8 for 0.08) |
+| r0 | RISC3D's version × 100 (9 for 0.09) |
 | r1 | drivers registered |
 | r2 | contexts open |
 | r3 | → the name of the driver a new context gets (the last registered), or 0 |
@@ -147,6 +147,7 @@ program. You may change r0 to r9. Keep r10, r11 and sp as they were.
 | 1 | **close** it | r1 = your handle (or file) | |
 | 2 | **sync** (command stream only) | r1 = handle, r2 = 0 wake / 1 wait | |
 | 3 | **describe** (flags bit 1 only) | | r0 = 0 on a GPU, 1 in software now, 2 not known yet; r1 bit 0 = contexts can share objects now (flags bit 2 too) |
+| 4 | **hardware** (flags bit 3 only; RISC3D 0.09 on) | r1 → a buffer, r2 = its size | r2 = the size your text needs, with its terminating 0 |
 
 - **Open:** made for each `RISC3D_Open`. RISC3D keeps your handle and gives
   the program its own context number.
@@ -163,6 +164,19 @@ program. You may change r0 to r9. Keep r10, r11 and sp as they were.
   contexts at exit, and from its signal handlers, to keep that rare.
 - **Sync:** command stream only; see section 5.
 - **Describe:** only if you registered with flags bit 1; see section 6.
+- **Hardware:** only if you registered with flags bit 3. Write what you know
+  about the GPU itself as lines of `label` TAB `value`, each ended by a
+  line feed, then a 0. For example: `GPU` TAB `V3D 4.2, revision 14`,
+  `Clock` TAB `500 MHz`, `GPU memory` TAB `2048 KB in use`. Keep labels short (up to
+  about 24 characters) and values to one line (up to about 90). Configure's
+  RISC3D window shows up to 8 of them under **Hardware**.
+  - Fill as much as fits in r2 bytes, always ending with a 0 when r2 > 0, and
+    return the full size in r2.
+  - Give hardware facts only. What OpenGL and OpenGL ES offer on your GPU
+    comes from Mesa: see the probe in section 5.
+  - Programs reach it through `RISC3D_Describe` (&5AF85): r0 = 0, r1 →
+    buffer, r2 = size → r2 = size needed (1 if you say nothing), r3 → your
+    name.
 
 RISC3D allows up to 32 contexts at once, across all drivers.
 
@@ -209,6 +223,50 @@ holds only "v3d" today. Adding yours means:
 Ask riscos-mesa for it, with your driver's name and Mesa's driver. Mesa
 25.2 or later is used, since older v3d drivers mis-draw fixed-function
 lighting.
+
+### What Configure's window shows for a DRM device: the probe
+
+For a DRM device, the OpenGL and OpenGL ES that programs get come from the
+Mesa linked into each program, so neither RISC3D nor your driver can say
+what they are. Configure's RISC3D window (!RISC3DSetup 1.05 on) runs a probe
+instead, if !RISC3D has one for your driver: `<RISC3D$Dir>.Probes.<name>`,
+where `<name>` is the first word of your registered name (`V3DRender`).
+Don't put it in the GPU folder: RISC3D tries everything there as a module.
+
+The window starts it with `*Run <probe> <file>`, through Wimp_StartTask, and
+waits for it to end. So it can be an Obey file that sets its own WimpSlot
+and runs the program, which may live elsewhere (in !MesaLibs, say). The
+program is built with the Mesa that draws on your GPU. It makes a context
+of each kind through RISC3D, as any program would, closes them, and writes
+`<file>` as lines of text:
+
+```
+# RISC3D probe 1
+gl version 2.1 Mesa 25.2.0
+gl renderer V3D 4.2.14.0
+gl glsl 1.20
+gl max_texture 4096
+gl extensions 141
+gles3 version OpenGL ES 3.1 Mesa 25.2.0
+gles3 glsl OpenGL ES GLSL ES 3.10
+gles3 max_texture 4096
+gles3 extensions 97
+gles2 ...
+es1 error <why there is no OpenGL ES 1.1 context>
+```
+
+- Each line is `<api> <key> <value>`. `<api>` is `gl`, `gles3`, `gles2` or
+  `es1`.
+- The keys are:
+  - `version`, `renderer` and `glsl`: glGetString's GL_VERSION, GL_RENDERER
+    and GL_SHADING_LANGUAGE_VERSION;
+  - `max_texture`: GL_MAX_TEXTURE_SIZE;
+  - `extensions`: how many there are;
+  - `error`: why there's no context of that kind.
+- Lines the window doesn't know are ignored, so more can be added later.
+- The window shows OpenGL, the newest OpenGL ES (gles3, else gles2),
+  whether there's OpenGL ES 1.1, the largest texture and the extension
+  counts.
 
 ## 6. A command stream
 

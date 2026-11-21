@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased: Configure's window says what a DRM device offers (21 Nov 2026)
+
+- **Why.** On the owner's native Pi 4 (V3DRender 0.19), Configure's RISC3D window showed "As Mesa's v3d driver gives" for OpenGL and OpenGL ES, and nothing for the largest texture or the extensions. Owner: "It should report what it actually supports and shouldn't need an app to run for it to do so." V3DRender's handoff (`handoffs/2026-11-21-v3drender-risc3dsetup-should-report-v3d-support.md`) proposed a probe from riscos-mesa, plus hardware facts from the driver.
+- **RISC3D module 0.09:**
+  - New SWI **`RISC3D_Describe`** (&5AF85): r0 = 0, r1 → buffer, r2 = size → r2 = size needed, r3 → the driver's name. It returns the driver's own text about its GPU, as lines of "label TAB value".
+  - New driver reason **4, hardware**, for drivers that register with flags **bit 3**. Register now keeps flag bit 3: it used to keep only bits 0–2.
+  - Info r0 = 9. !RISC3D's !Boot and !Run now RMEnsure 0.09.
+  - Tested headless in the Mac's VM (ROL 5.31, qemu-user) with a fake driver registered from BASIC: the whole text, a 4-byte buffer (cut, ended with a 0, full size returned), and no driver (size 1, no name).
+- **!RISC3DSetup 1.05:**
+  - For a DRM device, it runs the driver's probe, `<RISC3D$Dir>.Probes.<driver>`, with `*Run <probe> <file>` through Wimp_StartTask. It shows what the probe wrote: renderer, OpenGL and GLSL, the newest OpenGL ES (3.x, else 2.0), OpenGL ES 1.1 yes or no, largest texture, and extension counts.
+  - With no probe it says "Not known: !RISC3D has no probe for V3DRender".
+  - A **Hardware** group shows the driver's RISC3D_Describe lines, for any driver that gives them.
+  - The probe's file format is in `docs/DRIVER-GUIDE.md` section 5. The parser was tested on the host. The window itself hasn't been run yet.
+- **Waiting for:**
+  - riscos-mesa: the probe for V3DRender, built with libMesaGPU;
+  - V3DRender: reason 4, if it wants a Hardware group.
+- Nothing is packaged yet.
+
 ## Unreleased: Linux2D, a prototype of 2D acceleration on ROL (20 Nov 2026)
 
 - **Not in a kit yet.** The owner asked whether GraphicsV could be accelerated through Linux for 2D, then "Let's prototype it".

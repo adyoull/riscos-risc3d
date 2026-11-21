@@ -9,6 +9,13 @@
    moment, as a program would. A DRM device (V3DRender) is drawn with
    Mesa's own driver inside each program, so there it says that.
 
+   1.05: on a DRM device (V3DRender) too it says what programs get, with
+   no program running: it runs the driver's probe, <RISC3D$Dir>.Probes.
+   <driver> (from riscos-mesa, built with the Mesa that draws there),
+   which makes a context of each kind and writes what it was given (see
+   read_probe). And a Hardware group shows what the driver says of the
+   GPU itself (RISC3D 0.09's RISC3D_Describe), where it says anything.
+
    Started by Configure with "-openat x y" (the window's top left, OS
    units), else centred. Message_OpenConfigWindow brings it to the front.
    Plain Wimp calls, no Toolbox.
@@ -42,6 +49,7 @@
 #include "r3d.h"
 
 #define RISC3D_Info 0x5AF80
+#define RISC3D_Describe 0x5AF85
 #define Message_Quit 0
 #define Message_HelpRequest 0x502
 #define Message_HelpReply 0x503
@@ -64,6 +72,8 @@ static struct
   char drv_name[MAXDRV][40], drv_state[MAXDRV][160];
   int drv_ok[MAXDRV];
   char version_text[40], contexts_text[16];
+  int nhw;				/* the driver's own lines (Hardware) */
+  char hw_label[8][32], hw_value[8][100];
 } info;
 
 /* --- the window --------------------------------------------------------- */
@@ -85,7 +95,7 @@ typedef struct
   const char *help;
 } icon;
 
-#define ICONS 64
+#define ICONS 96
 static icon icons[ICONS];
 static int nicons, i_refresh, i_cancel, i_set, i_load;
 static int want_on;			/* the choice shown */
@@ -189,6 +199,7 @@ static const char
   h_contexts[] = "How many 3D contexts programs have open now.",
   h_folder[] = "Where RISC3D looks for drivers. Each one there is tried in turn until one starts; a driver refuses to start on machines it isn't for.",
   h_drv[] = "What draws for programs now: the 3D driver RISC3D loaded (Linux3D on RISC OS on Linux, V3DRender on a Raspberry Pi 4), or Software3D: Mesa drawing in software in each program, as without RISC3D.",
+  h_hw[] = "What the 3D driver says about the GPU itself.",
   h_version[] = "The version of the RISC3D module.",
   h_load[] = "Click to tick or untick. Ticked: RISC3D loads a 3D driver, so programs can draw on the GPU. Not ticked: no driver is loaded and programs draw in software, as without RISC3D. Then click Set.";
 
@@ -242,6 +253,14 @@ build (void)
   value_at (VALUE_X, VALUE_X + 120, y, info.contexts_text, h_contexts);
   y -= ROW;
   y = group_end (y + 8);
+
+  if (info.nhw)
+    {
+      y = group (y, "Hardware");
+      for (int i = 0; i < info.nhw; i++)
+	row (&y, info.hw_label[i], info.hw_value[i], h_hw);
+      y = group_end (y + 8);
+    }
 
   y = group (y, "Drivers");
   row (&y, "Folder", info.folder[0] ? info.folder : "(none: !RISC3D hasn't been seen)", h_folder);
@@ -435,6 +454,167 @@ read_star_risc3d (void)
   free (buf);
 }
 
+
+/* --- the driver's hardware lines (RISC3D 0.09) ------------------------ */
+
+static void
+read_hardware (void)
+{
+  static char text[1024];
+  int need = 0;
+  info.nhw = 0;
+  if (_swix (RISC3D_Describe, _INR (0, 2) | _OUT (2), 0, text, sizeof text, &need) || need <= 1)
+    return;
+  /* "label TAB value LF" lines */
+  char *p = text;
+  while (*p && info.nhw < 8)
+    {
+      char *e = strchr (p, '\n');
+      if (e)
+	*e = 0;
+      char *t = strchr (p, '\t');
+      if (t)
+	{
+	  *t = 0;
+	  trim_to (info.hw_label[info.nhw], sizeof info.hw_label[0], p);
+	  trim_to (info.hw_value[info.nhw], sizeof info.hw_value[0], t + 1);
+	  if (info.hw_label[info.nhw][0])
+	    info.nhw++;
+	}
+      if (!e)
+	break;
+      p = e + 1;
+    }
+}
+
+/* --- the probe, for a DRM device --------------------------------------
+
+   <RISC3D$Dir>.Probes.<driver> is run (*Run, through Wimp_StartTask, so
+   an Obey file can set its own WimpSlot) with one argument, the file to
+   write. It makes a context of each kind it can, through RISC3D as any
+   program would, and writes a line for each answer:
+
+     # RISC3D probe 1
+     <api> version <GL_VERSION>
+     <api> renderer <GL_RENDERER>
+     <api> glsl <GL_SHADING_LANGUAGE_VERSION>
+     <api> max_texture <GL_MAX_TEXTURE_SIZE>
+     <api> extensions <how many>
+     <api> error <why there is no context of that kind>
+
+   <api> is gl, gles3, gles2 or es1. Anything else is ignored. */
+
+enum { P_GL, P_GLES3, P_GLES2, P_ES1, P_N };
+static struct { char version[100], renderer[120], glsl[60], error[100]; int tex, exts; } probe[P_N];
+
+static int
+read_probe (const char *file)
+{
+  memset (probe, 0, sizeof probe);
+  for (int i = 0; i < P_N; i++)
+    probe[i].exts = -1;
+  FILE *f = fopen (file, "r");
+  if (!f)
+    return 0;
+  static const char *apis[P_N] = { "gl", "gles3", "gles2", "es1" };
+  char line[400];
+  int any = 0;
+  while (fgets (line, sizeof line, f))
+    {
+      line[strcspn (line, "\r\n")] = 0;
+      char *k = strchr (line, ' ');
+      if (!k || line[0] == '#')
+	continue;
+      *k++ = 0;
+      char *v = strchr (k, ' ');
+      v = v ? (*v = 0, v + 1) : k + strlen (k);
+      int a = -1;
+      for (int i = 0; i < P_N; i++)
+	if (!strcmp (line, apis[i]))
+	  a = i;
+      if (a < 0)
+	continue;
+      any = 1;
+      if (!strcmp (k, "version"))
+	trim_to (probe[a].version, sizeof probe[a].version, v);
+      else if (!strcmp (k, "renderer"))
+	trim_to (probe[a].renderer, sizeof probe[a].renderer, v);
+      else if (!strcmp (k, "glsl"))
+	trim_to (probe[a].glsl, sizeof probe[a].glsl, v);
+      else if (!strcmp (k, "error"))
+	trim_to (probe[a].error, sizeof probe[a].error, v);
+      else if (!strcmp (k, "max_texture"))
+	probe[a].tex = atoi (v);
+      else if (!strcmp (k, "extensions"))
+	probe[a].exts = atoi (v);
+    }
+  fclose (f);
+  return any;
+}
+
+static void
+probe_drm (const char *drm)
+{
+  char path[200], cmd[300];
+  snprintf (path, sizeof path, "<RISC3D$Dir>.Probes.%s", info.driver_module);
+  int type = 0;
+  if (_swix (OS_File, _INR (0, 1) | _OUT (0), 17, path, &type) || type != 1)
+    {
+      snprintf (info.gl, sizeof info.gl, "Not known: !RISC3D has no probe for %s", info.driver_module);
+      snprintf (info.gles, sizeof info.gles, "Not known: Mesa's %s driver in each program decides", drm);
+      return;
+    }
+  const char *out = "<Wimp$ScrapDir>.RISC3DProb";
+  _swix (OS_File, _INR (0, 1), 6, out);
+  snprintf (cmd, sizeof cmd, "Run %s %s", path, out);
+  _swix (Wimp_StartTask, _IN (0), cmd);
+  int got = read_probe (out);
+  _swix (OS_File, _INR (0, 1), 6, out);
+  if (!got)
+    {
+      snprintf (info.gl, sizeof info.gl, "Not known: the probe for %s gave no answer", info.driver_module);
+      snprintf (info.gles, sizeof info.gles, "Not known");
+      return;
+    }
+  char v[32], sl[32], ren[120] = "";
+  if (probe[P_GL].version[0])
+    {
+      version_number (v, sizeof v, probe[P_GL].version);
+      version_number (sl, sizeof sl, probe[P_GL].glsl);
+      snprintf (info.gl, sizeof info.gl, "%s, compatibility profile \x97 GLSL %s", v, sl);
+    }
+  else
+    snprintf (info.gl, sizeof info.gl, "None (%s)", probe[P_GL].error[0] ? probe[P_GL].error : "no context");
+  int es = probe[P_GLES3].version[0] ? P_GLES3 : P_GLES2;
+  if (probe[es].version[0])
+    {
+      version_number (v, sizeof v, probe[es].version);
+      const char *g = strstr (probe[es].glsl, "GLSL ES ");
+      version_number (sl, sizeof sl, g ? g + 8 : probe[es].glsl);
+      snprintf (info.gles, sizeof info.gles, "%s \x97 GLSL ES %s", v, sl);
+    }
+  else
+    snprintf (info.gles, sizeof info.gles, "None (%s)", probe[es].error[0] ? probe[es].error : "no context");
+  info.es1 = probe[P_ES1].version[0] != 0;
+  for (int i = 0; i < P_N && !ren[0]; i++)
+    if (probe[i].renderer[0])
+      snprintf (ren, sizeof ren, "%s", probe[i].renderer);
+  if (ren[0])
+    {
+      plain_renderer (ren);
+      trim_to (info.renderer, sizeof info.renderer, ren);
+      snprintf (info.subline, sizeof info.subline, "Drawing on the GPU: %s", info.renderer);
+    }
+  int tex = probe[P_GL].tex > probe[es].tex ? probe[P_GL].tex : probe[es].tex;
+  if (tex > 0)
+    snprintf (info.texture, sizeof info.texture, "%d \xD7 %d", tex, tex);
+  int eg = probe[P_GL].exts, ee = probe[es].exts;
+  if (eg >= 0 && ee >= 0)
+    snprintf (info.exts, sizeof info.exts, "%d OpenGL, %d OpenGL ES", eg, ee);
+  else if (eg >= 0 || ee >= 0)
+    snprintf (info.exts, sizeof info.exts, "%d", eg >= 0 ? eg : ee);
+}
+
 static void
 find_out (void)
 {
@@ -503,11 +683,14 @@ find_out (void)
       info.share = 1;
       snprintf (info.subline, sizeof info.subline, "Drawing on the GPU, with Mesa's %s driver in each program", drm ? drm : "own");
       snprintf (info.renderer, sizeof info.renderer, "Mesa's %s driver (programs linked with libMesaGPU)", drm ? drm : "");
-      snprintf (info.gl, sizeof info.gl, "As Mesa's %s driver gives", drm ? drm : "");
-      snprintf (info.gles, sizeof info.gles, "As Mesa's %s driver gives", drm ? drm : "");
+      read_hardware ();
+      _swix (Hourglass_On, 0);
+      probe_drm (drm ? drm : "");
+      _swix (Hourglass_Off, 0);
       return;
     }
   info.on_gpu = !(flags & 2);
+  read_hardware ();
 
   /* a command stream: ask, with a context of each kind */
   char ver[160], sl[80], ren[160] = "", v[32], s[32];

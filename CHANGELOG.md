@@ -14,6 +14,10 @@
   - With an older !MesaLibs it says "Not known: needs !MesaLibs 20.3.5-23 or later".
   - A **Hardware** group shows the driver's RISC3D_Describe lines, for any driver that gives them.
   - The reader was tested on the host with GPUProbe's output from the owner's Pi 4 (V3DRender 0.19). It reads: OpenGL 2.1 with GLSL 1.20; OpenGL ES 3.1 with GLSL ES 3.10; ES 1.1; 4096; 231 and 127 extensions. **Run on the owner's native Pi 4 the same day**, through TestAgent, with !MesaLibs 20.3.5-23test3 installed in `!Boot.Resources`; the old !MesaLibs and RISC3D files are kept in `$.Test.R3D09`. Strada was running, with 4 contexts open. The window showed: Renderer V3D 4.2.14.0; OpenGL 2.1, compatibility profile, GLSL 1.20; OpenGL ES 3.1, GLSL ES 3.10; largest texture 4096 × 4096; 231 OpenGL and 127 OpenGL ES extensions; ES 1.1 Yes. RISC3D 0.08 was still the loaded module (0.09 loads at the next start), so there was no Hardware group.
+- **A context left behind by every GPUProbe run** (the owner: "context count keeps going up on every refresh"):
+  - GPUProbe in riscos-mesa 20.3.5-23test3 leaves one RISC3D context open each time it runs. On the Pi, with RISC3D 0.09 and V3DRender 0.20 loaded and no other program, two runs left contexts 1 and 2. They are owned by no Wimp task, so RISC3D can't close them when the program ends, and RISC3D has room for 32.
+  - The window now notes the task-less contexts before it runs the probe and closes any new ones afterwards: nothing else runs while it does. This hasn't been tried on the Pi yet.
+  - Reported to riscos-mesa.
 - **Waiting for:** riscos-mesa 20.3.5-23 (GPUProbe); V3DRender's reason 4, if it wants a Hardware group.
 - Nothing is packaged yet.
 

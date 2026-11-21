@@ -410,22 +410,50 @@ plain_renderer (char *r)
 }
 
 /* *RISC3D's own account, for the drivers folder and what was tried */
-static void
-read_star_risc3d (void)
+static char *
+star_risc3d (void)
 {
-  info.ndrv = 0;
   if (_swix (OS_CLI, _IN (0), "RISC3D { > <Wimp$ScrapDir>.RISC3DSet }"))
-    return;
+    return 0;
   int type = 0, len = 0;
   if (_swix (OS_File, _INR (0, 1) | _OUT (0) | _OUT (4), 17, "<Wimp$ScrapDir>.RISC3DSet", &type, &len) || type != 1)
-    return;
+    return 0;
   char *buf = malloc ((size_t) len + 1);
   if (!buf)
-    return;
+    return 0;
   if (_swix (OS_File, _INR (0, 3), 16, "<Wimp$ScrapDir>.RISC3DSet", buf, 0))
     len = 0;
   buf[len] = 0;
   _swix (OS_File, _INR (0, 1), 6, "<Wimp$ScrapDir>.RISC3DSet");
+  return buf;
+}
+
+/* *RISC3D's "Context n: ..., task &00000000, ..." lines: used[n] = 1 for
+   each context open that no Wimp task owns (RISC3D can't close those
+   itself when their program ends) */
+static void
+untasked_contexts (unsigned char used[64])
+{
+  memset (used, 0, 64);
+  char *buf = star_risc3d ();
+  if (!buf)
+    return;
+  for (char *line = strtok (buf, "\r\n"); line; line = strtok (0, "\r\n"))
+    {
+      int n = 0;
+      if (sscanf (line, "Context %d:", &n) == 1 && n > 0 && n < 64 && strstr (line, "task &00000000"))
+	used[n] = 1;
+    }
+  free (buf);
+}
+
+static void
+read_star_risc3d (void)
+{
+  info.ndrv = 0;
+  char *buf = star_risc3d ();
+  if (!buf)
+    return;
   for (char *line = strtok (buf, "\r\n"); line; line = strtok (0, "\r\n"))	/* (OS_NewLine: LF CR) */
     {
       char t[200];
@@ -585,7 +613,17 @@ probe_drm (const char *drm)
   char cmd[200];
   _swix (OS_File, _INR (0, 1), 6, out);
   snprintf (cmd, sizeof cmd, "%s -o %s", path, out);
+  /* (GPUProbe of riscos-mesa 20.3.5-23test3 leaves a context open each
+     time, owned by no task, so nothing closes it: RISC3D has 32. Any
+     such context that wasn't there before it ran is its own, as nothing
+     else runs while it does; close those) */
+  unsigned char before[64], after[64];
+  untasked_contexts (before);
   _swix (Wimp_StartTask, _IN (0), cmd);
+  untasked_contexts (after);
+  for (int n = 1; n < 64; n++)
+    if (after[n] && !before[n])
+      _swix (RISC3D_Close, _IN (0), n);
   int got = read_probe (out);
   _swix (OS_File, _INR (0, 1), 6, out);
   if (!got)

@@ -13,7 +13,7 @@
   - The window shows what the probe wrote: renderer, OpenGL and GLSL, OpenGL ES and GLSL ES, OpenGL ES 1.1 yes or no, largest texture, and extension counts. If the probe's route was software, the window says programs draw in software.
   - With an older !MesaLibs it says "Not known: needs !MesaLibs 20.3.5-23 or later".
   - A **Hardware** group shows the driver's RISC3D_Describe lines, for any driver that gives them.
-  - The reader was tested on the host with GPUProbe's output from the owner's Pi 4 (V3DRender 0.19). It reads: OpenGL 2.1 with GLSL 1.20; OpenGL ES 3.1 with GLSL ES 3.10; ES 1.1; 4096; 231 and 127 extensions. The window itself hasn't been run yet. The Pi's installed !MesaLibs has no GPUProbe yet: it came in 20.3.5-23test3.
+  - The reader was tested on the host with GPUProbe's output from the owner's Pi 4 (V3DRender 0.19). It reads: OpenGL 2.1 with GLSL 1.20; OpenGL ES 3.1 with GLSL ES 3.10; ES 1.1; 4096; 231 and 127 extensions. **Run on the owner's native Pi 4 the same day**, through TestAgent, with !MesaLibs 20.3.5-23test3 installed in `!Boot.Resources`; the old !MesaLibs and RISC3D files are kept in `$.Test.R3D09`. Strada was running, with 4 contexts open. The window showed: Renderer V3D 4.2.14.0; OpenGL 2.1, compatibility profile, GLSL 1.20; OpenGL ES 3.1, GLSL ES 3.10; largest texture 4096 × 4096; 231 OpenGL and 127 OpenGL ES extensions; ES 1.1 Yes. RISC3D 0.08 was still the loaded module (0.09 loads at the next start), so there was no Hardware group.
 - **Waiting for:** riscos-mesa 20.3.5-23 (GPUProbe); V3DRender's reason 4, if it wants a Hardware group.
 - Nothing is packaged yet.
 

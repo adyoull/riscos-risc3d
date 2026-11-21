@@ -744,10 +744,11 @@ find_out (void)
       info.share = 1;
       snprintf (info.subline, sizeof info.subline, "Drawing on the GPU, with Mesa's %s driver in each program", drm ? drm : "own");
       snprintf (info.renderer, sizeof info.renderer, "Mesa's %s driver (programs linked with libMesaGPU)", drm ? drm : "");
-      read_hardware ();
+      /* (the probe first, then the driver's hardware lines) */
       _swix (Hourglass_On, 0);
       probe_drm (drm ? drm : "");
       _swix (Hourglass_Off, 0);
+      read_hardware ();
       return;
     }
   info.on_gpu = !(flags & 2);

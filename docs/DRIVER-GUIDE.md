@@ -224,49 +224,24 @@ Ask riscos-mesa for it, with your driver's name and Mesa's driver. Mesa
 25.2 or later is used, since older v3d drivers mis-draw fixed-function
 lighting.
 
-### What Configure's window shows for a DRM device: the probe
+### What Configure's window shows for a DRM device: GPUProbe
 
 For a DRM device, the OpenGL and OpenGL ES that programs get come from the
-Mesa linked into each program, so neither RISC3D nor your driver can say
-what they are. Configure's RISC3D window (!RISC3DSetup 1.05 on) runs a probe
-instead, if !RISC3D has one for your driver: `<RISC3D$Dir>.Probes.<name>`,
-where `<name>` is the first word of your registered name (`V3DRender`).
-Don't put it in the GPU folder: RISC3D tries everything there as a module.
+Mesa linked into each program, so neither RISC3D nor your driver can say what
+they are. Configure's RISC3D window (!RISC3DSetup 1.05 on) runs riscos-mesa's
+**GPUProbe** instead: `<MesaLibs$Dir>.GPUProbe -o <file>`, from !MesaLibs
+20.3.5-23 on, started as a task of its own.
 
-The window starts it with `*Run <probe> <file>`, through Wimp_StartTask, and
-waits for it to end. So it can be an Obey file that sets its own WimpSlot
-and runs the program, which may live elsewhere (in !MesaLibs, say). The
-program is built with the Mesa that draws on your GPU. It makes a context
-of each kind through RISC3D, as any program would, closes them, and writes
-`<file>` as lines of text:
-
-```
-# RISC3D probe 1
-gl version 2.1 Mesa 25.2.0
-gl renderer V3D 4.2.14.0
-gl glsl 1.20
-gl max_texture 4096
-gl extensions 141
-gles3 version OpenGL ES 3.1 Mesa 25.2.0
-gles3 glsl OpenGL ES GLSL ES 3.10
-gles3 max_texture 4096
-gles3 extensions 97
-gles2 ...
-es1 error <why there is no OpenGL ES 1.1 context>
-```
-
-- Each line is `<api> <key> <value>`. `<api>` is `gl`, `gles3`, `gles2` or
-  `es1`.
-- The keys are:
-  - `version`, `renderer` and `glsl`: glGetString's GL_VERSION, GL_RENDERER
-    and GL_SHADING_LANGUAGE_VERSION;
-  - `max_texture`: GL_MAX_TEXTURE_SIZE;
-  - `extensions`: how many there are;
-  - `error`: why there's no context of that kind.
-- Lines the window doesn't know are ignored, so more can be added later.
-- The window shows OpenGL, the newest OpenGL ES (gles3, else gles2),
-  whether there's OpenGL ES 1.1, the largest texture and the extension
-  counts.
+- It's linked with the same Mesa as every program and goes through RISC3D in
+  the same way. It makes an OpenGL, an OpenGL ES and an OpenGL ES 1.1
+  context, closes them, and writes `key: value` lines (format 1, in
+  !MesaLibs' !Help).
+- There's one block per API (`api:`, `route:`, `version:`, `renderer:`,
+  `shading:`, `max_texture_size:`, `extensions:`, `error:`), each ended by
+  `end`.
+- Your driver needs nothing for it, beyond opening contexts as usual.
+- With an older !MesaLibs, the window says the figures need !MesaLibs
+  20.3.5-23.
 
 ## 6. A command stream
 

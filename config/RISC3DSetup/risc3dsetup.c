@@ -10,10 +10,9 @@
    Mesa's own driver inside each program, so there it says that.
 
    1.05: on a DRM device (V3DRender) too it says what programs get, with
-   no program running: it runs the driver's probe, <RISC3D$Dir>.Probes.
-   <driver> (from riscos-mesa, built with the Mesa that draws there),
-   which makes a context of each kind and writes what it was given (see
-   read_probe). And a Hardware group shows what the driver says of the
+   no program running: it runs !MesaLibs' GPUProbe (riscos-mesa 20.3.5-23
+   on), built with the Mesa that draws there, which makes a context of
+   each kind and writes what it was given (see read_probe). And a Hardware group shows what the driver says of the
    GPU itself (RISC3D 0.09's RISC3D_Describe), where it says anything.
 
    Started by Configure with "-openat x y" (the window's top left, OS
@@ -489,23 +488,29 @@ read_hardware (void)
 
 /* --- the probe, for a DRM device --------------------------------------
 
-   <RISC3D$Dir>.Probes.<driver> is run (*Run, through Wimp_StartTask, so
-   an Obey file can set its own WimpSlot) with one argument, the file to
-   write. It makes a context of each kind it can, through RISC3D as any
-   program would, and writes a line for each answer:
+   riscos-mesa's GPUProbe (!MesaLibs 20.3.5-23 on): an Obey file that runs
+   a program linked with the same Mesa as every program, so it is given
+   what they are. It makes an OpenGL, an OpenGL ES and an OpenGL ES 1.1
+   context through RISC3D, closes them, and writes (format 1):
 
-     # RISC3D probe 1
-     <api> version <GL_VERSION>
-     <api> renderer <GL_RENDERER>
-     <api> glsl <GL_SHADING_LANGUAGE_VERSION>
-     <api> max_texture <GL_MAX_TEXTURE_SIZE>
-     <api> extensions <how many>
-     <api> error <why there is no context of that kind>
+     gpuprobe: 1
+     egl: <EGL_VERSION>
+     api: OpenGL | OpenGL ES | OpenGL ES 1
+     route: RISC3D | software | none
+     version: <GL_VERSION>
+     renderer: <GL_RENDERER>
+     shading: <GL_SHADING_LANGUAGE_VERSION>
+     max_texture_size: <n>
+     extensions: <space separated>
+     error: <why not> (route: none)
+     end
 
-   <api> is gl, gles3, gles2 or es1. Anything else is ignored. */
+   a block per api. Keys not known here are ignored. It's started as a
+   task of its own (it needs its own slot) and runs to the end before
+   Wimp_StartTask returns: it opens no window. */
 
-enum { P_GL, P_GLES3, P_GLES2, P_ES1, P_N };
-static struct { char version[100], renderer[120], glsl[60], error[100]; int tex, exts; } probe[P_N];
+enum { P_GL, P_GLES, P_ES1, P_N };
+static struct { char version[100], renderer[120], glsl[60], error[100], route[16]; int tex, exts; } probe[P_N];
 
 static int
 read_probe (const char *file)
@@ -516,68 +521,81 @@ read_probe (const char *file)
   FILE *f = fopen (file, "r");
   if (!f)
     return 0;
-  static const char *apis[P_N] = { "gl", "gles3", "gles2", "es1" };
-  char line[400];
-  int any = 0;
+  static char line[65536];		/* (extensions: one long line, ~10 KB) */
+  int a = -1, any = 0;
   while (fgets (line, sizeof line, f))
     {
       line[strcspn (line, "\r\n")] = 0;
-      char *k = strchr (line, ' ');
-      if (!k || line[0] == '#')
-	continue;
-      *k++ = 0;
-      char *v = strchr (k, ' ');
-      v = v ? (*v = 0, v + 1) : k + strlen (k);
-      int a = -1;
-      for (int i = 0; i < P_N; i++)
-	if (!strcmp (line, apis[i]))
-	  a = i;
+      char *v = strchr (line, ':');
+      if (!v)
+	{
+	  if (!strcmp (line, "end"))
+	    a = -1;
+	  continue;
+	}
+      *v++ = 0;
+      while (*v == ' ')
+	v++;
+      if (!strcmp (line, "api"))
+	{
+	  a = !strcmp (v, "OpenGL") ? P_GL : !strcmp (v, "OpenGL ES") ? P_GLES : !strcmp (v, "OpenGL ES 1") ? P_ES1 : -1;
+	  continue;
+	}
       if (a < 0)
 	continue;
       any = 1;
-      if (!strcmp (k, "version"))
+      if (!strcmp (line, "route"))
+	trim_to (probe[a].route, sizeof probe[a].route, v);
+      else if (!strcmp (line, "version"))
 	trim_to (probe[a].version, sizeof probe[a].version, v);
-      else if (!strcmp (k, "renderer"))
+      else if (!strcmp (line, "renderer"))
 	trim_to (probe[a].renderer, sizeof probe[a].renderer, v);
-      else if (!strcmp (k, "glsl"))
+      else if (!strcmp (line, "shading"))
 	trim_to (probe[a].glsl, sizeof probe[a].glsl, v);
-      else if (!strcmp (k, "error"))
+      else if (!strcmp (line, "error"))
 	trim_to (probe[a].error, sizeof probe[a].error, v);
-      else if (!strcmp (k, "max_texture"))
+      else if (!strcmp (line, "max_texture_size"))
 	probe[a].tex = atoi (v);
-      else if (!strcmp (k, "extensions"))
-	probe[a].exts = atoi (v);
+      else if (!strcmp (line, "extensions"))
+	probe[a].exts = count_words (v);
     }
   fclose (f);
   return any;
 }
 
+/* a context of that api was made (on the route RISC3D) */
+static int
+made (int a)
+{
+  return probe[a].version[0] && strcmp (probe[a].route, "none");
+}
+
 static void
 probe_drm (const char *drm)
 {
-  char path[200], cmd[300];
-  snprintf (path, sizeof path, "<RISC3D$Dir>.Probes.%s", info.driver_module);
+  const char *path = "<MesaLibs$Dir>.GPUProbe";
   int type = 0;
   if (_swix (OS_File, _INR (0, 1) | _OUT (0), 17, path, &type) || type != 1)
     {
-      snprintf (info.gl, sizeof info.gl, "Not known: !RISC3D has no probe for %s", info.driver_module);
+      snprintf (info.gl, sizeof info.gl, "Not known: needs !MesaLibs 20.3.5-23 or later (its GPUProbe)");
       snprintf (info.gles, sizeof info.gles, "Not known: Mesa's %s driver in each program decides", drm);
       return;
     }
   const char *out = "<Wimp$ScrapDir>.RISC3DProb";
+  char cmd[200];
   _swix (OS_File, _INR (0, 1), 6, out);
-  snprintf (cmd, sizeof cmd, "Run %s %s", path, out);
+  snprintf (cmd, sizeof cmd, "%s -o %s", path, out);
   _swix (Wimp_StartTask, _IN (0), cmd);
   int got = read_probe (out);
   _swix (OS_File, _INR (0, 1), 6, out);
   if (!got)
     {
-      snprintf (info.gl, sizeof info.gl, "Not known: the probe for %s gave no answer", info.driver_module);
+      snprintf (info.gl, sizeof info.gl, "Not known: !MesaLibs' GPUProbe gave no answer");
       snprintf (info.gles, sizeof info.gles, "Not known");
       return;
     }
   char v[32], sl[32], ren[120] = "";
-  if (probe[P_GL].version[0])
+  if (made (P_GL))
     {
       version_number (v, sizeof v, probe[P_GL].version);
       version_number (sl, sizeof sl, probe[P_GL].glsl);
@@ -585,19 +603,18 @@ probe_drm (const char *drm)
     }
   else
     snprintf (info.gl, sizeof info.gl, "None (%s)", probe[P_GL].error[0] ? probe[P_GL].error : "no context");
-  int es = probe[P_GLES3].version[0] ? P_GLES3 : P_GLES2;
-  if (probe[es].version[0])
+  if (made (P_GLES))
     {
-      version_number (v, sizeof v, probe[es].version);
-      const char *g = strstr (probe[es].glsl, "GLSL ES ");
-      version_number (sl, sizeof sl, g ? g + 8 : probe[es].glsl);
+      version_number (v, sizeof v, probe[P_GLES].version);
+      const char *g = strstr (probe[P_GLES].glsl, "GLSL ES ");
+      version_number (sl, sizeof sl, g ? g + 8 : probe[P_GLES].glsl);
       snprintf (info.gles, sizeof info.gles, "%s \x97 GLSL ES %s", v, sl);
     }
   else
-    snprintf (info.gles, sizeof info.gles, "None (%s)", probe[es].error[0] ? probe[es].error : "no context");
-  info.es1 = probe[P_ES1].version[0] != 0;
+    snprintf (info.gles, sizeof info.gles, "None (%s)", probe[P_GLES].error[0] ? probe[P_GLES].error : "no context");
+  info.es1 = made (P_ES1);
   for (int i = 0; i < P_N && !ren[0]; i++)
-    if (probe[i].renderer[0])
+    if (made (i) && probe[i].renderer[0])
       snprintf (ren, sizeof ren, "%s", probe[i].renderer);
   if (ren[0])
     {
@@ -605,10 +622,16 @@ probe_drm (const char *drm)
       trim_to (info.renderer, sizeof info.renderer, ren);
       snprintf (info.subline, sizeof info.subline, "Drawing on the GPU: %s", info.renderer);
     }
-  int tex = probe[P_GL].tex > probe[es].tex ? probe[P_GL].tex : probe[es].tex;
+  /* (the probe draws as programs do: if it went to software, so do they) */
+  if (made (P_GL) && !strcmp (probe[P_GL].route, "software"))
+    {
+      info.on_gpu = 0;
+      snprintf (info.subline, sizeof info.subline, "Drawing in software: Mesa didn't take %s", info.driver_module);
+    }
+  int tex = probe[P_GL].tex > probe[P_GLES].tex ? probe[P_GL].tex : probe[P_GLES].tex;
   if (tex > 0)
     snprintf (info.texture, sizeof info.texture, "%d \xD7 %d", tex, tex);
-  int eg = probe[P_GL].exts, ee = probe[es].exts;
+  int eg = made (P_GL) ? probe[P_GL].exts : -1, ee = made (P_GLES) ? probe[P_GLES].exts : -1;
   if (eg >= 0 && ee >= 0)
     snprintf (info.exts, sizeof info.exts, "%d OpenGL, %d OpenGL ES", eg, ee);
   else if (eg >= 0 || ee >= 0)

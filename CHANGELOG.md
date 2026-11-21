@@ -9,13 +9,12 @@
   - Info r0 = 9. !RISC3D's !Boot and !Run now RMEnsure 0.09.
   - Tested headless in the Mac's VM (ROL 5.31, qemu-user) with a fake driver registered from BASIC: the whole text, a 4-byte buffer (cut, ended with a 0, full size returned), and no driver (size 1, no name).
 - **!RISC3DSetup 1.05:**
-  - For a DRM device, it runs the driver's probe, `<RISC3D$Dir>.Probes.<driver>`, with `*Run <probe> <file>` through Wimp_StartTask. It shows what the probe wrote: renderer, OpenGL and GLSL, the newest OpenGL ES (3.x, else 2.0), OpenGL ES 1.1 yes or no, largest texture, and extension counts.
-  - With no probe it says "Not known: !RISC3D has no probe for V3DRender".
+  - For a DRM device, it runs riscos-mesa's **GPUProbe**: `<MesaLibs$Dir>.GPUProbe -o <file>`, from !MesaLibs 20.3.5-23, through Wimp_StartTask. That's riscos-mesa's answer to V3DRender (`MESA/handoffs/2026-11-21-mesa-gpuprobe-for-risc3dsetup.md`). It is one probe for every driver, kept in !MesaLibs, so the `Probes` folder first planned in !RISC3D isn't used.
+  - The window shows what the probe wrote: renderer, OpenGL and GLSL, OpenGL ES and GLSL ES, OpenGL ES 1.1 yes or no, largest texture, and extension counts. If the probe's route was software, the window says programs draw in software.
+  - With an older !MesaLibs it says "Not known: needs !MesaLibs 20.3.5-23 or later".
   - A **Hardware** group shows the driver's RISC3D_Describe lines, for any driver that gives them.
-  - The probe's file format is in `docs/DRIVER-GUIDE.md` section 5. The parser was tested on the host. The window itself hasn't been run yet.
-- **Waiting for:**
-  - riscos-mesa: the probe for V3DRender, built with libMesaGPU;
-  - V3DRender: reason 4, if it wants a Hardware group.
+  - The reader was tested on the host with GPUProbe's output from the owner's Pi 4 (V3DRender 0.19). It reads: OpenGL 2.1 with GLSL 1.20; OpenGL ES 3.1 with GLSL ES 3.10; ES 1.1; 4096; 231 and 127 extensions. The window itself hasn't been run yet. The Pi's installed !MesaLibs has no GPUProbe yet: it came in 20.3.5-23test3.
+- **Waiting for:** riscos-mesa 20.3.5-23 (GPUProbe); V3DRender's reason 4, if it wants a Hardware group.
 - Nothing is packaged yet.
 
 ## Unreleased: Linux2D, a prototype of 2D acceleration on ROL (20 Nov 2026)

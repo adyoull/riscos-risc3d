@@ -598,6 +598,31 @@ made (int a)
   return probe[a].version[0] && strcmp (probe[a].route, "none");
 }
 
+/* polls (the desktop carries on) until the probe's Obey file has set
+   RISC3D$ProbeDone, or 20 s */
+static void
+wait_for_probe (void)
+{
+  unsigned t0 = 0, t = 0;
+  _swix (OS_ReadMonotonicTime, _OUT (0), &t0);
+  for (;;)
+    {
+      char v[8];
+      int n = 0;
+      if (!_swix (OS_ReadVarVal, _INR (0, 4) | _OUT (2), "RISC3D$ProbeDone", v, sizeof v - 1, 0, 0, &n) && n > 0)
+	break;
+      _swix (OS_ReadMonotonicTime, _OUT (0), &t);
+      if (t - t0 > 2000)
+	break;
+      int b[64], ev = 0;
+      /* null events at most every 10 cs; the window redraws itself */
+      _swix (Wimp_PollIdle, _INR (0, 2) | _OUT (0), 0, b, t + 10, &ev);
+      if ((ev == 17 || ev == 18) && b[4] == Message_Quit)
+	exit (0);
+    }
+  _swix (OS_CLI, _IN (0), "Unset RISC3D$ProbeDone");
+}
+
 static void
 probe_drm (const char *drm)
 {
@@ -610,16 +635,35 @@ probe_drm (const char *drm)
       return;
     }
   const char *out = "<Wimp$ScrapDir>.RISC3DProb";
-  char cmd[200];
+  const char *obey = "<Wimp$ScrapDir>.RISC3DPrbO";
   _swix (OS_File, _INR (0, 1), 6, out);
-  snprintf (cmd, sizeof cmd, "%s -o %s", path, out);
+  /* Started by the Filer (Filer_Run of an Obey file), not by this task:
+     started by Wimp_StartTask from here, a child of this UnixLib program,
+     it crashed in libMesaGPU about one time in four on the owner's Pi 4
+     (EMT trap, its backtrace in a box waiting for a key); started by the
+     Filer, never (0 in 22). The Obey file sets RISC3D$ProbeDone when it
+     ends, and this waits for that, polling, for up to 20 s. */
+  FILE *o = fopen (obey, "w");
+  if (!o)
+    {
+      snprintf (info.gl, sizeof info.gl, "Not known: couldn't write %s", obey);
+      return;
+    }
+  fprintf (o, "%s -o %s\nSet RISC3D$ProbeDone 1\n", path, out);
+  fclose (o);
+  _swix (OS_File, _INR (0, 2), 18, obey, 0xFEB);
+  _swix (OS_CLI, _IN (0), "Unset RISC3D$ProbeDone");
   /* (GPUProbe of riscos-mesa 20.3.5-23test3 leaves a context open each
      time, owned by no task, so nothing closes it: RISC3D has 32. Any
-     such context that wasn't there before it ran is its own, as nothing
-     else runs while it does; close those) */
+     such context that wasn't there before it ran is its own; close
+     those) */
   unsigned char before[64], after[64];
   untasked_contexts (before);
-  _swix (Wimp_StartTask, _IN (0), cmd);
+  char cmd[200];
+  snprintf (cmd, sizeof cmd, "Filer_Run %s", obey);
+  _swix (OS_CLI, _IN (0), cmd);
+  wait_for_probe ();
+  _swix (OS_File, _INR (0, 1), 6, obey);
   untasked_contexts (after);
   for (int n = 1; n < 64; n++)
     if (after[n] && !before[n])

@@ -18,18 +18,20 @@
   - GPUProbe in riscos-mesa 20.3.5-23test3 leaves one RISC3D context open each time it runs. On the Pi, with RISC3D 0.09 and V3DRender 0.20 loaded and no other program, two runs left contexts 1 and 2. They are owned by no Wimp task, so RISC3D can't close them when the program ends, and RISC3D has room for 32.
   - The window now notes the task-less contexts before it runs the probe and closes any new ones afterwards: nothing else runs while it does. This hasn't been tried on the Pi yet.
   - Reported to riscos-mesa.
-- **GPUProbe crashes about one time in three under V3DRender 0.20** (the owner: "an EMT abort when refreshing sometimes", and "pressing Set lists a load of Mesa libs"; that list is the probe's UnixLib backtrace, in libMesaGPU, called from libEGL). Tested on the owner's Pi through TestAgent:
+- **GPUProbe crashed about one time in four when the window started it** (the owner: "an EMT abort when refreshing sometimes", and "pressing Set lists a load of Mesa libs"). The list was the probe's UnixLib backtrace, in libMesaGPU, called from libEGL, in a box waiting for a key. Tested on the owner's Pi through TestAgent:
 
-  | Setup | Crashes |
+  | How the probe was started | Crashes |
   |---|---|
-  | V3DRender 0.20, started by the window, desktop 2D on | 2 in 5 |
-  | the same, desktop 2D off | 2 in 8 |
-  | the same, window running the probe before its hardware query | 3 in 10 |
-  | V3DRender 0.20, the probe run on its own (Filer_Run) | 0 in 10 |
-  | V3DRender 0.19, started by the window | 0 in 16 |
+  | by the window (Wimp_StartTask from RISC3DSetup, a UnixLib program), V3DRender 0.20 | 7 in 23 |
+  | the same, V3DRender 0.20 built without reason 4 | 2 in 10 |
+  | the same, V3DRender 0.19 | 3 in 12 |
+  | by the Filer (an Obey file, Filer_Run) | 0 in 22 |
+  | **by the window through the Filer (the fix)**, V3DRender 0.19, then 0.20 | **0 in 12, 0 in 12** |
 
-  The owner's Pi is back on 0.19 (0.20 is kept in `$.Test.R3D09.V3DRender020`), so the window has no Hardware group there for now. Reported to V3DRender.
-- The window now runs the probe before it asks for the driver's hardware lines. That made no difference to the crash, but it does no harm.
+  - It isn't V3DRender: an earlier "0.19 never crashes" result was wrong, because the clicks missed Refresh in the shorter window.
+  - It is the probe running as a child of a UnixLib program. **Fix:** the window writes a small Obey file that runs GPUProbe and then sets `RISC3D$ProbeDone`. It starts that file with `*Filer_Run` and polls (Wimp_PollIdle, so the desktop carries on) until the variable is set, or for 20 s.
+  - The context the probe leaves is still closed afterwards. After the 24 runs, no contexts were left open.
+  - The owner's Pi runs this window, with RISC3D 0.09 and V3DRender 0.20 in `!RISC3D`.
 - **Waiting for:** riscos-mesa 20.3.5-23 (GPUProbe); V3DRender's reason 4, if it wants a Hardware group.
 - Nothing is packaged yet.
 

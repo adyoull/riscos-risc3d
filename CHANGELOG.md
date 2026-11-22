@@ -1,5 +1,14 @@
 # Changelog
 
+## Test build RISC3D-0.09-test1 (22 Nov 2026), for Chris Hughes's CM4
+
+- **Chris's report:** at start-up on a CM4 (R-Comp Ne.X.T, RISC OS 5.31 of 13 Jun 2026), with !RISC3D in `!Boot.Resources`, he gets "Internal error, trap while in trap handler: Internal error: abort on instruction fetch at &00000000, pc = 00000000: registers at 0000B2B0". He sent two photos, both of the same error. Without !RISC3D there are no errors.
+  - He most likely has PackMan's !RISC3D, with V3DRender 0.15 or 0.16. That's older than 0.20's fix for powering the V3D on before reading it.
+- **The zip:**
+  - !RISC3D with RISC3D 0.09, Linux3D 0.06 and **V3DRender 0.23** (`third/V3DRender` updated from 0.16; the GPU Licences file now names 0.23);
+  - !RISC3DSetup 1.05, for `!Boot.Resources.Configure`.
+- Not a release. Reported to V3DRender with the error.
+
 ## Unreleased: Configure's window says what a DRM device offers (21 Nov 2026)
 
 - **Why.** On the owner's native Pi 4 (V3DRender 0.19), Configure's RISC3D window showed "As Mesa's v3d driver gives" for OpenGL and OpenGL ES, and nothing for the largest texture or the extensions. Owner: "It should report what it actually supports and shouldn't need an app to run for it to do so." V3DRender's handoff (`handoffs/2026-11-21-v3drender-risc3dsetup-should-report-v3d-support.md`) proposed a probe from riscos-mesa, plus hardware facts from the driver.

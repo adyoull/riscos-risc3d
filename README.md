@@ -49,6 +49,11 @@ no driver is loaded and programs draw in software. The choice is kept in
 
 <img src="docs/images/risc3dsetup.png" alt="Configure's RISC3D window on a Raspberry Pi 4 under RISC OS on Linux" width="660">
 
+On native RISC OS (a Raspberry Pi 4 with V3DRender, and !MesaLibs 20.3.5-23
+for the OpenGL figures):
+
+<img src="docs/images/risc3dsetup-pi4-native.png" alt="Configure's RISC3D window on a native Raspberry Pi 4 with V3DRender" width="620">
+
 ### For programs
 
 Programs reach RISC3D through [riscos-mesa](https://github.com/adyoull/riscos-mesa)'s

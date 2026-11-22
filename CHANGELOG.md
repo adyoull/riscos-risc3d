@@ -1,5 +1,10 @@
 # Changelog
 
+## Docs (22 Nov 2026)
+
+- **Release notes:** the screenshots in `docs/releases/*.md` now use full `raw.githubusercontent.com` links, so they show on GitHub release pages. The relative `../images/` links only worked when browsing the repository.
+- **New screenshot:** `docs/images/risc3dsetup-pi4-native.png`, Configure's RISC3D window on the owner's native Pi 4. It shows RISC3D 0.09, V3DRender 0.23, !MesaLibs 20.3.5-23test3's GPUProbe figures and the Hardware group. It's in the README beside the RISC OS on Linux one.
+
 ## Test build RISC3D-0.09-test4 (22 Nov 2026)
 
 - **As test3,** with V3DRender **0.26** in place of 0.25 (`handoffs/2026-11-22-v3drender-0.26-no-memory-calls-in-graphicsv.md`).

@@ -1,5 +1,15 @@
 # Changelog
 
+## Release 0.17 (22 Nov 2026): !RISC3D 0.09-1
+
+- **The package:** **RISC3D-0.09-1.zip**, also the PackMan package RISC3D. It holds:
+  - RISC3D 0.09, Linux3D 0.06 and **V3DRender 0.26**, the latest (`handoffs/2026-11-22-v3drender-0.26-no-memory-calls-in-graphicsv.md`);
+  - !RISC3DSetup 1.05.
+
+  It has the same contents as RISC3D-0.09-test4 (`docs/releases/0.17.md`).
+- **What's new since 0.16:** everything under "Unreleased" and the test builds below: RISC3D_Describe, the GPUProbe figures and the Hardware section, and V3DRender 0.16 → 0.26.
+- **Version:** the owner asked for the release to increase the version number, so it's 0.17, with package 0.09-1.
+
 ## Docs (22 Nov 2026)
 
 - **Release notes:** the screenshots in `docs/releases/*.md` now use full `raw.githubusercontent.com` links, so they show on GitHub release pages. The relative `../images/` links only worked when browsing the repository.

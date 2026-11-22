@@ -1,5 +1,13 @@
 # Changelog
 
+## Test build RISC3D-0.09-test4 (22 Nov 2026)
+
+- **As test3,** with V3DRender **0.26** in place of 0.25 (`handoffs/2026-11-22-v3drender-0.26-no-memory-calls-in-graphicsv.md`).
+- **What 0.26 adds:**
+  - No RISC OS memory is claimed or freed inside a GraphicsV call. The desktop's GPU copies and fills do that work afterwards, from a callback. Doing it inside the call froze Rob Heaton's V3DDriver with the Task Manager open.
+  - Cleaning the GPU's caches waits for a pending L2T flush first (Broadcom erratum GFXH-1897).
+- The driver interface is unchanged. The GPU Licences file names 0.26.
+
 ## Test build RISC3D-0.09-test3 (22 Nov 2026)
 
 - **As test2,** with V3DRender **0.25** in place of 0.24 (`handoffs/2026-11-22-v3drender-0.25-page-pool.md`).

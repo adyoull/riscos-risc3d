@@ -1,5 +1,16 @@
 # Changelog
 
+## Test build RISC3D-0.09-test2 (22 Nov 2026), for Chris Hughes's CM4
+
+- **As test1,** with V3DRender **0.24** in place of 0.23 (V3DRender's reply, `handoffs/2026-11-22-v3drender-0.24-cm4-next.md`).
+- **What 0.24 adds:**
+  - It records how far its start-up got in `V3DRender$Step`.
+  - It does no interrupt work until it's fully set up.
+  - It refuses to start if there's no HAL_IRQClear routine.
+  - A start-up that fails part way no longer runs the full teardown on a device that was never set up. That's a real fault, which could crash on CM4s whose memory claims fail differently.
+- The GPU Licences file names 0.24.
+- test1 is superseded.
+
 ## Test build RISC3D-0.09-test1 (22 Nov 2026), for Chris Hughes's CM4
 
 - **Chris's report:** at start-up on a CM4 (R-Comp Ne.X.T, RISC OS 5.31 of 13 Jun 2026), with !RISC3D in `!Boot.Resources`, he gets "Internal error, trap while in trap handler: Internal error: abort on instruction fetch at &00000000, pc = 00000000: registers at 0000B2B0". He sent two photos, both of the same error. Without !RISC3D there are no errors.

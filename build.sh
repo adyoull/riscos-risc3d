@@ -311,3 +311,16 @@ kit out/RISC3D-0.09-test2.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!
   "$P/!Sprites11,ff9=/!RISC3DSetup/!Sprites11,ff9" "$P/CoSprite,ff9=/!RISC3DSetup/CoSprite,ff9" \
   "$P/CoSprite11,ff9=/!RISC3DSetup/CoSprite11,ff9" "$P/CoSprite22,ff9=/!RISC3DSetup/CoSprite22,ff9" \
   "out/RISC3DSetup-RunImage,ff8=/!RISC3DSetup/!RunImage,ff8"
+
+# RISC3D-0.09-test3 (22 Nov 2026): as test2, with V3DRender 0.25 (0.24's
+# start-up changes, plus a pool of freed buffer pages)
+kit out/RISC3D-0.09-test3.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+  "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" \
+  "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa" \
+  "third/V3DRender/V3DRender,ffa=GPU/V3DRender,ffa" "dist/!RISC3D/GPU/Licences,fff=GPU/Licences,fff" \
+  "dist/!RISC3D/GPU/GPL-2,fff=GPU/GPL-2,fff" \
+  "$P/!Boot,feb=/!RISC3DSetup/!Boot,feb" "$P/!Run,feb=/!RISC3DSetup/!Run,feb" "$P/!Help,fff=/!RISC3DSetup/!Help,fff" \
+  "$P/Messages,fff=/!RISC3DSetup/Messages,fff" "$P/!Sprites,ff9=/!RISC3DSetup/!Sprites,ff9" \
+  "$P/!Sprites11,ff9=/!RISC3DSetup/!Sprites11,ff9" "$P/CoSprite,ff9=/!RISC3DSetup/CoSprite,ff9" \
+  "$P/CoSprite11,ff9=/!RISC3DSetup/CoSprite11,ff9" "$P/CoSprite22,ff9=/!RISC3DSetup/CoSprite22,ff9" \
+  "out/RISC3DSetup-RunImage,ff8=/!RISC3DSetup/!RunImage,ff8"

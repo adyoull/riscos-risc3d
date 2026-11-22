@@ -1,5 +1,12 @@
 # Changelog
 
+## Test build RISC3D-0.09-test3 (22 Nov 2026)
+
+- **As test2,** with V3DRender **0.25** in place of 0.24 (`handoffs/2026-11-22-v3drender-0.25-page-pool.md`).
+- **What 0.25 adds:** a pool of freed buffer pages, up to 16 MB, kept while a program has the GPU open (`*V3DRender pool <MB>`). The driver interface is unchanged, and reason 4's GPU memory line can add "N KB kept for reuse".
+- **For Chris's start-up problem,** 0.24 and 0.25 are the same.
+- The GPU Licences file names 0.25.
+
 ## Test build RISC3D-0.09-test2 (22 Nov 2026), for Chris Hughes's CM4
 
 - **As test1,** with V3DRender **0.24** in place of 0.23 (V3DRender's reply, `handoffs/2026-11-22-v3drender-0.24-cm4-next.md`).

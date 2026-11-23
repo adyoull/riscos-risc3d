@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased: from David Sharp's ports (Quake 3, Mupen64Plus, Doom 3), 23 Nov 2026
+
+David Sharp's reports on RISC3D 0.17 (riscos-quake3, riscos-mupen64plus, riscos-dhewm3; summary "RISC3D-for-Andy.md"). What's RISC3D's own is done here; the rest went to V3DRender and riscos-mesa by handoff.
+
+- **Client library 0.13: `RISC3D$Disable` works** (his item 10).
+  - **The bug:** `r3d_available` asked OS_ReadVarVal with R2 = -1 and treated "no error" as "set". RISC OS returns an error exactly when the variable exists (R2 = NOT its length), so the variable was never seen.
+  - **The fix:** it now reads into a buffer. Set to anything, or too long for the buffer, means disabled; "not found" (&124) means not.
+  - **The host stand-in** (`test/host/swis.h`) now behaves as RISC OS: not found → error &124; R2 < 0 and found → error, R2 = NOT length; a value too long → error &1E4. Its old "no error" is why the host tests missed it.
+  - **Tested** on the host: unset → available; "1", a long value → not; an empty value → available.
+- **!RISC3D runs its own DAClamp before RISC3D loads the driver** (his item 1, in part).
+  - **The problem:** V3DRender's 256 MB buffer area was stopped at 128 MB unless !MesaLibs, whose !Boot runs DAClamp, happened to boot first. A user with only !RISC3D got "Failed to allocate device memory for BO" and crashes.
+  - **The fix:** `tools/daclamp/daclamp.s`, written fresh, MIT: OS_DynamicArea 8 with R2 = -1, R1 = R3 = 0, as !MesaLibs' DAClamp. It's now in `dist/!RISC3D` as `DAClamp`, run from !Boot and !Run after the Settings file. V3DRender has also been asked to lift the clamp itself, and to show the area's real maximum.
+- **README, For programs:**
+  - `RISC3D_Info` is a supported way for a program to choose its defaults before making a context (his item 11): R3 the driver's name or 0, R4 bit 1 software, bit 0 a DRM device.
+  - Program authors' !Run should load SharedUnixLibrary and ARMEABISupport.
+  - Quake 3, Mupen64Plus and Doom 3 added to "Programs seen on the GPU".
+
 ## Unreleased: turning the desktop's 2D on and off from Configure (23 Nov 2026)
 
 - **The owner asked** for a way to turn 2D acceleration on or off in Configure's RISC3D window, where a driver says it supports it, so no `*V3DRender 2D on|off` command is needed.

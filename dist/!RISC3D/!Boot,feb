@@ -7,4 +7,9 @@ Set RISC3D$Path <RISC3D$Dir>.
 | Configure's RISC3D window keeps its choice here: Set RISC3D$Off 1 when
 | loading a driver is turned off
 IfThere Choices:RISC3D.Settings Then Obey Choices:RISC3D.Settings
+| Before RISC3D loads the GPU driver: lift RISC OS 5's 128 MB clamp on
+| dynamic areas given a maximum size (OS_DynamicArea 8), as !MesaLibs
+| does, so V3DRender's buffer area gets all of V3DRender$Size whatever
+| order Resources boot in. System-wide; harmless where it's already lifted.
+/<RISC3D$Dir>.DAClamp
 RMEnsure RISC3D 0.10 RMLoad <RISC3D$Dir>.RISC3D

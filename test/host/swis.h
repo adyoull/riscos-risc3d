@@ -110,12 +110,34 @@ _swix (int swi, int flags, ...)
     }
   else if (swi == 0x23)
     {
-      /* OS_ReadVarVal, R2 < 0: does the variable exist (R2 0 if not) */
+      /* OS_ReadVarVal, as RISC OS has it (0.13: the old stand-in gave no
+	 error for R2 < 0, so the client's mistake there went unseen):
+	 not found: error &124, R2 = 0; R2 < 0 and found: error (buffer
+	 overflow), R2 = NOT length; a buffer: the value, R2 = its length,
+	 or error &1E4 if it doesn't fit */
+      static _kernel_oserror notfound = { 0x124, "System variable not found" };
+      static _kernel_oserror overflow = { 0x1E4, "Buffer overflow" };
       const char *name = va_arg (ap, const char *);
-      (void) va_arg (ap, void *); (void) va_arg (ap, int); (void) va_arg (ap, int); (void) va_arg (ap, int);
+      char *buf = va_arg (ap, char *);
+      int size = va_arg (ap, int);
+      (void) va_arg (ap, int); (void) va_arg (ap, int);
       int *len = va_arg (ap, int *);
       const char *v = getenv (name);
-      *len = v ? ~(int) strlen (v) : 0;
+      if (!v)
+	{
+	  *len = 0;
+	  e = &notfound;
+	}
+      else if (size < 0 || (int) strlen (v) > size)
+	{
+	  *len = ~(int) strlen (v);
+	  e = &overflow;
+	}
+      else
+	{
+	  memcpy (buf, v, strlen (v));
+	  *len = (int) strlen (v);
+	}
     }
   else if (swi == 0x5AF80)
     {

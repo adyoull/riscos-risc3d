@@ -79,6 +79,24 @@ software.
   start-up. A program that must have it can check with
   `RMEnsure RISC3D 0.05 Error This program needs !RISC3D`. Never name a
   driver.
+- **Choosing defaults before making a context** (a game's render size,
+  say): ask `RISC3D_Info` (&5AF80). It's a supported way to ask, and cheap:
+  - R3 → the driver's name, or 0 for none (software);
+  - R4 bit 1: the driver draws in software (Linux's llvmpipe, for
+    example), as far as it knows; bit 0: a DRM device (V3DRender), drawn
+    through libMesaGPU, so it's the GPU only for programs linked with it.
+
+  `RISC3D$Disable`, set to anything, makes the client library's
+  `r3d_available()` say no, so riscos-mesa draws in software where it
+  asks (from client 0.13: before that the test never saw the variable).
+  `RISC3D$Off` (Configure's switch) stops a driver loading at all.
+- **Your !Run should load the GCCSDK modules** a GCC program needs, as a
+  machine just started may not have them:
+  ```
+  RMEnsure SharedUnixLibrary 1.16 IfThere System:Modules.SharedULib Then RMLoad System:Modules.SharedULib
+  RMEnsure ARMEABISupport 0 IfThere System:Modules.ARMEABISupport Then RMLoad System:Modules.ARMEABISupport
+  ```
+  Without ARMEABISupport, a program stops with "SWI &59D01 not known".
 - **Contexts that share objects, in several threads** (EGL's
   `share_context`, as WebKit's Skia draws): RISC3D 0.06 and client 0.12
   on. On RISC OS on Linux this needs Linux3D 0.06 (!RISC3D 0.06-1) and
@@ -157,6 +175,9 @@ RISC3D's client library (`lib/`, `proto/`) is released as
 | TORCS 1.3.7-riscos6 | Pi 4 native and ROL | the mixed build; on ROL it needs Mesa 26.1 (Debian's 25.0.7 loses its textures) |
 | Quakespasm | Windows Dev Kit 2023, ROL | Chris Gransden's build: `timedemo demo1` 5 fps at 640x480 in software, 98 fps at 1920x1080 on the GPU |
 | OpenLara | Pi 4, ROL | 50 fps, against 12 to 16 in software |
+| Quake 3 (ioquake3, David Sharp's port) | Pi 4 native, RISC3D 0.17; also RoMac | 138 fps at 480x300, 77 at 1024x768, 69 at 1280x800 full screen (software: 35) |
+| Mupen64Plus (David Sharp's port) | Pi 4 native, RISC3D 0.17 | Super Mario 64 at 163-169 VI/s with the limiter off (full speed 60; software 12-15) |
+| Doom 3 (dhewm3, David Sharp's port) | Pi 4 native | about 12 fps at 800x600, Medium; needs more buffer handles than V3DRender 0.26 allows |
 
 ## The parts
 

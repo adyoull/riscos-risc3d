@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased: turning the desktop's 2D on and off from Configure (23 Nov 2026)
+
+- **The owner asked** for a way to turn 2D acceleration on or off in Configure's RISC3D window, where a driver says it supports it, so no `*V3DRender 2D on|off` command is needed.
+- **RISC3D module 0.10:**
+  - New driver flag **bit 4**: the driver can do the desktop's 2D on the GPU and switch it while running.
+  - New driver reason **5, "desktop 2D"**: r1 = -1 read, 0 off, 1 on, 2 on without waiting → r0 = the state.
+  - New SWI **`RISC3D_Desktop2D`** (&5AF86): r0 = -1, 0, 1 or 2 → r0 = the state, r1 → the driver's name. Error &823D04 if the driver doesn't offer it.
+  - **`RISC3D$2D`** (on, async or off), if set, is given to such a driver on a callback after it registers.
+  - Register keeps flag bits 0–4. Info r0 = 10. !RISC3D's !Boot and !Run RMEnsure 0.10.
+  - **Tested** in the Mac's VM with a fake driver registered from BASIC:
+    - `RISC3D$2D on` was applied after registering (state 1);
+    - read, off and async worked;
+    - a bad value gave an error;
+    - a driver without bit 4 gave &823D04.
+- **!RISC3DSetup 1.07:** where the driver offers it, the Use group has a second tick box, "Draw the desktop's copies and fills on the GPU (2D)". Set applies it at once through RISC3D_Desktop2D and keeps it as `RISC3D$2D` in `Choices:RISC3D.Settings`, beside `RISC3D$Off`. With no such driver the box isn't shown.
+- **Waiting for:** V3DRender to register with flags bit 4 and answer reason 5 (`V3DRender/handoffs/2026-11-23-risc3d-desktop-2d-reason-5.md`).
+
 ## Release 0.18 (23 Nov 2026): !RISC3D 0.09-2
 
 - **!RISC3DSetup 1.06:** its `!Run` now loads SharedUnixLibrary 1.16 and ARMEABISupport from `System:Modules`, or stops with an error saying which to install with PackMan.

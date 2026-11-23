@@ -9,6 +9,10 @@
    moment, as a program would. A DRM device (V3DRender) is drawn with
    Mesa's own driver inside each program, so there it says that.
 
+   1.07: where the 3D driver offers the desktop's 2D on the GPU (RISC3D
+   0.10's RISC3D_Desktop2D; V3DRender), a second tick box turns it on or
+   off: at once, and kept as RISC3D$2D in Choices:RISC3D.Settings.
+
    1.06: !Run loads SharedUnixLibrary and ARMEABISupport (from System:Modules) or says they
    are needed: without ARMEABISupport, UnixLib stopped at once with "SWI
    &59D01 not known" (Chris Hughes, a CM4 Ne.X.T).
@@ -53,6 +57,7 @@
 
 #define RISC3D_Info 0x5AF80
 #define RISC3D_Describe 0x5AF85
+#define RISC3D_Desktop2D 0x5AF86
 #define Message_Quit 0
 #define Message_HelpRequest 0x502
 #define Message_HelpReply 0x503
@@ -76,6 +81,7 @@ static struct
   int drv_ok[MAXDRV];
   char version_text[40], contexts_text[16];
   int nhw;				/* the driver's own lines (Hardware) */
+  int has_2d, state_2d;			/* (1.07) the driver's desktop 2D: offered; 0 off, 1 on, 2 on, not waited for */
   char hw_label[8][32], hw_value[8][100];
 } info;
 
@@ -100,8 +106,9 @@ typedef struct
 
 #define ICONS 96
 static icon icons[ICONS];
-static int nicons, i_refresh, i_cancel, i_set, i_load;
+static int nicons, i_refresh, i_cancel, i_set, i_load, i_2d = -1;
 static int want_on;			/* the choice shown */
+static int want_2d;			/* (1.07) desktop 2D on the GPU, as shown */
 static int win = -1, win_h;
 static int font = -1;			/* the headline's, or -1: the desktop font */
 static char title[] = "RISC3D";
@@ -204,6 +211,7 @@ static const char
   h_drv[] = "What draws for programs now: the 3D driver RISC3D loaded (Linux3D on RISC OS on Linux, V3DRender on a Raspberry Pi 4), or Software3D: Mesa drawing in software in each program, as without RISC3D.",
   h_hw[] = "What the 3D driver says about the GPU itself.",
   h_version[] = "The version of the RISC3D module.",
+  h_2d[] = "Click to tick or untick. Ticked: the 3D driver does the desktop's window moves, scrolls and plain fills on the GPU. Not ticked: the CPU does them, as usual. Then click Set. (Off unless you turn it on.)",
   h_load[] = "Click to tick or untick. Ticked: RISC3D loads a 3D driver, so programs can draw on the GPU. Not ticked: no driver is loaded and programs draw in software, as without RISC3D. Then click Set.";
 
 static void
@@ -232,6 +240,13 @@ build (void)
   y = group (y, "Use");
   i_load = option_at (LABEL_X, VALUE_R, y, want_on, "Load a 3D driver, so programs can draw on the GPU", h_load);
   y -= ROW;
+  /* (1.07) where the driver offers it (RISC3D 0.10, flags bit 4) */
+  i_2d = -1;
+  if (info.has_2d)
+    {
+      i_2d = option_at (LABEL_X, VALUE_R, y, want_2d, "Draw the desktop's copies and fills on the GPU (2D)", h_2d);
+      y -= ROW;
+    }
   y = group_end (y + 8);
 
   /* what programs get */
@@ -744,6 +759,16 @@ find_out (void)
       snprintf (info.contexts_text, sizeof info.contexts_text, "0");
       return;
     }
+  /* (1.07) the driver's desktop 2D, if it offers it (RISC3D 0.10) */
+  {
+    int st = 0;
+    const char *dn = 0;
+    if (!_swix (RISC3D_Desktop2D, _IN (0) | _OUTR (0, 1), -1, &st, &dn))
+      {
+	info.has_2d = 1;
+	info.state_2d = st;
+      }
+    }
   snprintf (info.version_text, sizeof info.version_text, "RISC3D %d.%02d", version / 100, version % 100);
   snprintf (info.contexts_text, sizeof info.contexts_text, "%d", nctx);
   info.nctx = nctx;
@@ -859,8 +884,16 @@ report (const char *text)
 static int
 save_choice (int on)
 {
-  const char *text = on ? "| RISC3D: written by Configure's RISC3D window\nUnset RISC3D$Off\n"
-		       : "| RISC3D: written by Configure's RISC3D window\nSet RISC3D$Off 1\n";
+  /* (1.07) and the desktop 2D choice, RISC3D$2D, if one has been made */
+  char d2[12] = "";
+  int n = 0;
+  if (!_swix (OS_ReadVarVal, _INR (0, 4) | _OUT (2), "RISC3D$2D", d2, sizeof d2 - 1, 0, 0, &n) && n > 0)
+    d2[n] = 0;
+  else
+    d2[0] = 0;
+  static char text[200];
+  snprintf (text, sizeof text, "| RISC3D: written by Configure's RISC3D window\n%s\n%s%s%s",
+	    on ? "Unset RISC3D$Off" : "Set RISC3D$Off 1", d2[0] ? "Set RISC3D$2D " : "", d2, d2[0] ? "\n" : "");
   _swix (OS_File, _INR (0, 1) | _IN (4), 8, "<Choices$Write>.RISC3D", 0);
   return !_swix (OS_File, _INR (0, 2) | _INR (4, 5), 10, "<Choices$Write>.RISC3D.Settings", 0xFEB, text,
 		 text + strlen (text));
@@ -917,6 +950,7 @@ make (void)
 {
   find_out ();
   want_on = !info.off;
+  want_2d = info.state_2d != 0;
   build ();
   win = create_window ();
 }
@@ -973,6 +1007,23 @@ main (int argc, char **argv)
 	      want_on = !want_on;
 	      int blk[4] = { win, i_load, want_on ? 1 << 21 : 0, 1 << 21 };	/* (EOR, clear: selected) */
 	      _swix (Wimp_SetIconState, _IN (1), blk);
+	    }
+	  if (b[3] == win && i_2d >= 0 && b[4] == i_2d)
+	    {
+	      want_2d = !want_2d;
+	      int blk[4] = { win, i_2d, want_2d ? 1 << 21 : 0, 1 << 21 };
+	      _swix (Wimp_SetIconState, _IN (1), blk);
+	    }
+	  if (b[3] == win && b[4] == i_set && i_2d >= 0 && want_2d != (info.state_2d != 0))
+	    {
+	      /* (1.07) at once, and kept for the next start (RISC3D 0.10
+		 gives RISC3D$2D to the driver when it registers) */
+	      int st = 0;
+	      if (_swix (RISC3D_Desktop2D, _IN (0) | _OUT (0), want_2d ? 1 : 0, &st))
+		report ("The 3D driver couldn't change the desktop 2D setting.");
+	      _swix (OS_SetVarVal, _INR (0, 4), "RISC3D$2D", want_2d ? "on" : "off", want_2d ? 2 : 3, 0, 0);
+	      if (want_on != info.off && !save_choice (want_on))	/* (the load choice unchanged: saved here) */
+		report ("RISC3D couldn't keep the choice in Choices:RISC3D.Settings: it lasts until the machine next starts.");
 	    }
 	  if (b[3] == win && b[4] == i_set)
 	    {

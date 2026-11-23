@@ -204,10 +204,12 @@ draws straight into the window's sprite or into screen memory.
 | `RISC3D_Open` (&5AF82) | r0 = flags (bit 0: share the objects of context r1, 0.06 on), r1 = that context | r0 = context, r1 -> shared memory, r2 = size (a DRM device: r1 = the driver's file, r2 = 0) |
 | `RISC3D_Close` (&5AF83) | r0 = context | |
 | `RISC3D_Sync` (&5AF84) | r0 = context, r1 = 0 wake / 1 wait | |
+| `RISC3D_Desktop2D` (&5AF86, 0.10 on) | r0 = -1 read, 0 off, 1 on, 2 on without waiting | r0 = the state, r1 -> the driver's name: the desktop's 2D on the GPU, for drivers that offer it |
 | `RISC3D_Describe` (&5AF85, 0.09 on) | r0 = 0, r1 -> buffer, r2 = size | r2 = size needed, r3 -> the driver's name: the driver's own lines about its GPU ("label TAB value" per line) |
 
 A driver's entry is called with r0 = 0 open, 1 close, 2 sync, 3
-describe or 4 hardware (0.09 on, drivers registered with flags bit 3). Register flags: bit 0 a DRM device; bit 1 may draw in software;
+describe, 4 hardware (0.09 on, drivers registered with flags bit 3) or 5
+desktop 2D (0.10 on, flags bit 4). Register flags: bit 0 a DRM device; bit 1 may draw in software;
 bit 2 contexts can share objects (open's r1 bit 0, with r2 the handle to
 share with).
 [docs/DRIVER-GUIDE.md](docs/DRIVER-GUIDE.md) has the details.

@@ -97,7 +97,7 @@ your finalisation.
 | r1 | your entry point (section 4) |
 | r2 | the value for r12 when it's called (your private word, or 0) |
 | r3 | → your name, shown by `*RISC3D` (up to 47 characters) |
-| r4 | flags: bit 0 = a DRM device; bit 1 = you may draw in software (section 6); bit 2 = your contexts can share objects (section 6, RISC3D 0.06 on); bit 3 = you describe your hardware (reason 4, RISC3D 0.09 on) |
+| r4 | flags: bit 0 = a DRM device; bit 1 = you may draw in software (section 6); bit 2 = your contexts can share objects (section 6, RISC3D 0.06 on); bit 3 = you describe your hardware (reason 4, RISC3D 0.09 on); bit 4 = you can do the desktop's 2D on the GPU and turn it on and off (reason 5, RISC3D 0.10 on) |
 | r5 | DRM device: your ioctl SWI's number |
 | r6 | DRM device: → the name of Mesa's driver for your GPU ("v3d", "etnaviv", ...) |
 
@@ -120,7 +120,7 @@ registration:
 
 | Out | |
 |---|---|
-| r0 | RISC3D's version × 100 (9 for 0.09) |
+| r0 | RISC3D's version × 100 (10 for 0.10) |
 | r1 | drivers registered |
 | r2 | contexts open |
 | r3 | → the name of the driver a new context gets (the last registered), or 0 |
@@ -148,6 +148,7 @@ program. You may change r0 to r9. Keep r10, r11 and sp as they were.
 | 2 | **sync** (command stream only) | r1 = handle, r2 = 0 wake / 1 wait | |
 | 3 | **describe** (flags bit 1 only) | | r0 = 0 on a GPU, 1 in software now, 2 not known yet; r1 bit 0 = contexts can share objects now (flags bit 2 too) |
 | 4 | **hardware** (flags bit 3 only; RISC3D 0.09 on) | r1 → a buffer, r2 = its size | r2 = the size your text needs, with its terminating 0 |
+| 5 | **desktop 2D** (flags bit 4 only; RISC3D 0.10 on) | r1 = -1 read, 0 off, 1 on, 2 on without waiting | r0 = the state now: 0, 1 or 2 |
 
 - **Open:** made for each `RISC3D_Open`. RISC3D keeps your handle and gives
   the program its own context number.
@@ -164,6 +165,11 @@ program. You may change r0 to r9. Keep r10, r11 and sp as they were.
   contexts at exit, and from its signal handlers, to keep that rare.
 - **Sync:** command stream only; see section 5.
 - **Describe:** only if you registered with flags bit 1; see section 6.
+- **Desktop 2D:** only if you registered with flags bit 4. That means you can do the desktop's GraphicsV copies and fills on the GPU, and turn that on and off while running.
+  - **The call:** r1 = -1 asks for the state; 0, 1 or 2 sets it (off, on, on without waiting). If you have no "without waiting" mode, treat 2 as 1. Return the state now in r0, with V clear, or an error.
+  - **The default:** keep your own (off is recommended) until you're told otherwise.
+  - **The saved choice:** Configure's RISC3D window keeps the user's choice as `RISC3D$2D` (on, async or off) in `Choices:RISC3D.Settings`. RISC3D gives it to you with reason 5 on a callback soon after you register, not inside your own initialisation. If the variable isn't set, you aren't called.
+  - **Programs reach it** through `RISC3D_Desktop2D` (&5AF86): r0 = -1, 0, 1 or 2 → r0 = the state, r1 → your name. Error &823D04 if the driver in use doesn't offer it.
 - **Hardware:** only if you registered with flags bit 3. Write what you know
   about the GPU itself as lines of `label` TAB `value`, each ended by a
   line feed, then a 0. For example: `GPU` TAB `V3D 4.2, revision 14`,

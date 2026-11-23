@@ -46,6 +46,8 @@
    a rol-3d of 0.20 on); Info's r4 bit 2 is set if it can.
    Bit 3 (0.09 on) = the driver describes its hardware (reason 4), for
    RISC3D_Describe.
+   Bit 4 (0.10 on) = the driver can do the desktop's 2D on the GPU, and
+   turn it on and off (reason 5), for RISC3D_Desktop2D.
    Bit 0 = a DRM device. Such a driver (V3DRender, for the
    Pi 4's GPU) takes no command stream: the program's own Mesa drives the
    GPU through the driver's ioctl SWI (r5), with the file from
@@ -78,6 +80,15 @@
 			      and its revision, clock, memory, limits); not
 			      what Mesa offers on it. The driver fills as much
 			      as fits, always ending it with a 0 when r2 > 0.
+
+   RISC3D_Desktop2D (0.10 on) r0 = -1 read, 0 off, 1 on, 2 on without
+			 waiting -> r0 = the state now (0, 1, 2), r1 -> the
+			 driver's name. Error &823D04 if the driver doesn't
+			 offer it (flags bit 4). RISC3D$2D (on, async, off),
+			 if set, is given to such a driver when it registers.
+     r0 = 5 desktop 2D     r1 = -1 read, 0 off, 1 on, 2 on without waiting
+			      -> r0 = the state now (0.10 on, drivers
+			      registered with flags bit 4)
 
    RISC3D_Describe (0.09 on) r0 = flags (0), r1 -> buffer, r2 = its size
 			 -> r2 = the size needed (1: the driver has nothing
@@ -133,6 +144,7 @@ ERROR_BLOCK (err_nodriver, 0x823D00, "There is no 3D driver (RISC3D has none reg
 ERROR_BLOCK (err_full, 0x823D01, "Too many 3D contexts or drivers");
 ERROR_BLOCK (err_handle, 0x823D02, "Not a RISC3D context");
 ERROR_BLOCK (err_noshare, 0x823D03, "This 3D driver can't share objects between contexts");
+ERROR_BLOCK (err_no2d, 0x823D04, "This 3D driver doesn't do the desktop's 2D on the GPU");
 
 static unsigned
 this_task (void)
@@ -245,6 +257,55 @@ find_driver (void)
     }
 }
 
+/* (0.10) the desktop's 2D on the GPU, for drivers registered with flags
+   bit 4: RISC3D$2D (on, async or off; Configure's RISC3D window keeps it
+   in Choices:RISC3D.Settings, which !RISC3D's !Boot runs) is given to
+   the driver when it has registered, from a callback; unset, the driver
+   keeps its own default */
+static int
+same (const char *a, const char *b)
+{
+  while (*a && *a == *b)
+    a++, b++;
+  return *a == *b;
+}
+
+static int
+want_2d (void)
+{
+  char v[12];
+  regs r = {{ (unsigned) "RISC3D$2D", (unsigned) v, sizeof v - 1, 0, 0 }};
+  if (swix_regs (OS_ReadVarVal, &r) || (int) r.r[2] <= 0)
+    return -1;
+  v[r.r[2]] = 0;
+  for (char *c = v; *c; c++)
+    *c |= 32;
+  if (same (v, "on") || same (v, "1"))
+    return 1;
+  if (same (v, "async"))
+    return 2;
+  if (same (v, "off") || same (v, "0"))
+    return 0;
+  return -1;
+}
+
+static int best_driver (void);
+static int applied_2d;		/* the driver given RISC3D$2D (entry), 0 none */
+
+static void
+apply_2d (void)
+{
+  int b = best_driver ();
+  if (b < 0 || !(drv[b].flags & 16) || applied_2d == (int) drv[b].entry)
+    return;
+  applied_2d = (int) drv[b].entry;
+  int w = want_2d ();
+  if (w < 0)
+    return;
+  regs q = {{ 5, (unsigned) w }};
+  call_driver (drv[b].entry, drv[b].r12, &q);
+}
+
 static void
 look_now (void)
 {
@@ -266,6 +327,7 @@ drivers_callback_c (void)
 {
   callback_pending = 0;
   find_driver ();
+  apply_2d ();
 }
 
 static int
@@ -290,7 +352,7 @@ mod_swi (unsigned number, regs *r)
 	  n += drv[i].entry != 0;
 	for (int i = 0; i < MAXCTX; i++)
 	  c += ctx[i].used;
-	r->r[0] = 9;
+	r->r[0] = 10;
 	r->r[1] = (unsigned) n;
 	r->r[2] = (unsigned) c;
 	r->r[3] = b < 0 ? 0 : (unsigned) drv[b].name;
@@ -325,10 +387,18 @@ mod_swi (unsigned number, regs *r)
 		memset (drv[i].name, 0, sizeof drv[i].name);
 		memcpy (drv[i].name, s, l);
 		drv[i].r12 = r->r[2];
-		drv[i].flags = r->r[4] & 15;	/* (0.09: bit 3) */
+		drv[i].flags = r->r[4] & 31;	/* (0.09: bit 3; 0.10: bit 4) */
 		drv[i].ioctl = drv[i].flags & 1 ? r->r[5] : 0;
 		drv[i].drm_name = drv[i].flags & 1 ? r->r[6] : 0;
 		drv[i].entry = r->r[1];
+		/* (0.10) its desktop 2D setting, soon after (not inside
+		   its own initialisation) */
+		if ((drv[i].flags & 16) && !callback_pending)
+		  {
+		    regs c = {{ (unsigned) drivers_callback, (unsigned) private_word }};
+		    if (!swix_regs (OS_AddCallBack, &c))
+		      callback_pending = 1;
+		  }
 		return 0;
 	      }
 	  return ERR (err_full);
@@ -340,6 +410,8 @@ mod_swi (unsigned number, regs *r)
 	    for (int k = 0; k < MAXCTX; k++)
 	      if (ctx[k].used && ctx[k].driver == i)
 		ctx_close (k);
+	    if (applied_2d == (int) drv[i].entry)
+	      applied_2d = 0;
 	    drv[i].entry = 0;
 	  }
       return 0;
@@ -420,6 +492,24 @@ mod_swi (unsigned number, regs *r)
 	r->r[2] = q.r[2] ? q.r[2] : 1;
 	return 0;
       }
+    case 6:				/* (0.10) Desktop2D */
+      {
+	look_now ();
+	int b = best_driver ();
+	if (b < 0)
+	  return ERR (err_nodriver);
+	if (!(drv[b].flags & 16))
+	  return ERR (err_no2d);
+	if ((int) r->r[0] < -1 || (int) r->r[0] > 2)
+	  return ERR (err_swi);
+	regs q = {{ 5, r->r[0] }};
+	oserror *e = call_driver (drv[b].entry, drv[b].r12, &q);
+	if (e)
+	  return e;
+	r->r[0] = q.r[0];
+	r->r[1] = (unsigned) drv[b].name;
+	return 0;
+      }
     }
   return ERR (err_swi);
 }
@@ -444,6 +534,7 @@ mod_init (const char *tail, int instance, void *pw)
   looked = 0;
   ntried = 0;
   turned_off = 0;
+  applied_2d = 0;
   folder[0] = 0;
   memset (drv, 0, sizeof drv);
   memset (ctx, 0, sizeof ctx);

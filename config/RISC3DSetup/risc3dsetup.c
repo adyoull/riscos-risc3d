@@ -9,6 +9,10 @@
    moment, as a program would. A DRM device (V3DRender) is drawn with
    Mesa's own driver inside each program, so there it says that.
 
+   1.06: !Run loads SharedUnixLibrary and ARMEABISupport (from System:Modules) or says they
+   are needed: without ARMEABISupport, UnixLib stopped at once with "SWI
+   &59D01 not known" (Chris Hughes, a CM4 Ne.X.T).
+
    1.05: on a DRM device (V3DRender) too it says what programs get, with
    no program running: it runs !MesaLibs' GPUProbe (riscos-mesa 20.3.5-23
    on), built with the Mesa that draws there, which makes a context of

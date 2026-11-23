@@ -1,5 +1,13 @@
 # Changelog
 
+## Release 0.18 (23 Nov 2026): !RISC3D 0.09-2
+
+- **!RISC3DSetup 1.06:** its `!Run` now loads SharedUnixLibrary 1.16 and ARMEABISupport from `System:Modules`, or stops with an error saying which to install with PackMan.
+  - **Why:** Chris Hughes (CM4, R-Comp Ne.X.T) got "SWI &59D01 not known" opening the page. &59D01 is ARMEABISupport_AbortOp, which UnixLib calls as it starts.
+  - The program is unchanged (same !RunImage), so its Messages say 1.06.
+- **The package:** **RISC3D-0.09-2.zip** replaces 0.09-1, which was delivered and isn't rebuilt. `!RISC3D` is unchanged.
+- **Chris's start-up errors** with RISC3D-0.09-test2 (V3DRender 0.24) are unchanged: "abort on instruction fetch at &0", trap in the trap handler. Passed on to V3DRender.
+
 ## Release 0.17 (22 Nov 2026): !RISC3D 0.09-1
 
 - **The package:** **RISC3D-0.09-1.zip**, also the PackMan package RISC3D. It holds:

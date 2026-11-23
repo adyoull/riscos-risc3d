@@ -3,5 +3,10 @@
 Set RISC3DSetup$Dir <Obey$Dir>
 IconSprites <RISC3DSetup$Dir>.!Sprites
 IconSprites <RISC3DSetup$Dir>.CoSprite
+| (a GCCSDK program: needs SharedUnixLibrary and ARMEABISupport loaded)
+RMEnsure SharedUnixLibrary 1.16 IfThere System:Modules.SharedULib Then RMLoad System:Modules.SharedULib
+RMEnsure SharedUnixLibrary 1.16 Error RISC3D's Configure page needs SharedUnixLibrary 1.16 or later. Install it with PackMan.
+RMEnsure ARMEABISupport 0 IfThere System:Modules.ARMEABISupport Then RMLoad System:Modules.ARMEABISupport
+RMEnsure ARMEABISupport 0 Error RISC3D's Configure page needs the ARMEABISupport module. Install it with PackMan.
 WimpSlot -min 1024k -max 1024k
 Run <RISC3DSetup$Dir>.!RunImage %*0

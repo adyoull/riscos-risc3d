@@ -15,6 +15,19 @@
     - a bad value gave an error;
     - a driver without bit 4 gave &823D04.
 - **!RISC3DSetup 1.07:** where the driver offers it, the Use group has a second tick box, "Draw the desktop's copies and fills on the GPU (2D)". Set applies it at once through RISC3D_Desktop2D and keeps it as `RISC3D$2D` in `Choices:RISC3D.Settings`, beside `RISC3D$Off`. With no such driver the box isn't shown.
+- **!RISC3DSetup 1.08: "Enable z-layer complex overlays"** (V3DRender's request for the owner, `handoffs/2026-11-23-v3drender-0.29-z-layer-complex-overlays.md`).
+  - **What it does:** on a Pi, VideoOverlay's overlays (BCMVideo, firmware display layers) go behind the desktop, under its windows and menus, when the desktop is in an alpha mode. The firmware allows alpha modes only with `framebuffer_ignore_alpha=0` in config.txt.
+  - **Where it appears:** where the driver's hardware lines include "Z-layer complex overlays" (V3DRender 0.29), the Use group gets a third tick box.
+  - **Set, ticked:**
+    1. copies config.txt (`<Boot$Dir>.Loader.CONFIG/TXT`) to `CONFIG/BAK`;
+    2. adds `framebuffer_ignore_alpha=0` before the first `[section]`, so it holds on every model, or changes the value where the line already is, keeping the file's line endings;
+    3. saves the desktop mode (`Choices:Boot.PreDesk.Configure.Monitor`'s WimpMode line) with `LABGR` after `C16M`, or `LARGB` for an RGB-order screen;
+    4. tries the mode now. If the firmware refuses, the page says it takes effect at the next start.
+  - **Set, unticked:** sets the value to 1 and removes the alpha word.
+  - **Refuses** if the saved mode isn't C16M.
+  - Files are read and written with OS_File, so the FAT names aren't translated.
+  - **Tested on the host** with the owner's original config.txt (CRLF): on, off and on again; no section; no final newline. Also with his saved WimpMode line: on, twice, off, RGB order, and a 256-colour mode refused. **Not yet run on the Pi.**
+- **Still open:** this morning on the owner's Pi, a quick run of Set, refresh and a driver reload left the page's task with no window and `RISC3D$ProbeDone` still set. To be found before release.
 - **Waiting for:** V3DRender to register with flags bit 4 and answer reason 5 (`V3DRender/handoffs/2026-11-23-risc3d-desktop-2d-reason-5.md`).
 
 ## Release 0.18 (23 Nov 2026): !RISC3D 0.09-2

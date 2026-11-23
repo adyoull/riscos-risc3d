@@ -1,5 +1,20 @@
 # Changelog
 
+## Release 0.19 (23 Nov 2026): !RISC3D 0.10-1
+
+- **The package:** **RISC3D-0.10-1.zip** (also PackMan's RISC3D). It brings together the test kits and unreleased work below:
+  - RISC3D module 0.10;
+  - !RISC3DSetup 1.08;
+  - DAClamp in !RISC3D;
+  - GPU: Linux3D 0.06 and **V3DRender 0.33** (md5 61556bb76b936eb1d5b06f7f8cc9811d).
+  - The client library 0.13 is `RISC3D-client-0.13.tgz`.
+- **V3DRender 0.32 and 0.33** after the test kits:
+  - 0.32 fixes PRESENT's red and blue in 64K-colour modes. riscos-mesa checked it on the owner's Pi 4 in C64K, C32K, C16M LTRGB and C64K LTRGB.
+  - 0.33 adds `V3DRender$Options` and a longer start-up log, for machines that stop at boot with V3DRender loading (Chris Hughes's CM4).
+- **PRESENT needs riscos-mesa 20.3.5-24.** Its EGL calls it: in riscos-mesa's Pi tests, a 640x400 window ran at about 565 frames a second, against 66 with the CPU plot, with menus and windows layered over it. With older !MesaLibs nothing changes.
+- **Credit:** David Sharp's port reports (ioquake3, Mupen64Plus, dhewm3) found the 128 MB limit, the 4,096 handle limit and the `RISC3D$Disable` fault. They also led to the README's notes for programs. He's thanked in the release notes.
+- **Known:** Configure's RISC3D window opens only once the GPU probe has finished. That can take up to 20 s after Set or a driver reload, so it can look as if nothing happened.
+
 ## Unreleased: test kit RISC3D-0.10-test2 with V3DRender 0.31, 23 Nov 2026
 
 - **What it is:** test1 with **V3DRender 0.31** (md5 cb45b2609e363bf5887e453a92aa3211), which adds `DRM_IOCTL_RISCOS_PRESENT`: the GPU copies EGL's finished frame into a window's visible rectangles. It's for riscos-mesa's EGL (20.3.5-24 onwards); nothing changes in RISC3D.
@@ -59,9 +74,10 @@ David Sharp's reports on RISC3D 0.17 (riscos-quake3, riscos-mupen64plus, riscos-
   - **Set, unticked:** sets the value to 1 and removes the alpha word.
   - **Refuses** if the saved mode isn't C16M.
   - Files are read and written with OS_File, so the FAT names aren't translated.
-  - **Tested on the host** with the owner's original config.txt (CRLF): on, off and on again; no section; no final newline. Also with his saved WimpMode line: on, twice, off, RGB order, and a 256-colour mode refused. **Not yet run on the Pi.**
-- **Still open:** this morning on the owner's Pi, a quick run of Set, refresh and a driver reload left the page's task with no window and `RISC3D$ProbeDone` still set. To be found before release.
-- **Waiting for:** V3DRender to register with flags bit 4 and answer reason 5 (`V3DRender/handoffs/2026-11-23-risc3d-desktop-2d-reason-5.md`).
+  - **Tested on the host** with the owner's original config.txt (CRLF): on, off and on again; no section; no final newline. Also with his saved WimpMode line: on, twice, off, RGB order, and a 256-colour mode refused.
+  - **Tested on the owner's Pi 4**, both ways, with V3DRender 0.29.
+- **The "no window" seen this morning** after Set, refresh and a driver reload was the page waiting up to 20 s for the GPU probe. Its window opens only after that (see Release 0.19, Known).
+- **V3DRender 0.28** registers with flag bit 4 and answers reason 5. It was tested on the owner's Pi: the setting stayed through a restart and a reload.
 
 ## Release 0.18 (23 Nov 2026): !RISC3D 0.09-2
 

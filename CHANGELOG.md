@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased: test kit RISC3D-0.10-test1 with V3DRender 0.30, 23 Nov 2026
+
+- **What's in it:** RISC3D 0.10, !RISC3DSetup 1.08, !RISC3D's DAClamp, client library 0.13 (`out/RISC3D-client-0.13.tgz`), and **V3DRender 0.30** (md5 718df7ca43081530e9597dcae5cb2000).
+- **V3DRender 0.30 fixes David Sharp's two V3DRender items:**
+  - It lifts RISC OS's 128 MB clamp while making its area, puts the old value back, and uses the size it really got.
+  - Its handle and BO tables grow up to 65,535, so Doom 3 no longer runs out.
+  - Refused CREATE_BOs are counted by reason in `*V3DRender`.
+- **GPU/Licences** names V3DRender 0.30; the README's Doom 3 row says it needs 0.30.
+- **V3DRender proposes `DRM_IOCTL_RISCOS_PRESENT`:** EGL frames shown by a GPU copy into the window's visible rectangles. RISC3D said yes and passed it to MESA, who owns the caller.
+
 ## Unreleased: from David Sharp's ports (Quake 3, Mupen64Plus, Doom 3), 23 Nov 2026
 
 David Sharp's reports on RISC3D 0.17 (riscos-quake3, riscos-mupen64plus, riscos-dhewm3; summary "RISC3D-for-Andy.md"). What's RISC3D's own is done here; the rest went to V3DRender and riscos-mesa by handoff.

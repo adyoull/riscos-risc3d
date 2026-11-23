@@ -177,7 +177,7 @@ RISC3D's client library (`lib/`, `proto/`) is released as
 | OpenLara | Pi 4, ROL | 50 fps, against 12 to 16 in software |
 | Quake 3 (ioquake3, David Sharp's port) | Pi 4 native, RISC3D 0.17; also RoMac | 138 fps at 480x300, 77 at 1024x768, 69 at 1280x800 full screen (software: 35) |
 | Mupen64Plus (David Sharp's port) | Pi 4 native, RISC3D 0.17 | Super Mario 64 at 163-169 VI/s with the limiter off (full speed 60; software 12-15) |
-| Doom 3 (dhewm3, David Sharp's port) | Pi 4 native | about 12 fps at 800x600, Medium; needs more buffer handles than V3DRender 0.26 allows |
+| Doom 3 (dhewm3, David Sharp's port) | Pi 4 native | about 12 fps at 800x600, Medium; needs V3DRender 0.30 (more buffer handles than 0.26 allowed) |
 
 ## The parts
 

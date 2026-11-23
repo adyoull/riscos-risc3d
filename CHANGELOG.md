@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased: test kit RISC3D-0.10-test2 with V3DRender 0.31, 23 Nov 2026
+
+- **What it is:** test1 with **V3DRender 0.31** (md5 cb45b2609e363bf5887e453a92aa3211), which adds `DRM_IOCTL_RISCOS_PRESENT`: the GPU copies EGL's finished frame into a window's visible rectangles. It's for riscos-mesa's EGL (20.3.5-24 onwards); nothing changes in RISC3D.
+- **On ROL:** there's no ioctl to call. Linux3D isn't a DRM device, so `RISC3D_Info` gives R5 = 0 there, and EGL keeps its present by Linux3D. MESA has been told to try PRESENT only where Info's R4 bit 0 is set (the same test libMesaGPU uses), and to treat a SWI error as "not offered".
+- **GPU/Licences** names V3DRender 0.31.
+
 ## Unreleased: test kit RISC3D-0.10-test1 with V3DRender 0.30, 23 Nov 2026
 
 - **What's in it:** RISC3D 0.10, !RISC3DSetup 1.08, !RISC3D's DAClamp, client library 0.13 (`out/RISC3D-client-0.13.tgz`), and **V3DRender 0.30** (md5 718df7ca43081530e9597dcae5cb2000).

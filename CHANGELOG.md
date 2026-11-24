@@ -1,5 +1,15 @@
 # Changelog
 
+## Release 0.20 (24 Nov 2026): !RISC3D 0.10-2
+
+- **What changed:** release 0.19 (!RISC3D 0.10-1, V3DRender 0.33) was built and tagged but not published. 0.20 replaces it, with **V3DRender 0.35** (md5 be828bf7049e5092667ad872dd540f98). Otherwise it's unchanged: the RISC3D module, !RISC3DSetup, DAClamp, Linux3D and the client library are as in 0.19.
+- **V3DRender 0.34:** its interrupt handler made SWIs in IRQ mode from 0.27 (the start-up log's first-interrupt line, and a time fallback). That could overwrite the SVC return address of interrupted code. Found from Chris Hughes's CM4 log.
+- **V3DRender 0.35:**
+  - The memory and interrupt are taken on first use (a program opening the GPU, or reason 5 turning the desktop's 2D on), not at load. `Early` keeps the old way.
+  - `FreeOnly` takes only free-pool pages.
+  - Tested on the owner's Pi 4 by V3DRender through TestAgent, including presenttest.
+- **Notes:** `docs/releases/0.20.md` (0.19's, with these and thanks to Chris Hughes).
+
 ## Release 0.19 (23 Nov 2026): !RISC3D 0.10-1
 
 - **The package:** **RISC3D-0.10-1.zip** (also PackMan's RISC3D). It brings together the test kits and unreleased work below:

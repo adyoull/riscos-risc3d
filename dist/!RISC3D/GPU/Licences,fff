@@ -4,7 +4,7 @@ Licences of the GPU drivers
 Linux3D: MIT licence, Copyright (c) 2026 Andrew Youll (as RISC3D; see
 !RISC3D.!Help). Source: https://github.com/adyoull/riscos-risc3d
 
-V3DRender 0.33: GPL-2.0-or-later. Its source (the version here is 0.33) is
+V3DRender 0.35: GPL-2.0-or-later. Its source (the version here is 0.35) is
 at https://github.com/adyoull/riscos-v3drender; the text of the GPL,
 version 2, is in GPL-2 beside this file. Its notice follows.
 

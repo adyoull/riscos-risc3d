@@ -26,7 +26,7 @@ module_start:
 	.word	flags - module_start
 
 title:	.asciz	"RISC3D"
-help:	.asciz	"RISC3D\t0.10 (23 Nov 2026) 3D driver interface"
+help:	.asciz	"RISC3D\t0.11 (25 Nov 2026) 3D driver interface"
 swi_names:
 	.asciz	"RISC3D\0Info\0Register\0Open\0Close\0Sync\0Describe\0Desktop2D\0"
 	.align	2

@@ -1,5 +1,18 @@
 # Changelog
 
+## Release 0.21 (25 Nov 2026): !RISC3D 0.11-1
+
+- **RISC3D module 0.11: a task's contexts close only when it ends.**
+  - **The bug:** RISC3D closed a task's contexts on any Service_WimpCloseDown. That service also comes, with r0 non-zero, when a task starts another program within itself (`*Run` from a task, `system()`, the Filer booting an application) and carries on afterwards. So a GL program that ran a `*command` lost its contexts.
+  - **The fix:** contexts now close only when r0 = 0, as V3DRender 0.36 does for its GPU files. Spotted by V3DRender while reading !DigitalCD's start-up for Chris Hughes's CM4.
+  - Info r0 = 11. !RISC3D's !Boot and !Run RMEnsure 0.11.
+  - **Tested on the owner's Pi 4:** loaded over 0.10 with V3DRender running, V3DRender registered with it. The fix itself (a GL program running a `*command`) hasn't been run there.
+- **V3DRender 0.37** (md5 e5205b396837e0b0d1ca30287a5a1ac4):
+  - 0.36: its GPU files close only when a task ends (Service_WimpCloseDown r0 = 0).
+  - 0.37: PRESENT copies Mesa's 32 bpp UIF frame to the screen in one pass, not two, about half the GPU time. riscos-mesa measured it on the Pi: unscaled 1600x1000 presents went from 149 to 251 fps, now ahead of the CPU plot. Every check passed, 0 MMU errors.
+- **Unchanged:** !RISC3DSetup 1.08, DAClamp, Linux3D 0.06, client 0.13.
+- **ROL** staged 0.10.0.2-1 in riscos-harddisc 1.0.0073-1, with MesaLibs 20.3.5.0.23-1.
+
 ## Release 0.20 (24 Nov 2026): !RISC3D 0.10-2
 
 - **What changed:** release 0.19 (!RISC3D 0.10-1, V3DRender 0.33) was built and tagged but not published. 0.20 replaces it, with **V3DRender 0.35** (md5 be828bf7049e5092667ad872dd540f98). Otherwise it's unchanged: the RISC3D module, !RISC3DSetup, DAClamp, Linux3D and the client library are as in 0.19.

@@ -352,7 +352,7 @@ mod_swi (unsigned number, regs *r)
 	  n += drv[i].entry != 0;
 	for (int i = 0; i < MAXCTX; i++)
 	  c += ctx[i].used;
-	r->r[0] = 10;
+	r->r[0] = 11;
 	r->r[1] = (unsigned) n;
 	r->r[2] = (unsigned) c;
 	r->r[3] = b < 0 ? 0 : (unsigned) drv[b].name;
@@ -514,10 +514,16 @@ mod_swi (unsigned number, regs *r)
   return ERR (err_swi);
 }
 
-/* Service_WimpCloseDown: r2 = the task */
+/* Service_WimpCloseDown: r0 = 0 when the task is ending (Wimp_CloseDown),
+   non-zero when it's starting another program within itself (*Run from
+   a task, system(), the Filer booting an application) and carries on
+   afterwards; r2 = the task. (0.11) Contexts go only when it's ending:
+   before, a GL program that ran a *command lost its contexts. */
 void
 mod_service (regs *r)
 {
+  if (r->r[0] != 0)
+    return;
   for (int i = 0; i < MAXCTX; i++)
     if (ctx[i].used && ctx[i].task && ctx[i].task == r->r[2])
       ctx_close (i);

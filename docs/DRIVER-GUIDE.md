@@ -157,7 +157,7 @@ program. You may change r0 to r9. Keep r10, r11 and sp as they were.
   - Refuse with an error if you can't; the program then draws in
     software.
 - **Close:** called for `RISC3D_Close`, and also:
-  - when the program's Wimp task ends (`Service_WimpCloseDown`);
+  - when the program's Wimp task ends (`Service_WimpCloseDown` with r0 = 0; from RISC3D 0.11, not when the task starts another program within itself, r0 non-zero);
   - when RISC3D or your driver is removed.
 
   Free everything the context held. A command-line program that dies

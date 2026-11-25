@@ -12,4 +12,4 @@ IfThere Choices:RISC3D.Settings Then Obey Choices:RISC3D.Settings
 | does, so V3DRender's buffer area gets all of V3DRender$Size whatever
 | order Resources boot in. System-wide; harmless where it's already lifted.
 /<RISC3D$Dir>.DAClamp
-RMEnsure RISC3D 0.10 RMLoad <RISC3D$Dir>.RISC3D
+RMEnsure RISC3D 0.11 RMLoad <RISC3D$Dir>.RISC3D

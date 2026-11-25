@@ -7,14 +7,15 @@ above it, 3D drivers below it. Programs use Mesa as they do now; where a
 driver is registered the drawing is done by the machine's GPU driver, and
 where none is, Mesa draws in software as before.
 
-**Release 0.21, 25 November 2026** (0.11 moved to the allocated numbers;
+**Release 0.22, 25 November 2026** (0.11 moved to the allocated numbers;
 0.12 added contexts that share objects, for WebKit; 0.13 to 0.16 added
 Configure's RISC3D window; 0.17 shows what the GPU supports on native
 RISC OS; 0.18 fixed the page where ARMEABISupport wasn't loaded; 0.19 turns
-the desktop's 2D and the Pi's z-layer overlays on and off from Configure,
+the desktop's 2D on and off from Configure,
 and has V3DRender 0.37, which can put a 3D window on the screen by the GPU
 and takes nothing at start-up; 0.21 keeps a program's contexts when it
-runs a *command).
+runs a *command; 0.22 shows the driver's version in Configure and drops
+the z-layer overlays switch).
 It draws on the GPU:
 - on native RISC OS on a Raspberry Pi 4, through V3DRender;
 - on RISC OS on Linux, through Linux3D, on whatever GPU Linux drives. So

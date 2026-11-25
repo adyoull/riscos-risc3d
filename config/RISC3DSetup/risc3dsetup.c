@@ -9,6 +9,9 @@
    moment, as a program would. A DRM device (V3DRender) is drawn with
    Mesa's own driver inside each program, so there it says that.
 
+   1.09: the z-layer tick box is gone, at the owner's request (and its
+   hardware line isn't shown); the driver's version (from its module's
+   help string) is shown in Drivers and at the foot, beside RISC3D's.
    1.08: "Enable z-layer complex overlays", where the driver's hardware
    lines have "Z-layer complex overlays" (V3DRender 0.29): config.txt's
    framebuffer_ignore_alpha=0 and the saved desktop mode's alpha form
@@ -84,10 +87,10 @@ static struct
   int ndrv;
   char drv_name[MAXDRV][40], drv_state[MAXDRV][160];
   int drv_ok[MAXDRV];
-  char version_text[40], contexts_text[16];
+  char version_text[80], contexts_text[16];
   int nhw;				/* the driver's own lines (Hardware) */
   int has_2d, state_2d;
-  int has_zl, zl_set;			/* (1.08) the driver's "Z-layer complex overlays" line; config.txt and the saved mode both have it */			/* (1.07) the driver's desktop 2D: offered; 0 off, 1 on, 2 on, not waited for */
+  char driver_version[16];		/* (1.09) the driver module's version, from its help string */
   char hw_label[8][32], hw_value[8][100];
 } info;
 
@@ -115,8 +118,6 @@ static icon icons[ICONS];
 static int nicons, i_refresh, i_cancel, i_set, i_load, i_2d = -1;
 static int want_on;			/* the choice shown */
 static int want_2d;			/* (1.07) desktop 2D on the GPU, as shown */
-static int want_zl;			/* (1.08) z-layer complex overlays, as shown */
-static int i_zl = -1;
 static int win = -1, win_h;
 static int font = -1;			/* the headline's, or -1: the desktop font */
 static char title[] = "RISC3D";
@@ -220,7 +221,6 @@ static const char
   h_hw[] = "What the 3D driver says about the GPU itself.",
   h_version[] = "The version of the RISC3D module.",
   h_2d[] = "Click to tick or untick. Ticked: the 3D driver does the desktop's window moves, scrolls and plain fills on the GPU. Not ticked: the CPU does them, as usual. Then click Set. (Off unless you turn it on.)",
-  h_zl[] = "Click to tick or untick, then Set. Ticked: video overlays (VideoOverlay, as Reel and EGL use) sit behind the desktop, under its windows and menus, not over everything. Set adds framebuffer_ignore_alpha=0 to config.txt (kept as CONFIG/BAK first) and saves the desktop mode in its alpha form. The first time needs a restart. Needs a 16 million colour desktop.",
   h_load[] = "Click to tick or untick. Ticked: RISC3D loads a 3D driver, so programs can draw on the GPU. Not ticked: no driver is loaded and programs draw in software, as without RISC3D. Then click Set.";
 
 static void
@@ -254,13 +254,6 @@ build (void)
   if (info.has_2d)
     {
       i_2d = option_at (LABEL_X, VALUE_R, y, want_2d, "Draw the desktop's copies and fills on the GPU (2D)", h_2d);
-      y -= ROW;
-    }
-  /* (1.08) where the driver says it can (V3DRender 0.29's hardware line) */
-  i_zl = -1;
-  if (info.has_zl)
-    {
-      i_zl = option_at (LABEL_X, VALUE_R, y, want_zl, "Enable z-layer complex overlays", h_zl);
       y -= ROW;
     }
   y = group_end (y + 8);
@@ -305,12 +298,17 @@ build (void)
     snprintf (in_use, sizeof in_use, "%s",
 	      info.off ? "In use: RISC3D is turned off; Mesa draws in software"
 		       : "In use: no driver starts here; Mesa draws in software");
-  row (&y, info.have_driver ? info.driver_module : "Software3D", in_use, h_drv);
+  static char drv_label[60];
+  if (info.have_driver && info.driver_version[0])
+    snprintf (drv_label, sizeof drv_label, "%s %s", info.driver_module, info.driver_version);
+  else
+    snprintf (drv_label, sizeof drv_label, "%s", info.have_driver ? info.driver_module : "Software3D");
+  row (&y, drv_label, in_use, h_drv);
   y = group_end (y + 8);
 
   /* RISC3D's version, and the buttons */
   y -= 8;
-  add_icon (MARGIN, y - 68, MARGIN + 400, y, F_TEXT | F_VCENTRE | F_INDIR | F_COLOURS (5, 1), info.version_text, "",
+  add_icon (MARGIN, y - 68, WIN_W - MARGIN - 3 * 200 - 3 * 24, y, F_TEXT | F_VCENTRE | F_INDIR | F_COLOURS (5, 1), info.version_text, "",
 	    h_version);
   i_refresh = add_icon (WIN_W - MARGIN - 3 * 200 - 2 * 24, y - 68, WIN_W - MARGIN - 2 * 200 - 2 * 24, y,
 			F_TEXT | F_BORDER | F_HCENTRE | F_VCENTRE | F_FILLED | F_INDIR | F_CLICK | F_COLOURS (7, 1),
@@ -540,9 +538,10 @@ read_hardware (void)
 	  *t = 0;
 	  trim_to (info.hw_label[info.nhw], sizeof info.hw_label[0], p);
 	  trim_to (info.hw_value[info.nhw], sizeof info.hw_value[0], t + 1);
-	  if (!strcmp (info.hw_label[info.nhw], "Z-layer complex overlays"))
-	    info.has_zl = 1;		/* (1.08) V3DRender 0.29 on */
-	  if (info.hw_label[info.nhw][0])
+	  /* (1.09) the z-layer overlays line isn't shown: its tick box
+	     went (see 1.09 above) */
+	  if (info.hw_label[info.nhw][0]
+	      && strcmp (info.hw_label[info.nhw], "Z-layer complex overlays"))
 	    info.nhw++;
 	}
       if (!e)
@@ -759,267 +758,31 @@ probe_drm (const char *drm)
 
 static void report (const char *text);
 
-/* --- (1.08) z-layer complex overlays ------------------------------------
-
-   On a Pi, VideoOverlay's overlays (BCMVideo: firmware display layers)
-   go behind the desktop, under its windows and menus, when the desktop
-   is in an alpha mode (C16M LABGR, or LARGB). The firmware offers those
-   only with framebuffer_ignore_alpha=0 in config.txt, read at start-up.
-   So the choice is two settings, both kept for the next start:
-     - config.txt (<Boot$Dir>.Loader.CONFIG/TXT, on the FAT partition):
-       framebuffer_ignore_alpha=0, in the part before the first [section]
-       so it holds on every model; its line endings kept; copied to
-       CONFIG/BAK first;
-     - the desktop mode Configure's Screen saves (Choices:Boot.PreDesk.
-       Configure.Monitor's WimpMode line): C16M followed by LABGR or LARGB.
-   Read and written with OS_File, so the names aren't translated. */
-
-#define CONFIG_TXT "<Boot$Dir>.Loader.CONFIG/TXT"
-#define CONFIG_BAK "<Boot$Dir>.Loader.CONFIG/BAK"
-#define MONITOR_R "Choices:Boot.PreDesk.Configure.Monitor"
-#define MONITOR_W "<Choices$Write>.Boot.PreDesk.Configure.Monitor"
-
-/* a whole file, 0-terminated (malloc'd), or 0 */
-static char *
-load_file (const char *name, int *len)
-{
-  int type = 0, l = 0;
-  if (_swix (OS_File, _INR (0, 1) | _OUT (0) | _OUT (4), 17, name, &type, &l) || type != 1 || l < 0 || l > 65536)
-    return 0;
-  char *b = malloc ((size_t) l + 1);
-  if (!b)
-    return 0;
-  if (_swix (OS_File, _INR (0, 3), 16, name, b, 0))
-    {
-      free (b);
-      return 0;
-    }
-  b[l] = 0;
-  if (len)
-    *len = l;
-  return b;
-}
-
+/* (1.09) a module's version: the first word after the tab in its help
+   string ("V3DRender\t0.37 (25 Nov 2026) ..."); 1 if found */
 static int
-save_file (const char *name, int type, const char *b, int len)
+module_version (const char *name, char *out, size_t size)
 {
-  return !_swix (OS_File, _INR (0, 2) | _INR (4, 5), 10, name, type, b, b + len);
-}
-
-/* config.txt's framebuffer_ignore_alpha: 0, 1, or -1 when there's none
-   (the firmware's default, 1) */
-static int
-config_alpha (const char *c)
-{
-  int v = -1;
-  for (const char *p = c; p && *p;)
-    {
-      const char *e = p + strcspn (p, "\r\n");
-      if (!strncmp (p, "framebuffer_ignore_alpha=", 25))
-	v = atoi (p + 25);
-      p = *e ? e + 1 : e;
-    }
-  return v;
-}
-
-/* the saved mode's WimpMode line has C16M L... */
-static int
-monitor_alpha (const char *m)
-{
-  const char *w = m ? strstr (m, "WimpMode") : 0;
-  if (!w)
+  const char *base = 0;
+  out[0] = 0;
+  if (!name[0] || _swix (OS_Module, _INR (0, 1) | _OUT (3), 18, name, &base) || !base)
     return 0;
-  const char *e = w + strcspn (w, "\r\n");
-  for (const char *p = w; p + 5 <= e; p++)
-    if ((!strncmp (p, " LABGR", 6) || !strncmp (p, " LARGB", 6)) && (p + 6 >= e || p[6] == ' ' || p[6] == '\r' || p[6] == '\n'))
-      return 1;
-  return 0;
-}
-
-static void
-read_zlayer (void)
-{
-  char *c = load_file (CONFIG_TXT, 0), *m = load_file (MONITOR_R, 0);
-  info.zl_set = c && m && config_alpha (c) == 0 && monitor_alpha (m);
-  free (c);
-  free (m);
-}
-
-/* config.txt with framebuffer_ignore_alpha=on ? 0 : 1; 0 done, else why */
-static const char *
-set_config (int on)
-{
-  int len = 0;
-  char *c = load_file (CONFIG_TXT, &len);
-  if (!c)
-    return "couldn't read config.txt (<Boot$Dir>.Loader.CONFIG/TXT)";
-  int has = config_alpha (c);
-  if ((on && has == 0) || (!on && has != 0))
+  unsigned help = ((const unsigned *) base)[5];
+  if (!help)
+    return 0;
+  const char *h = base + help;
+  while (*h && *h != '\t')
+    h++;
+  while (*h == '\t' || *h == ' ')
+    h++;
+  size_t k = 0;
+  while (h[k] > ' ' && k < size - 1)
     {
-      free (c);
-      return 0;				/* (as it is) */
+      out[k] = h[k];
+      k++;
     }
-  if (!save_file (CONFIG_BAK, 0xFFF, c, len))
-    {
-      free (c);
-      return "couldn't keep a copy of config.txt as CONFIG/BAK, so didn't change it";
-    }
-  const char *eol = strstr (c, "\r\n") ? "\r\n" : "\n";
-  char *out = malloc ((size_t) len + 64);
-  if (!out)
-    {
-      free (c);
-      return "no memory";
-    }
-  int n = 0;
-  if (has >= 0)
-    {
-      /* change the value where the line is */
-      for (const char *p = c; *p;)
-	{
-	  const char *e = p + strcspn (p, "\r\n");
-	  if (!strncmp (p, "framebuffer_ignore_alpha=", 25))
-	    {
-	      n += sprintf (out + n, "framebuffer_ignore_alpha=%d", on ? 0 : 1);
-	      p = e;
-	    }
-	  else
-	    {
-	      memcpy (out + n, p, (size_t) (e - p));
-	      n += (int) (e - p);
-	      p = e;
-	    }
-	  while (*p == '\r' || *p == '\n')
-	    out[n++] = *p++;
-	}
-    }
-  else
-    {
-      /* a new line before the first [section] (every model), else at the end */
-      const char *p = c, *at = 0;
-      while (*p)
-	{
-	  if (*p == '[')
-	    {
-	      at = p;
-	      break;
-	    }
-	  p += strcspn (p, "\r\n");
-	  while (*p == '\r' || *p == '\n')
-	    p++;
-	}
-      /* before the blank lines that end the unconditional part */
-      while (at && at > c)
-	{
-	  const char *q = at;
-	  if (q > c && q[-1] == '\n')
-	    q--;
-	  if (q > c && q[-1] == '\r')
-	    q--;
-	  const char *ls = q;		/* the line before: from ls to q */
-	  while (ls > c && ls[-1] != '\n')
-	    ls--;
-	  if (ls != q)
-	    break;
-	  at = ls;			/* (an empty line: before it) */
-	}
-      size_t head = at ? (size_t) (at - c) : (size_t) len;
-      memcpy (out, c, head);
-      n = (int) head;
-      if (n > 0 && out[n - 1] != '\n')
-	n += sprintf (out + n, "%s", eol);
-      n += sprintf (out + n, "framebuffer_ignore_alpha=0%s", eol);
-      memcpy (out + n, c + head, (size_t) len - head);
-      n += len - (int) head;
-    }
-  int ok = save_file (CONFIG_TXT, 0xFFF, out, n);
-  free (out);
-  free (c);
-  return ok ? 0 : "couldn't write config.txt";
-}
-
-/* the saved mode: C16M with or without the alpha form; *mode gets the new
-   WimpMode specifier (for now). 0 done, else why */
-static const char *
-set_monitor (int on, char *mode, size_t msize)
-{
-  int len = 0;
-  char *m = load_file (MONITOR_R, &len);
-  mode[0] = 0;
-  if (!m)
-    return "there's no saved desktop mode (set one in Configure's Screen first)";
-  char *w = strstr (m, "WimpMode");
-  char *c16 = w ? strstr (w, " C16M") : 0;
-  char *e = w ? w + strcspn (w, "\r\n") : 0;
-  if (!w || !c16 || c16 > e)
-    {
-      free (m);
-      return "the saved desktop mode isn't 16 million colours (choose one in Configure's Screen)";
-    }
-  /* the line, without any alpha word */
-  char line[200];
-  size_t ln = 0;
-  for (char *p = w; p < e && ln < sizeof line - 8;)
-    {
-      if ((!strncmp (p, " LABGR", 6) || !strncmp (p, " LARGB", 6)) && (p + 6 >= e || p[6] == ' '))
-	{
-	  p += 6;
-	  continue;
-	}
-      line[ln++] = *p++;
-      if (p == c16 + 5 && on)
-	{
-	  int flags = 0;
-	  _swix (OS_ReadModeVariable, _INR (0, 1) | _OUT (2), -1, 0, &flags);
-	  const char *a = (flags & (1 << 14)) ? " LARGB" : " LABGR";
-	  memcpy (line + ln, a, 6);
-	  ln += 6;
-	}
-    }
-  line[ln] = 0;
-  size_t head = (size_t) (w - m), tail = (size_t) len - (size_t) (e - m);
-  char *out = malloc (head + ln + tail + 1);
-  if (!out)
-    {
-      free (m);
-      return "no memory";
-    }
-  memcpy (out, m, head);
-  memcpy (out + head, line, ln);
-  memcpy (out + head + ln, e, tail);
-  _swix (OS_File, _INR (0, 1) | _IN (4), 8, "<Choices$Write>.Boot", 0);
-  _swix (OS_File, _INR (0, 1) | _IN (4), 8, "<Choices$Write>.Boot.PreDesk", 0);
-  _swix (OS_File, _INR (0, 1) | _IN (4), 8, "<Choices$Write>.Boot.PreDesk.Configure", 0);
-  int ok = save_file (MONITOR_W, 0xFEB, out, (int) (head + ln + tail));
-  snprintf (mode, msize, "%s", line);	/* "WimpMode ..." */
-  free (out);
-  free (m);
-  return ok ? 0 : "couldn't save the desktop mode";
-}
-
-static void
-apply_zlayer (int on)
-{
-  char mode[200], msg[300];
-  const char *why = on ? set_monitor (1, mode, sizeof mode) : 0;
-  if (!why)
-    why = set_config (on);
-  if (!why && !on)
-    why = set_monitor (0, mode, sizeof mode);
-  if (why)
-    {
-      snprintf (msg, sizeof msg, "Z-layer complex overlays weren't changed: %s.", why);
-      report (msg);
-      return;
-    }
-  /* the desktop in that mode now, where the firmware already allows it */
-  if (_swix (OS_CLI, _IN (0), mode))
-    {
-      if (on)
-	report ("Z-layer complex overlays are set, and take effect when the machine next starts: the firmware reads config.txt only then. (A copy of the old config.txt is in !Boot.Loader as CONFIG/BAK.)");
-      else
-	report ("Z-layer complex overlays are off from the next start.");
-    }
+  out[k] = 0;
+  return k > 0;
 }
 
 static void
@@ -1092,6 +855,13 @@ find_out (void)
       }
     info.driver_module[k] = 0;
   }
+  /* (1.09) the driver's version, so it can be told without *Help:
+     "RISC3D 0.11, V3DRender 0.37" at the foot, and in Drivers */
+  if (module_version (info.driver_module, info.driver_version, sizeof info.driver_version))
+    {
+      size_t n = strlen (info.version_text);
+      snprintf (info.version_text + n, sizeof info.version_text - n, ", %s %s", info.driver_module, info.driver_version);
+    }
   info.share = (flags & 4) != 0;
   if (flags & 1)
     {
@@ -1234,8 +1004,6 @@ make (void)
   find_out ();
   want_on = !info.off;
   want_2d = info.state_2d != 0;
-  read_zlayer ();
-  want_zl = info.zl_set;
   build ();
   win = create_window ();
 }
@@ -1299,14 +1067,6 @@ main (int argc, char **argv)
 	      int blk[4] = { win, i_2d, want_2d ? 1 << 21 : 0, 1 << 21 };
 	      _swix (Wimp_SetIconState, _IN (1), blk);
 	    }
-	  if (b[3] == win && i_zl >= 0 && b[4] == i_zl)
-	    {
-	      want_zl = !want_zl;
-	      int blk[4] = { win, i_zl, want_zl ? 1 << 21 : 0, 1 << 21 };
-	      _swix (Wimp_SetIconState, _IN (1), blk);
-	    }
-	  if (b[3] == win && b[4] == i_set && i_zl >= 0 && want_zl != info.zl_set)
-	    apply_zlayer (want_zl);
 	  if (b[3] == win && b[4] == i_set && i_2d >= 0 && want_2d != (info.state_2d != 0))
 	    {
 	      /* (1.07) at once, and kept for the next start (RISC3D 0.10

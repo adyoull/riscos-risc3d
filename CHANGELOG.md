@@ -1,5 +1,13 @@
 # Changelog
 
+## Release 0.22 (25 Nov 2026): !RISC3D 0.11-2
+
+- **!RISC3DSetup 1.09:**
+  - **The z-layer tick box is gone,** at the owner's request, with its code (config.txt and saved-mode editing). The driver's "Z-layer complex overlays" hardware line isn't shown either. PRESENT layers 3D windows under menus per program, with no alpha mode.
+  - **The driver's version is shown,** from its module's help string (OS_Module 18): in Drivers ("V3DRender 0.37") and at the foot ("RISC3D 0.11, V3DRender 0.37"). It's for Chris Hughes's case, where the version couldn't be told without `*Help`.
+  - **Tested on the owner's Pi 4**, run from `$.Test.Setup109`: no z-layer box or line, "V3DRender 0.35" shown (the module in memory then). New screenshot `docs/images/risc3dsetup-pi4-native-1.09.png`.
+- **!RISC3D 0.11-2:** as 0.11-1 apart from !RISC3DSetup. 0.11-1 (release 0.21) was delivered but not published, and isn't rebuilt.
+
 ## Release 0.21 (25 Nov 2026): !RISC3D 0.11-1
 
 - **RISC3D module 0.11: a task's contexts close only when it ends.**

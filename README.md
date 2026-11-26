@@ -7,7 +7,7 @@ above it, 3D drivers below it. Programs use Mesa as they do now; where a
 driver is registered the drawing is done by the machine's GPU driver, and
 where none is, Mesa draws in software as before.
 
-**Release 0.23, 26 November 2026** (0.11 moved to the allocated numbers;
+**Release 0.24, 26 November 2026** (0.11 moved to the allocated numbers;
 0.12 added contexts that share objects, for WebKit; 0.13 to 0.16 added
 Configure's RISC3D window; 0.17 shows what the GPU supports on native
 RISC OS; 0.18 fixed the page where ARMEABISupport wasn't loaded; 0.19 turns

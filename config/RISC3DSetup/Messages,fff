@@ -2,7 +2,7 @@
 _TaskName:RISC3D
 _Purpose:Which 3D driver RISC3D uses, and what it offers
 _Author:Andrew Youll, 2026
-_Version:1.10 (26-Nov-26)
+_Version:1.11 (26-Nov-26)
 _ConfigText:RISC3D
 _ConfigHelp:Click SELECT to see which 3D driver RISC3D is using, whether programs' 3D is drawn on the GPU, and which versions of OpenGL and OpenGL ES they can have, or to turn RISC3D's GPU drawing off.
 _ConfigSprite:co_risc3d

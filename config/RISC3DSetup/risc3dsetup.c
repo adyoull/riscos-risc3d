@@ -9,6 +9,7 @@
    moment, as a program would. A DRM device (V3DRender) is drawn with
    Mesa's own driver inside each program, so there it says that.
 
+   1.11: relinked with riscos-unixlib 5.0.3.12 (word-aligned .data).
    1.10: relinked with riscos-unixlib 5.0.3.11; no source change.
    1.09: the z-layer tick box is gone, at the owner's request (and its
    hardware line isn't shown); the driver's version (from its module's

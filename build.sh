@@ -226,11 +226,12 @@ tools/mkclient.sh 0.12
 tools/mkclient.sh 0.13
 
 # Configure's plug-in, !RISC3DSetup (release 0.13 on)
-# (1.10 on) linked with riscos-unixlib 5.0.3.11 (sha256 4d1b3cc6...),
-# from $UNIXLIB_DIR (default /home/claude/unixlib-5.0.3.11), ahead of the
-# toolchain's; the build stops if it isn't there
-UNIXLIB_DIR=${UNIXLIB_DIR:-/home/claude/unixlib-5.0.3.11}
-echo "4d1b3cc68cf906b66aa1a5cfe1f7321d39e0145336b454d7fbaa6df70e5a62a0  $UNIXLIB_DIR/libunixlib.a" | sha256sum -c --quiet
+# (1.11 on) linked with riscos-unixlib 5.0.3.12 (sha256 f8e76d36...: its
+# .data word-aligned; 1.10 had 5.0.3.11), from $UNIXLIB_DIR (default
+# /home/claude/unixlib-5.0.3.12), ahead of the toolchain's; the build stops
+# if it isn't there
+UNIXLIB_DIR=${UNIXLIB_DIR:-/home/claude/unixlib-5.0.3.12}
+echo "f8e76d36ce5495553153cb9e15c69084ad3938974288ababc34e90055226c6f4  $UNIXLIB_DIR/libunixlib.a" | sha256sum -c --quiet
 ${T}gcc $AC -Wno-format-truncation $I -static -L"$UNIXLIB_DIR" -Wl,--trace-symbol=pthread_getspecific -o out/obj/risc3dsetup.elf config/RISC3DSetup/risc3dsetup.c out/libRISC3D.a -lm
 ${T}strip out/obj/risc3dsetup.elf
 "${RISCOS_TOOLCHAIN}/bin/elf2aif" -e out/obj/risc3dsetup.elf "out/RISC3DSetup-RunImage,ff8" >/dev/null
@@ -453,6 +454,19 @@ kit out/RISC3D-0.11-2.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,
 # !RISC3D 0.11-3 (release 0.23, 26 Nov 2026): V3DRender 0.38 (scaled
 # present), !RISC3DSetup 1.10 (relinked with UnixLib 5.0.3.11)
 kit out/RISC3D-0.11-3.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
+  "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" "dist/!RISC3D/DAClamp,ffc" \
+  "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa" \
+  "third/V3DRender/V3DRender,ffa=GPU/V3DRender,ffa" "dist/!RISC3D/GPU/Licences,fff=GPU/Licences,fff" \
+  "dist/!RISC3D/GPU/GPL-2,fff=GPU/GPL-2,fff" \
+  "$P/!Boot,feb=/!RISC3DSetup/!Boot,feb" "$P/!Run,feb=/!RISC3DSetup/!Run,feb" "$P/!Help,fff=/!RISC3DSetup/!Help,fff" \
+  "$P/Messages,fff=/!RISC3DSetup/Messages,fff" "$P/!Sprites,ff9=/!RISC3DSetup/!Sprites,ff9" \
+  "$P/!Sprites11,ff9=/!RISC3DSetup/!Sprites11,ff9" "$P/CoSprite,ff9=/!RISC3DSetup/CoSprite,ff9" \
+  "$P/CoSprite11,ff9=/!RISC3DSetup/CoSprite11,ff9" "$P/CoSprite22,ff9=/!RISC3DSetup/CoSprite22,ff9" \
+  "out/RISC3DSetup-RunImage,ff8=/!RISC3DSetup/!RunImage,ff8"
+
+# !RISC3D 0.11-4 (release 0.24, 26 Nov 2026): !RISC3DSetup 1.11 (relinked
+# with UnixLib 5.0.3.12)
+kit out/RISC3D-0.11-4.zip '!RISC3D' "dist/!RISC3D/!Boot,feb" "dist/!RISC3D/!Run,feb" \
   "dist/!RISC3D/!Help,fff" "dist/!RISC3D/!Sprites,ff9" "dist/!RISC3D/!Sprites11,ff9" "out/modules/RISC3D,ffa" "dist/!RISC3D/DAClamp,ffc" \
   "dist/!RISC3D/GPU/ReadMe,fff=GPU/ReadMe,fff" "out/modules/Linux3D,ffa=GPU/Linux3D,ffa" \
   "third/V3DRender/V3DRender,ffa=GPU/V3DRender,ffa" "dist/!RISC3D/GPU/Licences,fff=GPU/Licences,fff" \

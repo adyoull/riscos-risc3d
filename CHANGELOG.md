@@ -1,5 +1,15 @@
 # Changelog
 
+## Release 0.24 (26 Nov 2026): !RISC3D 0.11-4
+
+- **!RISC3DSetup 1.11:** relinked with **riscos-unixlib 5.0.3.12** (libunixlib.a sha256 f8e76d36…), with no source change.
+  - **Why:** 5.0.3.12 adds `.balign 4` after UnixLib's bare `.data` sections. 5.0.3.11 left `.data` byte-aligned in `_exist.o`, `_riscosify.o`, `_profile.o`, `_signal.o` and crt0. On a Pi with alignment exceptions on, a program whose link put `__riscosify_control_internal` off a word boundary aborted before main.
+  - **1.10 wasn't caught by it:** its link put that symbol at &C4398, word-aligned, the same in both links. It was fine by luck.
+  - **Now:** the program's `.data` section has 4-byte alignment.
+  - **Tested on the owner's Pi** from `$.Test.Setup111`: "RISC3D 0.11, V3DRender 0.38".
+- **!RISC3D 0.11-4:** as 0.11-3 apart from !RISC3DSetup. 0.11-3 (release 0.23) was delivered but not pushed or published, and isn't rebuilt.
+- **Client library 0.13:** unchanged. It's an archive, and programs link their own UnixLib.
+
 ## Release 0.23 (26 Nov 2026): !RISC3D 0.11-3
 
 - **V3DRender 0.38** (md5 58ea558b91725ec788e9117b4cf3fe34):

@@ -1,5 +1,20 @@
 # Changelog
 
+## Release 0.23 (26 Nov 2026): !RISC3D 0.11-3
+
+- **V3DRender 0.38** (md5 58ea558b91725ec788e9117b4cf3fe34):
+  - PRESENT can scale (`DRM_RISCOS_PRESENT_SCALE` / `LINEAR`; a 56-byte struct, and the 48-byte one is still taken).
+  - No SWI, reason or flag changes for RISC3D.
+  - riscos-mesa took it up in EGL (14e57b7) and measured it on the owner's Pi in C16M and C64K: a 1600x1000 window went 148 → 240 fps from 800x500, and 144 → 204 from 1024x640. All checks passed, with 0 MMU errors.
+- **!RISC3DSetup 1.10:** relinked with **riscos-unixlib 5.0.3.11** (libunixlib.a sha256 4d1b3cc6…), with no source change.
+  - build.sh links it from `$UNIXLIB_DIR`, ahead of the toolchain's, and checks the sha256 first.
+  - The link trace shows `pthread_getspecific` coming from 5.0.3.11's `key.o`.
+  - Run on the owner's Pi from `$.Test.Setup110`: the window shows "RISC3D 0.11, V3DRender 0.38".
+- **Client library:** unchanged at 0.13.
+  - It's an archive, so programs (riscos-mesa) link their own UnixLib.
+  - 5.0.3.11's header changes (pthread.h, stdlib.h, unistd.h) don't touch anything it uses: no struct or constant it depends on changed.
+- **Unchanged:** the RISC3D module 0.11, Linux3D 0.06 and DAClamp.
+
 ## Release 0.22 (25 Nov 2026): !RISC3D 0.11-2
 
 - **!RISC3DSetup 1.09:**

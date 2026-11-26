@@ -1,5 +1,21 @@
 # Changelog
 
+## Release 0.25 (26 Nov 2026): !RISC3D 0.11-5
+
+- **V3DRender 0.39** (md5 b075c396e5a562f338984a0493eb81a8), answering David Sharp's Doom 3 full-game findings (`V3DRender/handoffs/2026-11-26-risc3d-david-sharp-doom3-full-game-buffers.md`):
+  - **The buffer area grows on demand,** in 128 MB pieces (separate dynamic areas), up to `V3DRender$Size`, now 1 GB by default. It's read at load and again at first use. Empty pieces other than the first go back when no program has the GPU open. One buffer can be at most 128 MB.
+  - **Alignment:** a buffer is aligned to 256 or 16 pages only where the gap is at most 1/16 of its size. Host BOFrag: 93% (1 MB + 4 KB) and 94% (mixed), against 50% and 81%. Kit 41's BOFrag passed on the owner's Pi.
+  - **Binner overflow pool:** topped up from a callback, up to 8 MB a job.
+  - **`*V3DRender`:** lines end CR LF, and buffers are listed per file with the task's name.
+  - **RISC3D needs nothing new.** A size choice in Configure isn't needed now.
+- **Built with riscos-crossdev 1.14** (UnixLib 5.0.3.12 inside).
+  - build.sh checks BUILDINFO.txt for 1.14 or later.
+  - The separate `UNIXLIB_DIR` link of 1.11 is gone.
+  - The RISC3D, Linux3D and Linux2D modules and the client's `r3d_gl.o` are byte-identical to 1.11's builds (same GCC 10.2.0).
+- **!RISC3DSetup 1.12:** built with 1.14. Run on the owner's Pi from `$.Test.Setup112`: "GPU memory: 2176 KB in use, all above 1 GB, of up to 1024 MB", "RISC3D 0.11, V3DRender 0.39".
+- **Not published:** 0.11-3 (release 0.23) and 0.11-4 (release 0.24) were delivered but not published, and aren't rebuilt.
+- **README:** Doom 3's row covers the full game; building needs crossdev 1.14.
+
 ## Release 0.24 (26 Nov 2026): !RISC3D 0.11-4
 
 - **!RISC3DSetup 1.11:** relinked with **riscos-unixlib 5.0.3.12** (libunixlib.a sha256 f8e76d36…), with no source change.

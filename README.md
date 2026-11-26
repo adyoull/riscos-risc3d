@@ -7,13 +7,13 @@ above it, 3D drivers below it. Programs use Mesa as they do now; where a
 driver is registered the drawing is done by the machine's GPU driver, and
 where none is, Mesa draws in software as before.
 
-**Release 0.24, 26 November 2026** (0.11 moved to the allocated numbers;
+**Release 0.25, 26 November 2026** (0.11 moved to the allocated numbers;
 0.12 added contexts that share objects, for WebKit; 0.13 to 0.16 added
 Configure's RISC3D window; 0.17 shows what the GPU supports on native
 RISC OS; 0.18 fixed the page where ARMEABISupport wasn't loaded; 0.19 turns
 the desktop's 2D on and off from Configure,
-and has V3DRender 0.38, which can put a 3D window on the screen by the GPU,
-scaled if need be,
+and has V3DRender 0.39, which can put a 3D window on the screen by the GPU,
+scaled if need be, and whose buffer area grows to 1 GB as programs need it,
 and takes nothing at start-up; 0.21 keeps a program's contexts when it
 runs a *command; 0.22 shows the driver's version in Configure and drops
 the z-layer overlays switch).
@@ -183,7 +183,7 @@ RISC3D's client library (`lib/`, `proto/`) is released as
 | OpenLara | Pi 4, ROL | 50 fps, against 12 to 16 in software |
 | Quake 3 (ioquake3, ported by David Sharp) | Pi 4 native, RISC3D 0.17; also RoMac | 138 fps at 480x300, 77 at 1024x768, 69 at 1280x800 full screen (software: 35) |
 | Mupen64Plus (ported by David Sharp) | Pi 4 native, RISC3D 0.17 | Super Mario 64 at 163-169 VI/s with the limiter off (full speed 60; software 12-15) |
-| Doom 3 (dhewm3, ported by David Sharp) | Pi 4 native | about 12 fps at 800x600, Medium; needs V3DRender 0.30 (more buffer handles than 0.26 allowed) |
+| Doom 3 (dhewm3, ported by David Sharp) | Pi 4 native | demo about 12 fps at 800x600, Medium; the full game (dhewm3 0.2.2) plays full screen at 1280x1024; V3DRender 0.39 gives it the memory without restarting the driver |
 
 ## The parts
 
@@ -252,7 +252,8 @@ file RISC3D_Open returned, as Mesa does through a DRM device on Linux.
 
 ## Building and testing
 
-`RISCOS_TOOLCHAIN=.../toolchain/env ./build.sh` builds everything into
+`RISCOS_TOOLCHAIN=.../toolchain/env ./build.sh` (riscos-crossdev 1.14 or
+later) builds everything into
 `out/`. On the build machine: `out/rol-3d-host &` then
 `out/r3dtest-host 100`; `out/sharetest-host` checks contexts sharing
 objects in two threads. On RISC OS on Linux: `/opt/riscos/rol-3d` (init

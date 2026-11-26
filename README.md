@@ -181,9 +181,6 @@ RISC3D's client library (`lib/`, `proto/`) is released as
 | TORCS 1.3.7-riscos6 | Pi 4 native and ROL | the mixed build; on ROL it needs Mesa 26.1 (Debian's 25.0.7 loses its textures) |
 | Quakespasm | Windows Dev Kit 2023, ROL | Chris Gransden's build: `timedemo demo1` 5 fps at 640x480 in software, 98 fps at 1920x1080 on the GPU |
 | OpenLara | Pi 4, ROL | 50 fps, against 12 to 16 in software |
-| Quake 3 (ioquake3, ported by David Sharp) | Pi 4 native, RISC3D 0.17; also RoMac | 138 fps at 480x300, 77 at 1024x768, 69 at 1280x800 full screen (software: 35) |
-| Mupen64Plus (ported by David Sharp) | Pi 4 native, RISC3D 0.17 | Super Mario 64 at 163-169 VI/s with the limiter off (full speed 60; software 12-15) |
-| Doom 3 (dhewm3, ported by David Sharp) | Pi 4 native | demo about 12 fps at 800x600, Medium; the full game (dhewm3 0.2.2) plays full screen at 1280x1024; V3DRender 0.39 gives it the memory without restarting the driver |
 
 ## The parts
 
